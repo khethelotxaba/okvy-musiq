@@ -39,61 +39,18 @@ jobs:
 
       - name: Inject Android permissions
         run: |
-          python3 << 'PYEOF'
-          import re
-          manifest = "android/app/src/main/AndroidManifest.xml"
-          with open(manifest, "r") as f:
+          python3 -c "
+          manifest = 'android/app/src/main/AndroidManifest.xml'
+          with open(manifest, 'r') as f:
               content = f.read()
-
-          # Add permissions before </manifest>
-          perms = """    <uses-permission android:name="android.permission.INTERNET" />
-          <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
-          <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-          <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
-          <uses-permission android:name="android.permission.WAKE_LOCK" />
-          """
-          content = content.replace("</manifest>", perms + "</manifest>")
-
-          # Add usesCleartextTraffic to application tag
-          content = content.replace(
-              'android:label="Okvy MusiQ"',
-              'android:label="Okvy MusiQ" android:usesCleartextTraffic="true"'
-          )
-
-          # Add windowSoftInputMode to MainActivity
-          content = content.replace(
-              'android:name="com.okvy.musiq.MainActivity"',
-              'android:name="com.okvy.musiq.MainActivity" android:windowSoftInputMode="adjustResize"'
-          )
-
-          with open(manifest, "w") as f:
+          perms = '    <uses-permission android:name=\"android.permission.INTERNET\" />\n    <uses-permission android:name=\"android.permission.READ_MEDIA_AUDIO\" />\n    <uses-permission android:name=\"android.permission.FOREGROUND_SERVICE\" />\n    <uses-permission android:name=\"android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK\" />\n    <uses-permission android:name=\"android.permission.WAKE_LOCK\" />\n'
+          content = content.replace('</manifest>', perms + '</manifest>')
+          content = content.replace('android:label=\"Okvy MusiQ\"', 'android:label=\"Okvy MusiQ\" android:usesCleartextTraffic=\"true\"')
+          content = content.replace('android:name=\"com.okvy.musiq.MainActivity\"', 'android:name=\"com.okvy.musiq.MainActivity\" android:windowSoftInputMode=\"adjustResize\"')
+          with open(manifest, 'w') as f:
               f.write(content)
-          print("Manifest updated")
-          PYEOF
-
-      - name: Update splash colors
-        run: |
-          python3 << 'PYEOF'
-          colors = "android/app/src/main/res/values/colors.xml"
-          with open(colors, "r") as f:
-              content = f.read()
-          # Replace existing colors, don't add duplicates
-          content = content.replace(
-              "<color name="colorPrimary">#00875f</color>",
-              "<color name="colorPrimary">#0a0a0a</color>"
-          )
-          content = content.replace(
-              "<color name="colorPrimaryDark">#00785a</color>",
-              "<color name="colorPrimaryDark">#0a0a0a</color>"
-          )
-          content = content.replace(
-              "<color name="colorAccent">#0056e0</color>",
-              "<color name="colorAccent">#d4af37</color>"
-          )
-          with open(colors, "w") as f:
-              f.write(content)
-          print("Colors updated")
-          PYEOF
+          print('Manifest updated')
+          "
 
       - name: Sync Capacitor
         run: npx cap sync android
