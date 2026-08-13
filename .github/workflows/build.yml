@@ -37,6 +37,38 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Inject Android permissions
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          # Add permissions before </manifest>
+          sed -i 's|</manifest>|    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+</manifest>|' "$MANIFEST"
+          # Add android:usesCleartextTraffic for local file access
+          sed -i 's|android:label="Okvy MusiQ"|android:label="Okvy MusiQ" android:usesCleartextTraffic="true"|' "$MANIFEST"
+          # Add windowSoftInputMode to activity
+          sed -i 's|android:name="com.okvy.musiq.MainActivity"|android:name="com.okvy.musiq.MainActivity" android:windowSoftInputMode="adjustResize"|' "$MANIFEST"
+          cat "$MANIFEST"
+
+      - name: Configure WebView settings
+        run: |
+          ACTIVITY="android/app/src/main/java/com/okvy/musiq/MainActivity.java"
+          cat "$ACTIVITY"
+
+      - name: Add splash screen colors
+        run: |
+          COLORS="android/app/src/main/res/values/colors.xml"
+          echo '<?xml version="1.0" encoding="utf-8"?>' > "$COLORS"
+          echo '<resources>' >> "$COLORS"
+          echo '    <color name="colorPrimary">#0a0a0a</color>' >> "$COLORS"
+          echo '    <color name="colorPrimaryDark">#0a0a0a</color>' >> "$COLORS"
+          echo '    <color name="colorAccent">#d4af37</color>' >> "$COLORS"
+          echo '    <color name="ic_launcher_background">#0a0a0a</color>' >> "$COLORS"
+          echo '</resources>' >> "$COLORS"
+
       - name: Sync Capacitor
         run: npx cap sync android
 
