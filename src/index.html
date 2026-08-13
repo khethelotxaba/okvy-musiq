@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0a0a0a">
 <title>Okvy MusiQ</title>
 <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiT2t2eSBNdXNpUSIsInNob3J0X25hbWUiOiJPa3Z5Iiwic3RhcnRfdXJsIjoiLiIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwiYmFja2dyb3VuZF9jb2xvciI6IiMwYTBhMGEiLCJ0aGVtZV9jb2xvciI6IiMwYTBhMGEifQ==">
@@ -253,6 +253,14 @@ select:focus, input:focus { border-color:var(--gold-primary); }
 </head>
 <body>
 
+  <div id="app-loader" style="position:fixed;inset:0;background:#0a0a0a;display:flex;align-items:center;justify-content:center;z-index:99999;transition:opacity 0.5s">
+  <div style="text-align:center">
+    <div style="font-size:48px;font-weight:900;color:#d4af37;margin-bottom:16px">O</div>
+    <div style="color:#d4af37;font-size:18px;font-weight:700">Okvy MusiQ</div>
+    <div style="color:#666;font-size:12px;margin-top:8px">Loading...</div>
+  </div>
+</div>
+  
 <div class="app-container">
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
@@ -1877,6 +1885,15 @@ async function init() {
   toast('Okvy MusiQ ready');
 }
 init();
+
+// Hide loader when app is ready
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    const loader = document.getElementById('app-loader');
+    if (loader) { loader.style.opacity = '0'; setTimeout(() => loader.remove(), 500); }
+  }, 800);
+});
+  
 </script>
 </body>
 </html>
