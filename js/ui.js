@@ -61,13 +61,13 @@ const UI = {
 
     // Player bar
     document.getElementById('np-track').addEventListener('click', () => this.openFullPlayer());
-    document.getElementById('np-play').addEventListener('click', () => Player.togglePlay());
+    this.setupPlayButton(document.getElementById('np-play'));
     document.getElementById('np-prev').addEventListener('click', () => Player.prev());
     document.getElementById('np-next').addEventListener('click', () => Player.next());
 
     // Full player
     document.getElementById('fp-close').addEventListener('click', () => this.closeFullPlayer());
-    document.getElementById('fp-play').addEventListener('click', () => Player.togglePlay());
+    this.setupPlayButton(document.getElementById('fp-play'));
     document.getElementById('fp-prev').addEventListener('click', () => Player.prev());
     document.getElementById('fp-next').addEventListener('click', () => Player.next());
     document.getElementById('fp-shuffle').addEventListener('click', () => this.toggleShuffle());
@@ -793,10 +793,27 @@ const UI = {
 
   onPlaybackState(state) {
     const isPlaying = state.playing;
-    document.getElementById('play-icon').classList.toggle('hidden', isPlaying);
-    document.getElementById('pause-icon').classList.toggle('hidden', !isPlaying);
-    document.getElementById('fp-play-icon').classList.toggle('hidden', isPlaying);
-    document.getElementById('fp-pause-icon').classList.toggle('hidden', !isPlaying);
+    const wasReset = state.reset;
+
+    // Morph mini player icon
+    const npIcon = document.querySelector('#np-play svg');
+    if (npIcon) {
+      if (isPlaying) {
+        npIcon.innerHTML = '<line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/>';
+      } else {
+        npIcon.innerHTML = '<polygon points="10 8 16 12 10 16 10 8"/>';
+      }
+    }
+
+    // Morph full player icon
+    const fpIcon = document.querySelector('#fp-play svg');
+    if (fpIcon) {
+      if (isPlaying) {
+        fpIcon.innerHTML = '<line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/>';
+      } else {
+        fpIcon.innerHTML = '<polygon points="10 8 16 12 10 16 10 8"/>';
+      }
+    }
 
     const art = document.getElementById('fp-art');
     if (art) art.classList.toggle('playing', isPlaying && SettingsManager.get('ui.animatingThumbnail'));
@@ -1046,6 +1063,46 @@ const UI = {
       this.showToast('Queue saved as playlist');
       this.renderSidebarPlaylists();
     }
+  },
+
+  setupPlayButton(btn) {
+    if (!btn) return;
+    let pressTimer = null;
+    let isLongPress = false;
+    const LONG_PRESS_MS = 600;
+
+    const startPress = (e) => {
+      if (e.button !== undefined && e.button !== 0) return;
+      isLongPress = false;
+      pressTimer = setTimeout(() => {
+        isLongPress = true;
+        btn.classList.add('holding');
+        Utils.vibrate(20);
+      }, LONG_PRESS_MS);
+    };
+
+    const endPress = (e) => {
+      clearTimeout(pressTimer);
+      btn.classList.remove('holding');
+      if (isLongPress) {
+        Player.resetTrack();
+      } else {
+        Player.togglePlay();
+      }
+    };
+
+    const cancelPress = () => {
+      clearTimeout(pressTimer);
+      btn.classList.remove('holding');
+    };
+
+    btn.addEventListener('mousedown', startPress);
+    btn.addEventListener('touchstart', startPress, { passive: true });
+    btn.addEventListener('mouseup', endPress);
+    btn.addEventListener('touchend', endPress);
+    btn.addEventListener('mouseleave', cancelPress);
+    btn.addEventListener('touchcancel', cancelPress);
+    btn.addEventListener('contextmenu', (e) => e.preventDefault());
   },
 
   // SIDEBAR
