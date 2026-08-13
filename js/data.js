@@ -1,355 +1,321 @@
-/* ========================================
-   Okvy MusiQ - Data & State Management
-   ======================================== */
+const DB_NAME = 'OkvyMusiQ';
+const DB_VERSION = 3;
 
-const Data = (function() {
-    'use strict';
+const Data = {
+  db: null,
 
-    let state = {
-        tracks: [],
-        albums: [],
-        playlists: [],
-        favorites: new Set(),
-        queue: [],
-        queueIndex: -1,
-        currentTrack: null,
-        isPlaying: false,
-        shuffle: false,
-        repeat: 'none',
-        volume: 0.8,
-        searchQuery: '',
-        currentPage: 'home',
-        hasLibrary: false
+  async init() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onerror = () => reject(req.error);
+      req.onsuccess = () => { this.db = req.result; resolve(); };
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('tracks')) db.createObjectStore('tracks', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('albums')) db.createObjectStore('albums', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('artists')) db.createObjectStore('artists', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('genres')) db.createObjectStore('genres', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('playlists')) db.createObjectStore('playlists', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('history')) db.createObjectStore('history', { keyPath: 'id', autoIncrement: true });
+        if (!db.objectStoreNames.contains('queue')) db.createObjectStore('queue', { keyPath: 'key' });
+        if (!db.objectStoreNames.contains('folders')) db.createObjectStore('folders', { keyPath: 'path' });
+        if (!db.objectStoreNames.contains('stats')) db.createObjectStore('stats', { keyPath: 'key' });
+        if (!db.objectStoreNames.contains('moods')) db.createObjectStore('moods', { keyPath: 'id' });
+      };
+    });
+  },
+
+  async put(store, data) {
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(store, 'readwrite');
+      const req = tx.objectStore(store).put(data);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  async get(store, key) {
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(store, 'readonly');
+      const req = tx.objectStore(store).get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  async getAll(store) {
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(store, 'readonly');
+      const req = tx.objectStore(store).getAll();
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  async delete(store, key) {
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(store, 'readwrite');
+      const req = tx.objectStore(store).delete(key);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  async clear(store) {
+    return new Promise((resolve, reject) => {
+      const tx = this.db.transaction(store, 'readwrite');
+      const req = tx.objectStore(store).clear();
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    });
+  },
+
+  // Tracks
+  async saveTrack(track) {
+    const existing = await this.get('tracks', track.id);
+    if (existing) track = { ...existing, ...track, dateModified: Date.now() };
+    else track.dateAdded = track.dateAdded || Date.now();
+    await this.put('tracks', track);
+  },
+
+  async getTracks() { return this.getAll('tracks'); },
+  async getTrack(id) { return this.get('tracks', id); },
+  async deleteTrack(id) { return this.delete('tracks', id); },
+
+  // Playlists
+  async createPlaylist(name, tracks = [], auto = false, type = 'user') {
+    const id = Utils.generateId();
+    const pl = { id, name, tracks, type, auto, dateCreated: Date.now(), dateModified: Date.now() };
+    await this.put('playlists', pl);
+    return pl;
+  },
+
+  async getPlaylists() { return this.getAll('playlists'); },
+  async getPlaylist(id) { return this.get('playlists', id); },
+  async updatePlaylist(pl) { pl.dateModified = Date.now(); await this.put('playlists', pl); },
+  async deletePlaylist(id) { return this.delete('playlists', id); },
+
+  // History
+  async addHistoryEntry(trackId, duration, position, completed) {
+    const entry = {
+      trackId, duration, position, completed,
+      timestamp: Date.now(),
+      date: new Date().toISOString(),
+      week: Utils.getWeekNumber(new Date()),
+      year: new Date().getFullYear(),
+      month: new Date().getMonth()
     };
+    await this.put('history', entry);
+    await this.updateTrackStats(trackId, duration);
+  },
 
-    function init() {
-        try {
-            // Load user playlists
-            const savedPlaylists = Utils.getStorage(CONFIG.storage.playlists, []);
-            state.playlists = Array.isArray(savedPlaylists) ? savedPlaylists : [];
+  async getHistory() { return this.getAll('history'); },
 
-            // Load favorites
-            const savedFavs = Utils.getStorage(CONFIG.storage.favorites, []);
-            state.favorites = new Set(Array.isArray(savedFavs) ? savedFavs : []);
-
-            // Load volume
-            const savedVol = Utils.getStorage(CONFIG.storage.volume, null);
-            if (savedVol !== null && typeof savedVol === 'number') {
-                state.volume = Utils.clamp(savedVol, 0, 1);
-            }
-
-            // Load last played track metadata
-            const lastPlayed = Utils.getStorage(CONFIG.storage.lastPlayed, null);
-            if (lastPlayed && lastPlayed.id) {
-                state.currentTrack = lastPlayed;
-            }
-
-            // Load queue
-            const savedQueue = Utils.getStorage(CONFIG.storage.queue, []);
-            state.queue = Array.isArray(savedQueue) ? savedQueue : [];
-
-            // Check if library was ever scanned
-            const libMeta = Scanner.loadLibraryMeta();
-            state.hasLibrary = libMeta.length > 0;
-
-            return true;
-        } catch (e) {
-            console.error('Data.init error:', e);
-            return false;
-        }
-    }
-
-    // Set scanned tracks
-    function setTracks(tracks) {
-        state.tracks = Array.isArray(tracks) ? tracks : [];
-        state.hasLibrary = state.tracks.length > 0;
-        buildAlbumsFromTracks();
-    }
-
-    // Auto-build albums from track metadata
-    function buildAlbumsFromTracks() {
-        const albumMap = {};
-        state.tracks.forEach(t => {
-            const key = t.album + '|' + t.artist;
-            if (!albumMap[key]) {
-                albumMap[key] = {
-                    id: 'album_' + Utils.generateId(),
-                    title: t.album,
-                    artist: t.artist,
-                    cover: t.cover,
-                    year: t.year,
-                    tracks: []
-                };
-            }
-            albumMap[key].tracks.push(t.id);
-            // Use first track cover if album has no cover
-            if (!albumMap[key].cover && t.cover) {
-                albumMap[key].cover = t.cover;
-            }
-        });
-        state.albums = Object.values(albumMap);
-    }
-
-    function getState() {
-        return {
-            tracks: [...state.tracks],
-            albums: [...state.albums],
-            playlists: [...state.playlists],
-            favorites: new Set(state.favorites),
-            queue: [...state.queue],
-            queueIndex: state.queueIndex,
-            currentTrack: state.currentTrack ? {...state.currentTrack} : null,
-            isPlaying: state.isPlaying,
-            shuffle: state.shuffle,
-            repeat: state.repeat,
-            volume: state.volume,
-            searchQuery: state.searchQuery,
-            currentPage: state.currentPage,
-            hasLibrary: state.hasLibrary
-        };
-    }
-
-    function getTrack(id) {
-        return state.tracks.find(t => t.id === id) || null;
-    }
-
-    function getTracks() {
-        return [...state.tracks];
-    }
-
-    function getAlbum(id) {
-        return state.albums.find(a => a.id === id) || null;
-    }
-
-    function getAlbumTracks(albumId) {
-        const album = getAlbum(albumId);
-        if (!album) return [];
-        return album.tracks.map(tid => getTrack(tid)).filter(Boolean);
-    }
-
-    function getPlaylist(id) {
-        return state.playlists.find(p => p.id === id) || null;
-    }
-
-    function getPlaylistTracks(playlistId) {
-        const pl = getPlaylist(playlistId);
-        if (!pl) return [];
-        return pl.tracks.map(tid => getTrack(tid)).filter(Boolean);
-    }
-
-    function getFavorites() {
-        return state.tracks.filter(t => state.favorites.has(t.id));
-    }
-
-    function isFavorite(trackId) {
-        return state.favorites.has(trackId);
-    }
-
-    function searchTracks(query) {
-        if (!query) return [];
-        const q = query.toLowerCase().trim();
-        return state.tracks.filter(t => 
-            (t.title && t.title.toLowerCase().includes(q)) ||
-            (t.artist && t.artist.toLowerCase().includes(q)) ||
-            (t.album && t.album.toLowerCase().includes(q))
-        );
-    }
-
-    function setCurrentTrack(track) {
-        state.currentTrack = track;
-        if (track) {
-            Utils.setStorage(CONFIG.storage.lastPlayed, {
-                id: track.id,
-                title: track.title,
-                artist: track.artist,
-                album: track.album,
-                cover: track.cover,
-                duration: track.duration,
-                timestamp: Date.now()
-            });
-        }
-    }
-
-    function setIsPlaying(playing) {
-        state.isPlaying = !!playing;
-    }
-
-    function setVolume(vol) {
-        state.volume = Utils.clamp(vol, 0, 1);
-        Utils.setStorage(CONFIG.storage.volume, state.volume);
-    }
-
-    function setShuffle(shuffle) {
-        state.shuffle = !!shuffle;
-    }
-
-    function setRepeat(mode) {
-        if (['none', 'all', 'one'].includes(mode)) {
-            state.repeat = mode;
-        }
-    }
-
-    function setCurrentPage(page) {
-        state.currentPage = page;
-    }
-
-    function setSearchQuery(query) {
-        state.searchQuery = query;
-    }
-
-    function setQueue(tracks, startIndex) {
-        state.queue = tracks.map(t => typeof t === 'string' ? t : t.id);
-        state.queueIndex = typeof startIndex === 'number' ? startIndex : 0;
-        saveQueue();
-    }
-
-    function getQueue() {
-        return state.queue.map(id => getTrack(id)).filter(Boolean);
-    }
-
-    function getQueueIndex() {
-        return state.queueIndex;
-    }
-
-    function setQueueIndex(index) {
-        state.queueIndex = Utils.clamp(index, 0, Math.max(0, state.queue.length - 1));
-    }
-
-    function nextTrack() {
-        if (state.queue.length === 0) return null;
-
-        if (state.repeat === 'one') {
-            return getTrack(state.queue[state.queueIndex]);
-        }
-
-        let nextIndex = state.queueIndex + 1;
-        if (nextIndex >= state.queue.length) {
-            if (state.repeat === 'all') {
-                nextIndex = 0;
-            } else {
-                return null;
-            }
-        }
-        state.queueIndex = nextIndex;
-        saveQueue();
-        return getTrack(state.queue[nextIndex]);
-    }
-
-    function prevTrack() {
-        if (state.queue.length === 0) return null;
-
-        if (Player.getCurrentTime() > 3) {
-            Player.seek(0);
-            return getTrack(state.queue[state.queueIndex]);
-        }
-
-        let prevIndex = state.queueIndex - 1;
-        if (prevIndex < 0) {
-            if (state.repeat === 'all') {
-                prevIndex = state.queue.length - 1;
-            } else {
-                prevIndex = 0;
-            }
-        }
-        state.queueIndex = prevIndex;
-        saveQueue();
-        return getTrack(state.queue[prevIndex]);
-    }
-
-    function saveQueue() {
-        Utils.setStorage(CONFIG.storage.queue, state.queue);
-    }
-
-    function toggleFavorite(trackId) {
-        if (state.favorites.has(trackId)) {
-            state.favorites.delete(trackId);
-        } else {
-            state.favorites.add(trackId);
-        }
-        Utils.setStorage(CONFIG.storage.favorites, Array.from(state.favorites));
-        return state.favorites.has(trackId);
-    }
-
-    function createPlaylist(name) {
-        const pl = {
-            id: Utils.generateId(),
-            name: Utils.escapeHtml(name),
-            cover: '',
-            tracks: [],
-            isDefault: false
-        };
-        state.playlists.push(pl);
-        savePlaylists();
-        return pl;
-    }
-
-    function addToPlaylist(playlistId, trackId) {
-        const pl = state.playlists.find(p => p.id === playlistId);
-        if (!pl) return false;
-        if (!pl.tracks.includes(trackId)) {
-            pl.tracks.push(trackId);
-            savePlaylists();
-            return true;
-        }
-        return false;
-    }
-
-    function removeFromPlaylist(playlistId, trackId) {
-        const pl = state.playlists.find(p => p.id === playlistId);
-        if (!pl) return false;
-        const idx = pl.tracks.indexOf(trackId);
-        if (idx > -1) {
-            pl.tracks.splice(idx, 1);
-            savePlaylists();
-            return true;
-        }
-        return false;
-    }
-
-    function deletePlaylist(playlistId) {
-        const idx = state.playlists.findIndex(p => p.id === playlistId);
-        if (idx > -1 && !state.playlists[idx].isDefault) {
-            state.playlists.splice(idx, 1);
-            savePlaylists();
-            return true;
-        }
-        return false;
-    }
-
-    function savePlaylists() {
-        Utils.setStorage(CONFIG.storage.playlists, state.playlists);
-    }
-
+  async getTrackStats(trackId) {
+    const all = await this.getAll('history');
+    const entries = all.filter(h => h.trackId === trackId);
     return {
-        init,
-        setTracks,
-        getState,
-        getTrack,
-        getTracks,
-        getAlbum,
-        getAlbumTracks,
-        getPlaylist,
-        getPlaylistTracks,
-        getFavorites,
-        isFavorite,
-        searchTracks,
-        setCurrentTrack,
-        setIsPlaying,
-        setVolume,
-        setShuffle,
-        setRepeat,
-        setCurrentPage,
-        setSearchQuery,
-        setQueue,
-        getQueue,
-        getQueueIndex,
-        setQueueIndex,
-        nextTrack,
-        prevTrack,
-        toggleFavorite,
-        createPlaylist,
-        addToPlaylist,
-        removeFromPlaylist,
-        deletePlaylist
+      playCount: entries.length,
+      totalTime: entries.reduce((s, e) => s + (e.duration || 0), 0),
+      lastPlayed: entries.length > 0 ? Math.max(...entries.map(e => e.timestamp)) : 0
     };
-})();
+  },
+
+  async updateTrackStats(trackId, duration) {
+    const stats = await this.get('stats', trackId) || { trackId, playCount: 0, totalTime: 0 };
+    stats.playCount = (stats.playCount || 0) + 1;
+    stats.totalTime = (stats.totalTime || 0) + (duration || 0);
+    stats.lastPlayed = Date.now();
+    await this.put('stats', stats);
+  },
+
+  async getMostPlayed(limit = 50) {
+    const stats = await this.getAll('stats');
+    return stats.sort((a,b) => (b.playCount || 0) - (a.playCount || 0)).slice(0, limit);
+  },
+
+  async getTotalListenTime() {
+    const stats = await this.getAll('stats');
+    return stats.reduce((s, st) => s + (st.totalTime || 0), 0);
+  },
+
+  async getLostMemories() {
+    const now = new Date();
+    const yearsBack = SettingsManager.get('smart.lostMemoriesYearsBack') || [1,2,3];
+    const history = await this.getAll('history');
+    const memories = [];
+    yearsBack.forEach(years => {
+      const targetDate = new Date(now);
+      targetDate.setFullYear(targetDate.getFullYear() - years);
+      const windowStart = targetDate.getTime() - 7 * 86400000;
+      const windowEnd = targetDate.getTime() + 7 * 86400000;
+      const found = history.filter(h => h.timestamp >= windowStart && h.timestamp <= windowEnd);
+      memories.push(...found);
+    });
+    const trackIds = [...new Set(memories.map(m => m.trackId))];
+    const tracks = await this.getTracks();
+    return trackIds.map(id => tracks.find(t => t.id === id)).filter(Boolean);
+  },
+
+  // Queue
+  async saveQueue(queue, index, position) {
+    await this.put('queue', { key: 'current', queue, index, position, timestamp: Date.now() });
+  },
+
+  async loadQueue() {
+    return this.get('queue', 'current');
+  },
+
+  // Folders
+  async saveFolder(folder) { await this.put('folders', folder); },
+  async getFolders() { return this.getAll('folders'); },
+  async deleteFolder(path) { return this.delete('folders', path); },
+
+  // Moods
+  async addMood(mood) {
+    const id = Utils.generateId();
+    await this.put('moods', { id, ...mood, dateCreated: Date.now() });
+    return id;
+  },
+  async getMoods() { return this.getAll('moods'); },
+  async deleteMood(id) { return this.delete('moods', id); },
+
+  // Auto playlists
+  async ensureAutoPlaylists() {
+    const playlists = await this.getPlaylists();
+    if (!playlists.find(p => p.type === 'most-played')) {
+      await this.createPlaylist('Most Played', [], true, 'most-played');
+    }
+    if (!playlists.find(p => p.type === 'lost-memories')) {
+      await this.createPlaylist('Lost Memories', [], true, 'lost-memories');
+    }
+    if (!playlists.find(p => p.type === 'smort')) {
+      await this.createPlaylist('Smort Mix', [], true, 'smort');
+    }
+  },
+
+  async refreshAutoPlaylists() {
+    const playlists = await this.getPlaylists();
+    for (const pl of playlists) {
+      if (!pl.auto) continue;
+      if (pl.type === 'most-played') {
+        const mostPlayed = await this.getMostPlayed(SettingsManager.get('smart.mostPlayedMaxTracks') || 50);
+        const tracks = await this.getTracks();
+        pl.tracks = mostPlayed.map(s => {
+          const t = tracks.find(tr => tr.id === s.trackId);
+          return t ? t.id : null;
+        }).filter(Boolean);
+        await this.updatePlaylist(pl);
+      } else if (pl.type === 'lost-memories') {
+        const memories = await this.getLostMemories();
+        pl.tracks = memories.map(t => t.id);
+        await this.updatePlaylist(pl);
+      }
+    }
+  },
+
+  // Smort generation
+  async generateSmort(seedTrackId) {
+    const tracks = await this.getTracks();
+    const seed = tracks.find(t => t.id === seedTrackId);
+    if (!seed) return [];
+    const criteria = SettingsManager.get('smart.smortCriteria');
+    const scores = new Map();
+    const history = await this.getAll('history');
+    const stats = await this.getAll('stats');
+
+    tracks.forEach(t => {
+      if (t.id === seedTrackId) return;
+      let score = 0;
+
+      if (criteria.samePeriod) {
+        const seedHistory = history.filter(h => h.trackId === seedTrackId);
+        const tHistory = history.filter(h => h.trackId === t.id);
+        const commonWeeks = new Set(seedHistory.map(h => h.week)).intersection(new Set(tHistory.map(h => h.week)));
+        score += commonWeeks.size * 10;
+      }
+
+      if (criteria.sameEra && seed.year && t.year) {
+        score += Math.max(0, 5 - Math.abs(seed.year - t.year)) * 3;
+      }
+
+      if (criteria.ratings) {
+        const seedStat = stats.find(s => s.trackId === seedTrackId);
+        const tStat = stats.find(s => s.trackId === t.id);
+        if (seedStat && tStat) {
+          score += Math.min(seedStat.playCount, tStat.playCount) * 2;
+        }
+      }
+
+      if (criteria.moods && seed.moods && t.moods) {
+        const common = seed.moods.filter(m => t.moods.includes(m));
+        score += common.length * 15;
+      }
+
+      if (seed.genre && t.genre) {
+        const sg = Utils.splitGenres(seed.genre);
+        const tg = Utils.splitGenres(t.genre);
+        const commonG = sg.filter(g => tg.includes(g));
+        score += commonG.length * 8;
+      }
+
+      if (seed.artist && t.artist) {
+        const sa = Utils.splitArtists(seed.artist);
+        const ta = Utils.splitArtists(t.artist);
+        const commonA = sa.filter(a => ta.includes(a));
+        score += commonA.length * 6;
+      }
+
+      score += Math.random() * (criteria.random || 0.2) * 20;
+      scores.set(t.id, score);
+    });
+
+    const sorted = [...scores.entries()].sort((a,b) => b[1] - a[1]).slice(0, 30);
+    return sorted.map(([id]) => tracks.find(t => t.id === id)).filter(Boolean);
+  },
+
+  // Search with filters
+  async searchTracks(query, filters = {}) {
+    let tracks = await this.getTracks();
+    if (query) {
+      const q = query.toLowerCase();
+      tracks = tracks.filter(t => 
+        (t.title && t.title.toLowerCase().includes(q)) ||
+        (t.artist && t.artist.toLowerCase().includes(q)) ||
+        (t.album && t.album.toLowerCase().includes(q)) ||
+        (t.genre && t.genre.toLowerCase().includes(q))
+      );
+    }
+    if (filters.artist) tracks = tracks.filter(t => t.artist === filters.artist);
+    if (filters.album) tracks = tracks.filter(t => t.album === filters.album);
+    if (filters.genre) tracks = tracks.filter(t => t.genre && t.genre.includes(filters.genre));
+    if (filters.yearMin) tracks = tracks.filter(t => (t.year || 0) >= filters.yearMin);
+    if (filters.yearMax) tracks = tracks.filter(t => (t.year || 9999) <= filters.yearMax);
+    if (filters.minDuration) tracks = tracks.filter(t => (t.duration || 0) >= filters.minDuration);
+    if (filters.maxDuration) tracks = tracks.filter(t => (t.duration || Infinity) <= filters.maxDuration);
+    if (filters.minPlays) {
+      const stats = await this.getAll('stats');
+      tracks = tracks.filter(t => {
+        const s = stats.find(st => st.trackId === t.id);
+        return (s?.playCount || 0) >= filters.minPlays;
+      });
+    }
+    if (filters.mood) tracks = tracks.filter(t => t.moods && t.moods.includes(filters.mood));
+    if (filters.favorite) tracks = tracks.filter(t => t.favorite);
+    if (filters.recentDays) {
+      const cutoff = Date.now() - filters.recentDays * 86400000;
+      tracks = tracks.filter(t => (t.dateAdded || 0) >= cutoff);
+    }
+    return tracks;
+  },
+
+  // Clear all
+  async clearLibrary() {
+    await this.clear('tracks');
+    await this.clear('albums');
+    await this.clear('artists');
+    await this.clear('genres');
+    await this.clear('folders');
+    await this.clear('moods');
+  }
+};

@@ -1,237 +1,308 @@
-/* ========================================
-   Okvy MusiQ - Library Scanner
-   Scans local audio files and extracts metadata
-   ======================================== */
+const Scanner = {
+  isScanning: false,
+  progress: 0,
+  total: 0,
+  scanned: 0,
+  abortController: null,
 
-const Scanner = (function() {
-    'use strict';
+  async scanFiles(fileList) {
+    if (this.isScanning) return;
+    this.isScanning = true;
+    this.progress = 0;
+    this.scanned = 0;
+    this.abortController = new AbortController();
 
-    let isScanning = false;
-    let scannedCount = 0;
-    let listeners = {};
+    const existing = await Data.getTracks();
+    const existingPaths = new Set(existing.map(t => t.path));
+    const existingHashes = new Set(existing.map(t => t.hash));
 
-    function emit(event, data) {
-        if (listeners[event]) {
-            listeners[event].forEach(cb => {
-                try { cb(data); } catch (e) { console.error(e); }
-            });
-        }
+    const audioExts = ['.mp3','.flac','.wav','.ogg','.m4a','.aac','.wma','.opus'];
+    const m3uExts = ['.m3u','.m3u8'];
+
+    const files = Array.from(fileList).filter(f => {
+      const ext = '.' + f.name.split('.').pop().toLowerCase();
+      return audioExts.includes(ext) || m3uExts.includes(ext);
+    });
+
+    this.total = files.length;
+    const newTracks = [];
+    const m3uFiles = [];
+
+    for (const file of files) {
+      if (this.abortController.signal.aborted) break;
+
+      const ext = '.' + file.name.split('.').pop().toLowerCase();
+      if (m3uExts.includes(ext)) {
+        m3uFiles.push(file);
+        this.scanned++;
+        this.progress = Math.round((this.scanned / this.total) * 100);
+        continue;
+      }
+
+      // Filters
+      const minSize = SettingsManager.get('library.minFileSizeMB') * 1024 * 1024;
+      if (file.size < minSize) { this.scanned++; continue; }
+
+      const path = file.webkitRelativePath || file.name;
+      const excludeFolders = SettingsManager.get('library.excludeFolders') || [];
+      if (excludeFolders.some(ef => path.includes(ef))) { this.scanned++; continue; }
+
+      // Deduplication
+      const hash = await this.computeHash(file);
+      const dedupMode = SettingsManager.get('library.deduplicateBy');
+      if (dedupMode === 'hash' && existingHashes.has(hash)) { this.scanned++; continue; }
+      if (dedupMode === 'path' && existingPaths.has(path)) { this.scanned++; continue; }
+
+      const track = await this.processFile(file, path, hash);
+      if (track) {
+        // Duration filter
+        const minDur = SettingsManager.get('library.minDurationSeconds') * 1000;
+        if (track.duration && track.duration < minDur) { this.scanned++; continue; }
+
+        newTracks.push(track);
+        existingHashes.add(hash);
+        existingPaths.add(path);
+      }
+
+      this.scanned++;
+      this.progress = Math.round((this.scanned / this.total) * 100);
+
+      if (this.scanned % 10 === 0) {
+        window.dispatchEvent(new CustomEvent('scan-progress', { detail: { progress: this.progress, current: track?.title || file.name } }));
+        await new Promise(r => setTimeout(r, 0));
+      }
     }
-    function on(event, cb) {
-        if (!listeners[event]) listeners[event] = [];
-        listeners[event].push(cb);
+
+    // Save tracks
+    for (const track of newTracks) {
+      await Data.saveTrack(track);
     }
 
-    // Check if running in Capacitor native environment
-    function isCapacitor() {
-        return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    // Process M3U files
+    for (const m3u of m3uFiles) {
+      await this.importM3U(m3u);
     }
 
-    // Extract metadata using jsmediatags (loaded from CDN)
-    function extractMetadata(file) {
-        return new Promise((resolve) => {
-            if (typeof jsmediatags === 'undefined') {
-                // Fallback if library not loaded
-                resolve({
-                    title: file.name.replace(/\.[^/.]+$/, ''),
-                    artist: 'Unknown Artist',
-                    album: 'Unknown Album',
-                    cover: null
-                });
-                return;
+    // Rebuild indexes
+    await this.rebuildIndexes();
+    await Data.ensureAutoPlaylists();
+    await Data.refreshAutoPlaylists();
+
+    this.isScanning = false;
+    window.dispatchEvent(new CustomEvent('scan-complete', { detail: { added: newTracks.length } }));
+    return newTracks.length;
+  },
+
+  async processFile(file, path, hash) {
+    return new Promise((resolve) => {
+      const track = {
+        id: Utils.generateId(),
+        path: path,
+        fileName: file.name,
+        size: file.size,
+        hash: hash,
+        url: URL.createObjectURL(file),
+        favorite: false,
+        rating: 0,
+        playCount: 0,
+        moods: [],
+        dateAdded: Date.now()
+      };
+
+      // Get audio duration
+      const audio = new Audio();
+      audio.preload = 'metadata';
+      audio.src = track.url;
+
+      const onLoaded = () => {
+        track.duration = Math.round(audio.duration * 1000);
+        audio.removeEventListener('loadedmetadata', onLoaded);
+        audio.src = '';
+      };
+      audio.addEventListener('loadedmetadata', onLoaded);
+
+      // Read tags
+      if (window.jsmediatags) {
+        jsmediatags.read(file, {
+          onSuccess: (tag) => {
+            const t = tag.tags;
+            track.title = t.title || this.cleanFileName(file.name);
+            track.artist = t.artist || 'Unknown Artist';
+            track.album = t.album || 'Unknown Album';
+            track.genre = t.genre || '';
+            track.year = t.year ? parseInt(t.year) : null;
+            track.trackNumber = t.track ? parseInt(t.track) : null;
+            track.comment = t.comment ? (t.comment.text || t.comment) : '';
+            track.lyrics = t.lyrics ? (t.lyrics.lyrics || t.lyrics) : '';
+
+            // Featured artists
+            const featured = Utils.extractFeaturedArtists(track.title);
+            if (featured.length > 0) {
+              track.featuredArtists = featured;
+              track.cleanTitle = Utils.removeFeaturedFromTitle(track.title);
             }
 
-            jsmediatags.read(file, {
-                onSuccess: (tag) => {
-                    const tags = tag.tags || {};
-                    let cover = null;
+            // Picture
+            if (t.picture) {
+              const pic = t.picture;
+              const blob = new Blob([new Uint8Array(pic.data)], { type: pic.format });
+              track.artwork = URL.createObjectURL(blob);
+            }
 
-                    if (tags.picture) {
-                        const pic = tags.picture;
-                        const blob = new Blob([new Uint8Array(pic.data)], { type: pic.format });
-                        cover = URL.createObjectURL(blob);
-                    }
+            // Mood from comment if enabled
+            if (SettingsManager.get('library.moodTagsEnabled') && track.comment) {
+              const moodMatch = track.comment.match(/mood:\s*([^,]+)/i);
+              if (moodMatch) track.moods.push(moodMatch[1].trim());
+            }
 
-                    resolve({
-                        title: tags.title || file.name.replace(/\.[^/.]+$/, ''),
-                        artist: tags.artist || 'Unknown Artist',
-                        album: tags.album || 'Unknown Album',
-                        year: tags.year || '',
-                        genre: tags.genre || '',
-                        cover: cover
-                    });
-                },
-                onError: () => {
-                    resolve({
-                        title: file.name.replace(/\.[^/.]+$/, ''),
-                        artist: 'Unknown Artist',
-                        album: 'Unknown Album',
-                        cover: null
-                    });
-                }
-            });
+            resolve(track);
+          },
+          onError: () => {
+            track.title = this.cleanFileName(file.name);
+            track.artist = 'Unknown Artist';
+            track.album = 'Unknown Album';
+            resolve(track);
+          }
         });
-    }
+      } else {
+        track.title = this.cleanFileName(file.name);
+        track.artist = 'Unknown Artist';
+        track.album = 'Unknown Album';
+        resolve(track);
+      }
+    });
+  },
 
-    // Process a single file
-    async function processFile(file) {
-        try {
-            const metadata = await extractMetadata(file);
-            const objectUrl = URL.createObjectURL(file);
+  async computeHash(file) {
+    const buf = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buf.slice(0, Math.min(buf.byteLength, 65536)));
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  },
 
-            // Get duration
-            const duration = await getAudioDuration(objectUrl);
+  cleanFileName(name) {
+    return name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ').trim();
+  },
 
-            return {
-                id: 'track_' + Utils.generateId(),
-                title: metadata.title,
-                artist: metadata.artist,
-                album: metadata.album,
-                year: metadata.year,
-                genre: metadata.genre,
-                duration: duration,
-                cover: metadata.cover,
-                url: objectUrl,
-                fileName: file.name,
-                fileSize: file.size,
-                fileType: file.type,
-                addedAt: Date.now()
-            };
-        } catch (e) {
-            console.error('Process file error:', e);
-            return null;
+  async rebuildIndexes() {
+    const tracks = await Data.getTracks();
+    const albums = new Map();
+    const artists = new Map();
+    const genres = new Map();
+
+    for (const track of tracks) {
+      // Albums
+      if (track.album) {
+        const albumId = Utils.hashString(track.album + (track.albumArtist || track.artist || ''));
+        if (!albums.has(albumId)) {
+          albums.set(albumId, {
+            id: albumId,
+            name: track.album,
+            artist: track.albumArtist || track.artist || 'Unknown',
+            year: track.year,
+            artwork: track.artwork,
+            tracks: [],
+            dateAdded: Date.now()
+          });
         }
-    }
+        albums.get(albumId).tracks.push(track.id);
+        if (track.artwork && !albums.get(albumId).artwork) albums.get(albumId).artwork = track.artwork;
+      }
 
-    function getAudioDuration(url) {
-        return new Promise((resolve) => {
-            const audio = new Audio();
-            audio.preload = 'metadata';
-            audio.src = url;
+      // Artists
+      const allArtists = [...Utils.splitArtists(track.artist || '')];
+      if (track.featuredArtists) allArtists.push(...track.featuredArtists);
 
-            const cleanup = () => {
-                audio.src = '';
-                URL.revokeObjectURL(url);
-            };
-
-            audio.addEventListener('loadedmetadata', () => {
-                const dur = isFinite(audio.duration) ? audio.duration : 0;
-                cleanup();
-                resolve(Math.round(dur));
-            });
-
-            audio.addEventListener('error', () => {
-                cleanup();
-                resolve(0);
-            });
-
-            // Timeout fallback
-            setTimeout(() => {
-                cleanup();
-                resolve(0);
-            }, 5000);
-        });
-    }
-
-    // Main scan function for web file input
-    async function scanFiles(fileList) {
-        if (isScanning) return;
-        isScanning = true;
-        scannedCount = 0;
-        emit('scanStart', { total: fileList.length });
-
-        const tracks = [];
-        const batchSize = CONFIG.ui.scanBatchSize;
-
-        for (let i = 0; i < fileList.length; i++) {
-            const file = fileList[i];
-
-            // Skip non-audio files
-            const isAudio = CONFIG.audio.supportedFormats.some(fmt => 
-                file.type.includes(fmt.replace('audio/', '')) ||
-                file.name.match(/\.(mp3|wav|ogg|flac|aac|m4a|wma)$/i)
-            );
-
-            if (!isAudio) continue;
-
-            const track = await processFile(file);
-            if (track) {
-                tracks.push(track);
-                scannedCount++;
-                emit('scanProgress', { current: scannedCount, total: fileList.length, track: track });
-            }
-
-            // Yield to UI every batch
-            if (i % batchSize === 0) {
-                await new Promise(r => setTimeout(r, 10));
-            }
+      for (const artist of [...new Set(allArtists)]) {
+        const artistId = Utils.hashString(artist);
+        if (!artists.has(artistId)) {
+          artists.set(artistId, {
+            id: artistId,
+            name: artist,
+            tracks: [],
+            albums: new Set(),
+            artwork: null,
+            dateAdded: Date.now()
+          });
         }
+        artists.get(artistId).tracks.push(track.id);
+        if (track.album) artists.get(artistId).albums.add(track.album);
+        if (track.artwork && !artists.get(artistId).artwork) artists.get(artistId).artwork = track.artwork;
+      }
 
-        isScanning = false;
-        emit('scanComplete', { tracks: tracks, count: tracks.length });
-        return tracks;
-    }
-
-    // Scan folder using webkitdirectory
-    function scanFolder(inputElement) {
-        return new Promise((resolve) => {
-            if (!inputElement || !inputElement.files) {
-                resolve([]);
-                return;
-            }
-            scanFiles(inputElement.files).then(tracks => resolve(tracks));
-        });
-    }
-
-    // Save scanned library to storage
-    function saveLibrary(tracks) {
-        try {
-            // Store minimal data (URLs can't be serialized, so we store metadata only)
-            // For actual playback, user needs to re-scan or we keep object URLs in memory
-            const storable = tracks.map(t => ({
-                id: t.id,
-                title: t.title,
-                artist: t.artist,
-                album: t.album,
-                year: t.year,
-                genre: t.genre,
-                duration: t.duration,
-                fileName: t.fileName,
-                fileSize: t.fileSize,
-                fileType: t.fileType,
-                addedAt: t.addedAt
-            }));
-
-            Utils.setStorage(CONFIG.storage.library, storable);
-            Utils.setStorage(CONFIG.storage.libraryVersion, Date.now());
-            return true;
-        } catch (e) {
-            console.error('Save library error:', e);
-            return false;
+      // Genres
+      const genresList = Utils.splitGenres(track.genre || '');
+      for (const genre of genresList) {
+        const genreId = Utils.hashString(genre);
+        if (!genres.has(genreId)) {
+          genres.set(genreId, {
+            id: genreId,
+            name: genre,
+            tracks: [],
+            artwork: null,
+            dateAdded: Date.now()
+          });
         }
+        genres.get(genreId).tracks.push(track.id);
+        if (track.artwork && !genres.get(genreId).artwork) genres.get(genreId).artwork = track.artwork;
+      }
     }
 
-    // Load library metadata (without URLs — user must re-scan to play)
-    function loadLibraryMeta() {
-        try {
-            return Utils.getStorage(CONFIG.storage.library, []);
-        } catch (e) {
-            return [];
-        }
-    }
+    // Save indexes
+    await Data.clear('albums');
+    await Data.clear('artists');
+    await Data.clear('genres');
 
-    function isScanningNow() {
-        return isScanning;
+    for (const album of albums.values()) await Data.put('albums', album);
+    for (const [id, artist] of artists) {
+      artist.albums = [...artist.albums];
+      await Data.put('artists', artist);
     }
+    for (const genre of genres.values()) await Data.put('genres', genre);
+  },
 
-    return {
-        scanFiles,
-        scanFolder,
-        extractMetadata,
-        saveLibrary,
-        loadLibraryMeta,
-        isScanningNow,
-        isCapacitor,
-        on
-    };
-})();
+  async importM3U(file) {
+    const text = await file.text();
+    const basePath = file.webkitRelativePath ? file.webkitRelativePath.replace(/\/[^\/]+$/, '') : '';
+    const tracks = Utils.parseM3U(text, basePath);
+
+    const existing = await Data.getTracks();
+    for (const t of tracks) {
+      if (existing.find(e => e.path === t.path)) continue;
+      // For M3U imports without actual files, create placeholder tracks
+      const track = {
+        id: Utils.generateId(),
+        path: t.path,
+        title: t.title || this.cleanFileName(t.path.split('/').pop()),
+        artist: 'Unknown Artist',
+        album: 'Unknown Album',
+        duration: t.duration ? t.duration * 1000 : 0,
+        artwork: t.albumArt || null,
+        favorite: false,
+        rating: 0,
+        playCount: 0,
+        moods: [],
+        dateAdded: Date.now(),
+        isM3U: true
+      };
+      await Data.saveTrack(track);
+    }
+  },
+
+  async exportM3U(playlistId) {
+    const pl = await Data.getPlaylist(playlistId);
+    if (!pl) return;
+    const tracks = [];
+    for (const tid of pl.tracks) {
+      const t = await Data.getTrack(tid);
+      if (t) tracks.push(t);
+    }
+    const m3u = Utils.generateM3U(tracks, pl.name);
+    Utils.downloadFile(m3u, pl.name + '.m3u', 'audio/x-mpegurl');
+  },
+
+  abort() {
+    if (this.abortController) this.abortController.abort();
+    this.isScanning = false;
+  }
+};
