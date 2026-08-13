@@ -1,10 +1,11 @@
-const CACHE_NAME = 'okvy-musiq-v1';
+const CACHE_NAME = 'okvy-musiq-v2';
 const ASSETS = [
   '/',
   '/index.html',
   '/css/styles.css',
   '/js/config.js',
   '/js/utils.js',
+  '/js/scanner.js',
   '/js/data.js',
   '/js/player.js',
   '/js/ui.js',
@@ -19,10 +20,23 @@ self.addEventListener('install', e => {
   self.skipWaiting();
 });
 
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+    )
+  );
+  self.clients.claim();
+});
+
 self.addEventListener('fetch', e => {
   e.respondWith(
     caches.match(e.request).then(response => {
-      return response || fetch(e.request);
+      return response || fetch(e.request).catch(() => {
+        if (e.request.destination === 'document') {
+          return caches.match('/index.html');
+        }
+      });
     })
   );
 });

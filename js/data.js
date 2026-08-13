@@ -5,7 +5,6 @@
 const Data = (function() {
     'use strict';
 
-    // Internal state
     let state = {
         tracks: [],
         albums: [],
@@ -16,29 +15,22 @@ const Data = (function() {
         currentTrack: null,
         isPlaying: false,
         shuffle: false,
-        repeat: 'none', // 'none', 'all', 'one'
+        repeat: 'none',
         volume: 0.8,
         searchQuery: '',
-        currentPage: 'home'
+        currentPage: 'home',
+        hasLibrary: false
     };
 
-    // Initialize with demo data
     function init() {
         try {
-            state.tracks = CONFIG.demoTracks.map(t => ({...t}));
-            state.albums = CONFIG.demoAlbums.map(a => ({...a}));
-
-            // Load user playlists from storage or use defaults
-            const savedPlaylists = Utils.getStorage(CONFIG.storage.playlists, null);
-            if (savedPlaylists && Array.isArray(savedPlaylists)) {
-                state.playlists = savedPlaylists;
-            } else {
-                state.playlists = CONFIG.demoPlaylists.map(p => ({...p, isDefault: true}));
-            }
+            // Load user playlists
+            const savedPlaylists = Utils.getStorage(CONFIG.storage.playlists, []);
+            state.playlists = Array.isArray(savedPlaylists) ? savedPlaylists : [];
 
             // Load favorites
             const savedFavs = Utils.getStorage(CONFIG.storage.favorites, []);
-            state.favorites = new Set(savedFavs);
+            state.favorites = new Set(Array.isArray(savedFavs) ? savedFavs : []);
 
             // Load volume
             const savedVol = Utils.getStorage(CONFIG.storage.volume, null);
@@ -46,33 +38,58 @@ const Data = (function() {
                 state.volume = Utils.clamp(savedVol, 0, 1);
             }
 
-            // Load last played
+            // Load last played track metadata
             const lastPlayed = Utils.getStorage(CONFIG.storage.lastPlayed, null);
-            if (lastPlayed) {
-                const track = state.tracks.find(t => t.id === lastPlayed.id);
-                if (track) {
-                    state.currentTrack = track;
-                }
+            if (lastPlayed && lastPlayed.id) {
+                state.currentTrack = lastPlayed;
             }
 
             // Load queue
-            const savedQueue = Utils.getStorage(CONFIG.storage.queue, null);
-            if (savedQueue && Array.isArray(savedQueue)) {
-                state.queue = savedQueue;
-            }
+            const savedQueue = Utils.getStorage(CONFIG.storage.queue, []);
+            state.queue = Array.isArray(savedQueue) ? savedQueue : [];
+
+            // Check if library was ever scanned
+            const libMeta = Scanner.loadLibraryMeta();
+            state.hasLibrary = libMeta.length > 0;
 
             return true;
         } catch (e) {
             console.error('Data.init error:', e);
-            // Fallback to minimal state
-            state.tracks = CONFIG.demoTracks.map(t => ({...t}));
-            state.albums = CONFIG.demoAlbums.map(a => ({...a}));
-            state.playlists = CONFIG.demoPlaylists.map(p => ({...p}));
             return false;
         }
     }
 
-    // Getters
+    // Set scanned tracks
+    function setTracks(tracks) {
+        state.tracks = Array.isArray(tracks) ? tracks : [];
+        state.hasLibrary = state.tracks.length > 0;
+        buildAlbumsFromTracks();
+    }
+
+    // Auto-build albums from track metadata
+    function buildAlbumsFromTracks() {
+        const albumMap = {};
+        state.tracks.forEach(t => {
+            const key = t.album + '|' + t.artist;
+            if (!albumMap[key]) {
+                albumMap[key] = {
+                    id: 'album_' + Utils.generateId(),
+                    title: t.album,
+                    artist: t.artist,
+                    cover: t.cover,
+                    year: t.year,
+                    tracks: []
+                };
+            }
+            albumMap[key].tracks.push(t.id);
+            // Use first track cover if album has no cover
+            if (!albumMap[key].cover && t.cover) {
+                albumMap[key].cover = t.cover;
+            }
+        });
+        state.albums = Object.values(albumMap);
+    }
+
     function getState() {
         return {
             tracks: [...state.tracks],
@@ -87,7 +104,8 @@ const Data = (function() {
             repeat: state.repeat,
             volume: state.volume,
             searchQuery: state.searchQuery,
-            currentPage: state.currentPage
+            currentPage: state.currentPage,
+            hasLibrary: state.hasLibrary
         };
     }
 
@@ -131,17 +149,24 @@ const Data = (function() {
         if (!query) return [];
         const q = query.toLowerCase().trim();
         return state.tracks.filter(t => 
-            t.title.toLowerCase().includes(q) ||
-            t.artist.toLowerCase().includes(q) ||
-            t.album.toLowerCase().includes(q)
+            (t.title && t.title.toLowerCase().includes(q)) ||
+            (t.artist && t.artist.toLowerCase().includes(q)) ||
+            (t.album && t.album.toLowerCase().includes(q))
         );
     }
 
-    // Setters
     function setCurrentTrack(track) {
         state.currentTrack = track;
         if (track) {
-            Utils.setStorage(CONFIG.storage.lastPlayed, {id: track.id, timestamp: Date.now()});
+            Utils.setStorage(CONFIG.storage.lastPlayed, {
+                id: track.id,
+                title: track.title,
+                artist: track.artist,
+                album: track.album,
+                cover: track.cover,
+                duration: track.duration,
+                timestamp: Date.now()
+            });
         }
     }
 
@@ -172,7 +197,6 @@ const Data = (function() {
         state.searchQuery = query;
     }
 
-    // Queue management
     function setQueue(tracks, startIndex) {
         state.queue = tracks.map(t => typeof t === 'string' ? t : t.id);
         state.queueIndex = typeof startIndex === 'number' ? startIndex : 0;
@@ -214,6 +238,11 @@ const Data = (function() {
     function prevTrack() {
         if (state.queue.length === 0) return null;
 
+        if (Player.getCurrentTime() > 3) {
+            Player.seek(0);
+            return getTrack(state.queue[state.queueIndex]);
+        }
+
         let prevIndex = state.queueIndex - 1;
         if (prevIndex < 0) {
             if (state.repeat === 'all') {
@@ -231,7 +260,6 @@ const Data = (function() {
         Utils.setStorage(CONFIG.storage.queue, state.queue);
     }
 
-    // Favorites
     function toggleFavorite(trackId) {
         if (state.favorites.has(trackId)) {
             state.favorites.delete(trackId);
@@ -242,7 +270,6 @@ const Data = (function() {
         return state.favorites.has(trackId);
     }
 
-    // Playlists
     function createPlaylist(name) {
         const pl = {
             id: Utils.generateId(),
@@ -295,6 +322,7 @@ const Data = (function() {
 
     return {
         init,
+        setTracks,
         getState,
         getTrack,
         getTracks,

@@ -7,18 +7,13 @@ const Player = (function() {
 
     let audio = null;
     let isReady = false;
-    let updateInterval = null;
+    let currentObjectUrl = null;
     let listeners = {};
 
-    // Safe event emitter
     function emit(event, data) {
         if (listeners[event]) {
             listeners[event].forEach(cb => {
-                try {
-                    cb(data);
-                } catch (e) {
-                    console.error('Player event listener error:', e);
-                }
+                try { cb(data); } catch (e) { console.error(e); }
             });
         }
     }
@@ -35,21 +30,16 @@ const Player = (function() {
         }
     }
 
-    // Initialize audio element
     function init() {
         try {
             if (audio) {
-                audio.pause();
-                audio.src = '';
-                audio = null;
+                cleanup();
             }
 
             audio = new Audio();
             audio.preload = CONFIG.audio.preload;
-            audio.crossOrigin = CONFIG.audio.crossOrigin;
             audio.volume = Data.getState().volume;
 
-            // Bind events with error recovery
             audio.addEventListener('loadedmetadata', () => {
                 emit('loadedmetadata', { duration: audio.duration });
             });
@@ -92,12 +82,34 @@ const Player = (function() {
         }
     }
 
+    function cleanup() {
+        try {
+            if (audio) {
+                audio.pause();
+                audio.src = '';
+                audio.load();
+            }
+            if (currentObjectUrl) {
+                URL.revokeObjectURL(currentObjectUrl);
+                currentObjectUrl = null;
+            }
+        } catch (e) {
+            console.error('Player.cleanup error:', e);
+        }
+    }
+
     function loadTrack(track) {
         if (!isReady || !audio || !track) {
             console.warn('Player not ready or no track provided');
             return false;
         }
         try {
+            // Clean up previous blob URL
+            if (currentObjectUrl && currentObjectUrl !== track.url) {
+                URL.revokeObjectURL(currentObjectUrl);
+            }
+
+            currentObjectUrl = track.url;
             audio.src = track.url;
             audio.load();
             return true;
@@ -216,17 +228,10 @@ const Player = (function() {
     }
 
     function destroy() {
-        try {
-            if (audio) {
-                audio.pause();
-                audio.src = '';
-                audio.load();
-            }
-            listeners = {};
-            isReady = false;
-        } catch (e) {
-            console.error('Player.destroy error:', e);
-        }
+        cleanup();
+        listeners = {};
+        isReady = false;
+        audio = null;
     }
 
     return {

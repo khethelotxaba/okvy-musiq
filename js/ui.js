@@ -5,7 +5,6 @@
 const UI = (function() {
     'use strict';
 
-    // DOM element cache
     const el = {};
 
     function cacheElements() {
@@ -65,8 +64,7 @@ const UI = (function() {
         }
     }
 
-    // Toast notifications
-    function showToast(message, type) {
+    function showToast(message) {
         try {
             if (!el.toastContainer) return;
             const toast = document.createElement('div');
@@ -81,7 +79,6 @@ const UI = (function() {
         }
     }
 
-    // Sidebar
     function openSidebar() {
         try {
             el.sidebar.classList.add('open');
@@ -110,7 +107,6 @@ const UI = (function() {
         }
     }
 
-    // Full Player
     function openFullPlayer() {
         try {
             el.fullPlayer.classList.add('open');
@@ -129,7 +125,6 @@ const UI = (function() {
         }
     }
 
-    // Playlist Modal
     function openPlaylistModal(trackId) {
         try {
             el.playlistModal.dataset.trackId = trackId;
@@ -152,7 +147,6 @@ const UI = (function() {
     function renderPlaylistModal() {
         try {
             const playlists = Data.getState().playlists;
-            const trackId = el.playlistModal.dataset.trackId;
             if (!el.playlistModalList) return;
 
             el.playlistModalList.innerHTML = playlists.map(pl => `
@@ -169,7 +163,6 @@ const UI = (function() {
         }
     }
 
-    // Update Now Playing Bar
     function updateNowPlaying(track, isPlaying) {
         try {
             if (!track) {
@@ -182,7 +175,6 @@ const UI = (function() {
             el.npTitle.textContent = track.title || 'Unknown';
             el.npArtist.textContent = track.artist || 'Unknown artist';
 
-            // Sidebar mini player
             el.sidebarArt.src = track.cover || '';
             el.sidebarTitle.textContent = track.title || 'Not Playing';
             el.sidebarArtist.textContent = track.artist || '-';
@@ -213,21 +205,11 @@ const UI = (function() {
 
     function updateProgress(percent, currentTime, duration) {
         try {
-            if (el.npProgress) {
-                el.npProgress.style.width = percent + '%';
-            }
-            if (el.fpProgressBar) {
-                el.fpProgressBar.style.width = percent + '%';
-            }
-            if (el.fpProgressHandle) {
-                el.fpProgressHandle.style.left = percent + '%';
-            }
-            if (el.fpCurrent) {
-                el.fpCurrent.textContent = Utils.formatTime(currentTime);
-            }
-            if (el.fpDuration) {
-                el.fpDuration.textContent = Utils.formatTime(duration);
-            }
+            if (el.npProgress) el.npProgress.style.width = percent + '%';
+            if (el.fpProgressBar) el.fpProgressBar.style.width = percent + '%';
+            if (el.fpProgressHandle) el.fpProgressHandle.style.left = percent + '%';
+            if (el.fpCurrent) el.fpCurrent.textContent = Utils.formatTime(currentTime);
+            if (el.fpDuration) el.fpDuration.textContent = Utils.formatTime(duration);
         } catch (e) {
             console.error('UI.updateProgress error:', e);
         }
@@ -252,38 +234,88 @@ const UI = (function() {
         }
     }
 
-    // Render pages
+    // SCAN UI
+    function renderScanPrompt() {
+        return `
+            <div class="page">
+                <div class="empty-state" style="padding-top:80px;">
+                    <div class="empty-icon" style="font-size:48px;">🎵</div>
+                    <h3 style="font-size:1.5rem;margin-bottom:8px;">Your Library is Empty</h3>
+                    <p style="color:var(--text-muted);margin-bottom:32px;max-width:320px;">
+                        Scan your device for music files to start listening.
+                    </p>
+
+                    <div style="display:flex;flex-direction:column;gap:12px;align-items:center;">
+                        <label class="btn-gold" style="cursor:pointer;display:flex;align-items:center;gap:8px;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            Scan Folder
+                            <input type="file" id="folder-input" webkitdirectory directory multiple 
+                                style="display:none;" accept="audio/*">
+                        </label>
+
+                        <label class="btn-gold" style="cursor:pointer;display:flex;align-items:center;gap:8px;background:var(--bg-elevated);color:var(--text-primary);box-shadow:none;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                            Select Files
+                            <input type="file" id="files-input" multiple 
+                                style="display:none;" accept="audio/*">
+                        </label>
+                    </div>
+
+                    <div id="scan-status" style="margin-top:24px;font-size:0.875rem;color:var(--text-muted);display:none;">
+                        <div class="skeleton" style="width:200px;height:8px;border-radius:4px;margin-bottom:8px;"></div>
+                        <span id="scan-count">Scanning...</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function showScanProgress(current, total) {
+        const status = document.getElementById('scan-status');
+        const count = document.getElementById('scan-count');
+        if (status) status.style.display = 'block';
+        if (count) count.textContent = `Found ${current} songs${total ? ' of ' + total : ''}`;
+    }
+
+    function hideScanProgress() {
+        const status = document.getElementById('scan-status');
+        if (status) status.style.display = 'none';
+    }
+
+    // PAGES
     function renderPage(pageName) {
         try {
             Data.setCurrentPage(pageName);
             el.pageTitle.textContent = pageName.charAt(0).toUpperCase() + pageName.slice(1);
 
-            switch(pageName) {
-                case 'home':
-                    renderHome();
-                    break;
-                case 'search':
-                    renderSearch();
-                    break;
-                case 'library':
-                    renderLibrary();
-                    break;
-                case 'favorites':
-                    renderFavorites();
-                    break;
-                case 'playlists':
-                    renderPlaylists();
-                    break;
-                default:
-                    renderHome();
+            const state = Data.getState();
+
+            if (!state.hasLibrary && pageName !== 'search') {
+                el.pageContainer.innerHTML = renderScanPrompt();
+                bindScanInputs();
+                updateNavActive(pageName);
+                return;
             }
 
-            // Update nav active state
-            document.querySelectorAll('.nav-item').forEach(item => {
-                item.classList.toggle('active', item.dataset.page === pageName);
-            });
+            switch(pageName) {
+                case 'home': renderHome(); break;
+                case 'search': renderSearch(); break;
+                case 'library': renderLibrary(); break;
+                case 'favorites': renderFavorites(); break;
+                case 'playlists': renderPlaylists(); break;
+                default: renderHome();
+            }
 
-            // Close sidebar on mobile
+            updateNavActive(pageName);
+
             if (window.innerWidth < 1024) {
                 closeSidebar();
             }
@@ -293,15 +325,48 @@ const UI = (function() {
         }
     }
 
+    function updateNavActive(pageName) {
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.page === pageName);
+        });
+    }
+
+    function bindScanInputs() {
+        const folderInput = document.getElementById('folder-input');
+        const filesInput = document.getElementById('files-input');
+
+        if (folderInput) {
+            folderInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    App.handleScan(e.target.files);
+                }
+            });
+        }
+
+        if (filesInput) {
+            filesInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    App.handleScan(e.target.files);
+                }
+            });
+        }
+    }
+
     function renderHome() {
         const tracks = Data.getTracks();
         const albums = Data.getState().albums;
         const playlists = Data.getState().playlists;
 
+        if (tracks.length === 0) {
+            el.pageContainer.innerHTML = renderScanPrompt();
+            bindScanInputs();
+            return;
+        }
+
         el.pageContainer.innerHTML = `
             <div class="page">
                 ${renderHero(tracks[0])}
-                ${renderSection('Recently Played', tracks.slice(0, 5))}
+                ${renderSection('Recently Added', tracks.slice(0, 6))}
                 ${renderAlbumSection('Albums', albums)}
                 ${renderPlaylistSection('Your Playlists', playlists)}
                 ${renderTrackListSection('All Songs', tracks)}
@@ -313,10 +378,10 @@ const UI = (function() {
         if (!track) return '';
         return `
             <div class="hero-card" data-track-id="${track.id}">
-                <img src="${track.cover}" alt="${Utils.escapeHtml(track.title)}">
+                <img src="${track.cover || 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=800&h=400&fit=crop'}" alt="${Utils.escapeHtml(track.title)}">
                 <div class="hero-gradient"></div>
                 <div class="hero-content">
-                    <span class="hero-badge">Featured</span>
+                    <span class="hero-badge">Now Available</span>
                     <h2 class="hero-title">${Utils.escapeHtml(track.title)}</h2>
                     <p class="hero-subtitle">${Utils.escapeHtml(track.artist)} — ${Utils.escapeHtml(track.album)}</p>
                 </div>
@@ -346,7 +411,7 @@ const UI = (function() {
                 ${albums.map(a => `
                     <div class="media-card" data-album-id="${a.id}">
                         <div class="media-art">
-                            <img src="${a.cover}" alt="${Utils.escapeHtml(a.title)}">
+                            <img src="${a.cover || 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400&h=400&fit=crop'}" alt="${Utils.escapeHtml(a.title)}">
                             <div class="media-overlay">
                                 <button class="play-overlay-btn" data-album-id="${a.id}">
                                     <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -391,7 +456,7 @@ const UI = (function() {
         return `
             <div class="media-card" data-track-id="${track.id}">
                 <div class="media-art">
-                    <img src="${track.cover}" alt="${Utils.escapeHtml(track.title)}">
+                    <img src="${track.cover || 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=400&h=400&fit=crop'}" alt="${Utils.escapeHtml(track.title)}">
                     <div class="media-overlay">
                         <button class="play-overlay-btn" data-track-id="${track.id}">
                             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -416,14 +481,14 @@ const UI = (function() {
         `;
     }
 
-    function renderTrackItem(track, index, options) {
+    function renderTrackItem(track, index) {
         if (!track) return '';
         const isActive = Data.getState().currentTrack && Data.getState().currentTrack.id === track.id;
         const isFav = Data.isFavorite(track.id);
         return `
             <div class="track-item ${isActive ? 'active' : ''}" data-track-id="${track.id}">
                 <span class="track-num">${index}</span>
-                <img class="track-art" src="${track.cover}" alt="">
+                <img class="track-art" src="${track.cover || 'https://images.unsplash.com/photo-1493225255756-d9584f8606e9?w=100&h=100&fit=crop'}" alt="">
                 <div class="track-info">
                     <span class="track-title">${Utils.escapeHtml(track.title)}</span>
                     <span class="track-artist">${Utils.escapeHtml(track.artist)}</span>
@@ -482,8 +547,8 @@ const UI = (function() {
             container.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-icon">🔍</div>
-                    <h3>Search for music</h3>
-                    <p>Type a song name, artist, or album to find your favorite tracks.</p>
+                    <h3>Search your library</h3>
+                    <p>Type to find songs, artists, or albums.</p>
                 </div>
             `;
             return;
@@ -495,7 +560,7 @@ const UI = (function() {
                 <div class="empty-state">
                     <div class="empty-icon">😕</div>
                     <h3>No results found</h3>
-                    <p>Try searching with different keywords.</p>
+                    <p>Try different keywords.</p>
                 </div>
             `;
             return;
@@ -513,6 +578,11 @@ const UI = (function() {
 
     function renderLibrary() {
         const albums = Data.getState().albums;
+        if (albums.length === 0) {
+            el.pageContainer.innerHTML = renderScanPrompt();
+            bindScanInputs();
+            return;
+        }
         el.pageContainer.innerHTML = `
             <div class="page">
                 ${renderAlbumSection('All Albums', albums)}
@@ -526,11 +596,7 @@ const UI = (function() {
             <div class="page">
                 ${favorites.length > 0 
                     ? renderTrackListSection('Your Favorites', favorites)
-                    : `<div class="empty-state">
-                        <div class="empty-icon">💛</div>
-                        <h3>No favorites yet</h3>
-                        <p>Tap the heart icon on any song to add it here.</p>
-                       </div>`
+                    : `<div class="empty-state"><div class="empty-icon">💛</div><h3>No favorites yet</h3><p>Tap the heart icon on any song to add it here.</p></div>`
                 }
             </div>
         `;
@@ -588,7 +654,7 @@ const UI = (function() {
                 <div class="page">
                     <div style="display:flex;align-items:center;gap:16px;margin:20px 0;">
                         <div style="width:120px;height:120px;border-radius:var(--radius-xl);overflow:hidden;background:var(--bg-elevated);flex-shrink:0;">
-                            <img src="${album.cover}" style="width:100%;height:100%;object-fit:cover;" alt="">
+                            <img src="${album.cover || 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=400&h=400&fit=crop'}" style="width:100%;height:100%;object-fit:cover;" alt="">
                         </div>
                         <div>
                             <h2 style="font-size:1.5rem;font-weight:800;margin-bottom:4px;">${Utils.escapeHtml(album.title)}</h2>
@@ -607,7 +673,6 @@ const UI = (function() {
         }
     }
 
-    // Update sidebar playlists
     function updateSidebarPlaylists() {
         try {
             const playlists = Data.getState().playlists;
@@ -651,6 +716,9 @@ const UI = (function() {
         renderPlaylistDetail,
         renderAlbumDetail,
         updateSidebarPlaylists,
+        renderScanPrompt,
+        showScanProgress,
+        hideScanProgress,
         get el() { return el; }
     };
 })();

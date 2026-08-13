@@ -6,10 +6,8 @@ const App = (function() {
     'use strict';
 
     let isInitialized = false;
-    let progressInterval = null;
     let isDraggingProgress = false;
 
-    // Safe initialization wrapper
     function safeInit(name, fn) {
         try {
             const result = fn();
@@ -21,7 +19,6 @@ const App = (function() {
         }
     }
 
-    // Main init
     function init() {
         if (isInitialized) {
             console.warn('App already initialized');
@@ -31,28 +28,16 @@ const App = (function() {
         try {
             console.log('=== Okvy MusiQ v' + CONFIG.version + ' ===');
 
-            // Step 1: Cache DOM elements
             safeInit('UI Elements', () => UI.cacheElements());
-
-            // Step 2: Initialize data
             safeInit('Data', () => Data.init());
-
-            // Step 3: Initialize player
             safeInit('Player', () => Player.init());
-
-            // Step 4: Setup event listeners
             safeInit('Event Listeners', () => setupEventListeners());
-
-            // Step 5: Setup player events
             safeInit('Player Events', () => setupPlayerEvents());
-
-            // Step 6: Render initial page
+            safeInit('Scanner Events', () => setupScannerEvents());
             safeInit('Initial Render', () => {
                 UI.updateSidebarPlaylists();
                 UI.renderPage('home');
             });
-
-            // Step 7: Restore last playing state
             safeInit('State Restore', () => restoreState());
 
             isInitialized = true;
@@ -66,10 +51,11 @@ const App = (function() {
 
     function restoreState() {
         const state = Data.getState();
-        if (state.currentTrack) {
+        if (state.currentTrack && state.hasLibrary) {
+            // For restored state, we only have metadata — user needs to re-scan to play
+            // But we can show the last played track info
             UI.updateNowPlaying(state.currentTrack, false);
             UI.updateFullPlayer(state.currentTrack, false);
-            Player.loadTrack(state.currentTrack);
         }
     }
 
@@ -82,14 +68,53 @@ const App = (function() {
         if (appEl) appEl.style.display = 'none';
     }
 
-    // Event Listeners Setup
+    // SCANNER HANDLER
+    function handleScan(fileList) {
+        if (!fileList || fileList.length === 0) return;
+        if (Scanner.isScanningNow()) {
+            UI.showToast('Scan already in progress');
+            return;
+        }
+
+        UI.showToast('Scanning ' + fileList.length + ' files...');
+
+        Scanner.scanFiles(fileList).then(tracks => {
+            if (tracks.length === 0) {
+                UI.showToast('No audio files found');
+                UI.hideScanProgress();
+                return;
+            }
+
+            Data.setTracks(tracks);
+            Scanner.saveLibrary(tracks);
+
+            UI.showToast('Found ' + tracks.length + ' songs');
+            UI.hideScanProgress();
+            UI.renderPage('home');
+            UI.updateSidebarPlaylists();
+        }).catch(err => {
+            console.error('Scan error:', err);
+            UI.showToast('Scan failed: ' + (err.message || 'Unknown error'));
+            UI.hideScanProgress();
+        });
+    }
+
+    function setupScannerEvents() {
+        Scanner.on('scanProgress', (data) => {
+            UI.showScanProgress(data.current, data.total);
+        });
+
+        Scanner.on('scanComplete', (data) => {
+            console.log('Scan complete:', data.count, 'tracks');
+        });
+    }
+
+    // EVENT LISTENERS
     function setupEventListeners() {
-        // Navigation
         bindSafe(UI.el.menuToggle, 'click', () => UI.toggleSidebar());
         bindSafe(UI.el.closeSidebar, 'click', () => UI.closeSidebar());
         bindSafe(UI.el.sidebarOverlay, 'click', () => UI.closeSidebar());
 
-        // Nav items
         document.querySelectorAll('.nav-item').forEach(item => {
             bindSafe(item, 'click', (e) => {
                 e.preventDefault();
@@ -98,12 +123,10 @@ const App = (function() {
             });
         });
 
-        // Search toggle
         bindSafe(UI.el.searchToggle, 'click', () => {
             UI.renderPage('search');
         });
 
-        // Now Playing Bar
         bindSafe(UI.el.npTrack, 'click', () => UI.openFullPlayer());
         bindSafe(UI.el.npPlay, 'click', (e) => {
             e.stopPropagation();
@@ -118,7 +141,6 @@ const App = (function() {
             playNext();
         });
 
-        // Full Player
         bindSafe(UI.el.fpClose, 'click', () => UI.closeFullPlayer());
         bindSafe(UI.el.fpPlay, 'click', togglePlayback);
         bindSafe(UI.el.fpPrev, 'click', playPrev);
@@ -133,10 +155,8 @@ const App = (function() {
             }
         });
 
-        // Progress bar dragging
         setupProgressBar();
 
-        // Playlist Modal
         bindSafe(UI.el.closePlaylistModal, 'click', UI.closePlaylistModal);
         bindSafe(UI.el.playlistModal, 'click', (e) => {
             if (e.target === UI.el.playlistModal) UI.closePlaylistModal();
@@ -155,10 +175,8 @@ const App = (function() {
             }
         });
 
-        // Page container delegation
         bindSafe(UI.el.pageContainer, 'click', handlePageClick);
 
-        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.target.tagName === 'INPUT') return;
             try {
@@ -179,7 +197,6 @@ const App = (function() {
             }
         });
 
-        // Handle back button
         window.addEventListener('popstate', () => {
             const hash = window.location.hash.replace('#', '') || 'home';
             if (['home','search','library','favorites','playlists'].includes(hash)) {
@@ -226,7 +243,6 @@ const App = (function() {
             }
         });
 
-        // Touch support
         UI.el.fpProgressContainer.addEventListener('touchstart', (e) => {
             isDraggingProgress = true;
             UI.el.fpProgressContainer.classList.add('dragging');
@@ -245,7 +261,7 @@ const App = (function() {
         });
     }
 
-    // Player Events
+    // PLAYER EVENTS
     function setupPlayerEvents() {
         Player.on('timeupdate', (data) => {
             if (!isDraggingProgress && data.duration > 0) {
@@ -276,9 +292,12 @@ const App = (function() {
         });
     }
 
-    // Playback Control
+    // PLAYBACK CONTROL
     function playTrack(track) {
-        if (!track) return;
+        if (!track || !track.url) {
+            UI.showToast('Track not available. Please re-scan your library.');
+            return;
+        }
         try {
             Data.setCurrentTrack(track);
             Player.loadTrack(track);
@@ -299,10 +318,12 @@ const App = (function() {
         try {
             const state = Data.getState();
             if (!state.currentTrack) {
-                // Play first track if none selected
                 const tracks = Data.getTracks();
                 if (tracks.length > 0) {
+                    Data.setQueue(tracks, 0);
                     playTrack(tracks[0]);
+                } else {
+                    UI.showToast('Scan your music library first');
                 }
                 return;
             }
@@ -332,7 +353,6 @@ const App = (function() {
 
     function playPrev() {
         try {
-            // If current time > 3s, restart track
             if (Player.getCurrentTime() > 3) {
                 Player.seek(0);
                 return;
@@ -416,7 +436,6 @@ const App = (function() {
                 UI.updateSidebarPlaylists();
                 UI.showToast('Playlist created: ' + pl.name);
 
-                // Add current track if modal is open
                 const trackId = UI.el.playlistModal.dataset.trackId;
                 if (trackId) {
                     Data.addToPlaylist(pl.id, trackId);
@@ -429,16 +448,14 @@ const App = (function() {
         }
     }
 
-    // Page click delegation handler
+    // PAGE CLICK DELEGATION
     function handlePageClick(e) {
         try {
-            // Track cards
             const trackCard = e.target.closest('[data-track-id]');
             if (trackCard && !e.target.closest('.play-overlay-btn') && !e.target.closest('.favorite-btn') && !e.target.closest('.add-btn')) {
                 const trackId = trackCard.dataset.trackId;
                 const track = Data.getTrack(trackId);
                 if (track) {
-                    // Set queue to all visible tracks
                     const allCards = UI.el.pageContainer.querySelectorAll('[data-track-id]');
                     const ids = Array.from(allCards).map(c => c.dataset.trackId);
                     const idx = ids.indexOf(trackId);
@@ -449,7 +466,6 @@ const App = (function() {
                 return;
             }
 
-            // Play overlay buttons
             const playBtn = e.target.closest('.play-overlay-btn');
             if (playBtn) {
                 const trackId = playBtn.dataset.trackId;
@@ -478,28 +494,24 @@ const App = (function() {
                 return;
             }
 
-            // Album cards
             const albumCard = e.target.closest('[data-album-id]');
             if (albumCard && !e.target.closest('.play-overlay-btn')) {
                 UI.renderAlbumDetail(albumCard.dataset.albumId);
                 return;
             }
 
-            // Playlist cards
             const playlistCard = e.target.closest('[data-playlist-id]');
             if (playlistCard && !e.target.closest('.play-overlay-btn') && !e.target.closest('.playlist-item')) {
                 UI.renderPlaylistDetail(playlistCard.dataset.playlistId);
                 return;
             }
 
-            // Sidebar playlist items
             const sidebarPl = e.target.closest('.playlist-item');
             if (sidebarPl) {
                 UI.renderPlaylistDetail(sidebarPl.dataset.playlistId);
                 return;
             }
 
-            // Favorite buttons
             const favBtn = e.target.closest('.favorite-btn');
             if (favBtn) {
                 const trackId = favBtn.dataset.trackId;
@@ -513,7 +525,6 @@ const App = (function() {
                 return;
             }
 
-            // Add to playlist buttons
             const addBtn = e.target.closest('.add-btn');
             if (addBtn) {
                 const trackId = addBtn.dataset.trackId;
@@ -523,7 +534,6 @@ const App = (function() {
                 return;
             }
 
-            // Play album/playlist buttons
             const playAlbumBtn = e.target.closest('#play-album-btn');
             if (playAlbumBtn) {
                 const tracks = Data.getAlbumTracks(playAlbumBtn.dataset.albumId);
@@ -544,14 +554,12 @@ const App = (function() {
                 return;
             }
 
-            // New playlist button
             const newPlBtn = e.target.closest('#new-playlist-btn');
             if (newPlBtn) {
                 createNewPlaylist();
                 return;
             }
 
-            // Hero card
             const hero = e.target.closest('.hero-card');
             if (hero) {
                 const trackId = hero.dataset.trackId;
@@ -567,18 +575,15 @@ const App = (function() {
         }
     }
 
-    return { init };
+    return { init, handleScan };
 })();
 
-// Deferred initialization to ensure DOM is fully ready
 document.addEventListener('DOMContentLoaded', function() {
-    // Small delay to ensure all scripts are parsed
     setTimeout(function() {
         App.init();
     }, 50);
 });
 
-// Fallback: if DOMContentLoaded already fired
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
     setTimeout(function() {
         App.init();

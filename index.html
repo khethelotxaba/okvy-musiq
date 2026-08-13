@@ -13,10 +13,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/styles.css">
     <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(console.error);
-  }
-</script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(console.error);
+      }
+    </script>
 </head>
 <body>
     <!-- Critical Error Fallback -->
@@ -93,9 +93,7 @@
 
                 <div class="sidebar-section">
                     <h3 class="section-label">Your Playlists</h3>
-                    <div id="user-playlists" class="playlist-list">
-                        <!-- Populated by JS -->
-                    </div>
+                    <div id="user-playlists" class="playlist-list"></div>
                 </div>
 
                 <div class="sidebar-footer">
@@ -110,12 +108,9 @@
             </div>
         </aside>
 
-        <!-- Sidebar Overlay -->
         <div id="sidebar-overlay" class="sidebar-overlay"></div>
 
-        <!-- Main Content -->
         <main class="main-content">
-            <!-- Top Bar -->
             <header class="top-bar">
                 <button id="menu-toggle" class="icon-btn" aria-label="Open menu">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -133,14 +128,10 @@
                 </button>
             </header>
 
-            <!-- Page Container -->
-            <div id="page-container" class="page-container">
-                <!-- Pages injected by JS -->
-            </div>
+            <div id="page-container" class="page-container"></div>
         </main>
 
-        <!-- Now Playing Bar -->
-        <div id="now-playing-bar" class="now-playing-bar">
+        <div id="now-playing-bar" class="now-playing-bar hidden">
             <div class="np-progress-container">
                 <div id="np-progress" class="np-progress"></div>
             </div>
@@ -175,7 +166,6 @@
             </div>
         </div>
 
-        <!-- Full Player Modal -->
         <div id="full-player" class="full-player">
             <div class="full-player-bg">
                 <img id="fp-bg-img" src="" alt="">
@@ -241,8 +231,9 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="17 1 21 5 17 9"/>
                             <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-                            <polyline points="7 23 3 19 7 15"/>
-                            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                            <polyline points="21 16 21 21 16 21"/>
+                            <line x1="15" y1="15" x2="21" y2="21"/>
+                            <line x1="4" y1="4" x2="9" y2="9"/>
                         </svg>
                     </button>
                 </div>
@@ -273,10 +264,8 @@
             </div>
         </div>
 
-        <!-- Toast Container -->
         <div id="toast-container" class="toast-container"></div>
 
-        <!-- Add to Playlist Modal -->
         <div id="playlist-modal" class="modal">
             <div class="modal-glass">
                 <div class="modal-header">
@@ -294,7 +283,6 @@
         </div>
     </div>
 
-    <!-- Scripts loaded with error handling -->
     <script>
         window.onerror = function(msg, url, line, col, error) {
             console.error('Global error:', msg, 'at', url, line, col);
@@ -310,8 +298,10 @@
             document.getElementById('app').style.display = 'none';
         };
     </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
     <script src="js/config.js"></script>
     <script src="js/utils.js"></script>
+    <script src="js/scanner.js"></script>
     <script src="js/data.js"></script>
     <script src="js/player.js"></script>
     <script src="js/ui.js"></script>
