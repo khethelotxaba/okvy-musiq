@@ -383,7 +383,7 @@ html, body {
 
 .np-controls { display: flex; align-items: center; gap: 8px; }
 .control-btn {
-  width: 36px; height: 36px;
+  width: 40px; height: 40px;
   border-radius: 50%;
   background: transparent;
   border: none;
@@ -396,9 +396,9 @@ html, body {
   touch-action: manipulation;
 }
 .control-btn:hover { background: var(--glass-bg); }
-.control-btn svg { width: 20px; height: 20px; }
+.control-btn svg { width: 22px; height: 22px; }
 .control-btn.play-btn {
-  width: 44px; height: 44px;
+  width: 52px; height: 52px;
   background: var(--gold-primary);
   color: var(--bg-primary);
   transition: transform 0.15s, box-shadow 0.2s, background 0.3s;
@@ -416,9 +416,19 @@ html, body {
   50% { transform: scale(0.85); }
   100% { transform: scale(0.9); }
 }
-.control-btn.secondary { color: var(--text-muted); }
-.control-btn.secondary.active { color: var(--gold-primary); }
-.control-btn.secondary svg { width: 18px; height: 18px; }
+.control-btn.secondary {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+.control-btn.secondary:hover { opacity: 1; background: var(--glass-bg); }
+.control-btn.secondary.active { color: var(--gold-primary); opacity: 1; }
+.control-btn.secondary svg { width: 20px; height: 20px; }
+
+/* Full player larger icons */
+.fp-controls .control-btn { width: 44px; height: 44px; }
+.fp-controls .control-btn svg { width: 26px; height: 26px; }
+.fp-controls .play-btn.large { width: 72px; height: 72px; }
+.fp-controls .play-btn.large svg { width: 32px; height: 32px; }
 
 /* Full Player */
 .full-player {
@@ -490,10 +500,7 @@ html, body {
 }
 .time-display { display: flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--text-muted); }
 
-.fp-controls { display: flex; align-items: center; gap: 20px; margin-bottom: 24px; }
-.fp-controls .control-btn svg { width: 24px; height: 24px; }
-.fp-controls .play-btn.large { width: 64px; height: 64px; }
-.fp-controls .play-btn.large svg { width: 28px; height: 28px; }
+
 
 .fp-actions { display: flex; gap: 24px; }
 .action-btn {
@@ -514,12 +521,23 @@ html, body {
 .waveform-container { width: 100%; max-width: 400px; height: 60px; margin-bottom: 16px; }
 #waveform-canvas { width: 100%; height: 100%; }
 
-/* Particles */
+/* Particles - Full Screen Background Visualizer */
 #particles-canvas {
   position: fixed; inset: 0;
   pointer-events: none;
-  z-index: 1;
+  z-index: 0;
+  width: 100vw;
+  height: 100vh;
 }
+
+/* Ensure app content sits above particles */
+.app { position: relative; z-index: 1; }
+.sidebar { z-index: 100; }
+.main-content { position: relative; z-index: 2; }
+.now-playing-bar { z-index: 90; }
+.full-player { z-index: 200; }
+.modal { z-index: 300; }
+.toast-container { z-index: 400; }
 
 /* Search */
 .search-box {
@@ -807,3 +825,17 @@ html, body {
   to { opacity: 1; transform: translateY(0); }
 }
 .page-container > * { animation: fadeIn 0.3s ease-out; }
+
+/* Waveform Seekbar */
+.waveform-container {
+  width: 100%;
+  max-width: 400px;
+  height: 48px;
+  margin: 0 auto 16px;
+  position: relative;
+}
+#waveform-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}

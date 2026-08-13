@@ -736,7 +736,13 @@ const UI = {
   // FULL PLAYER
   openFullPlayer() {
     document.getElementById('full-player').classList.add('open');
-    if (SettingsManager.get('ui.waveformSeekbar')) this.renderWaveform();
+    const container = document.getElementById('waveform-container');
+    if (SettingsManager.get('ui.waveformSeekbar')) {
+      if (container) container.style.display = 'block';
+      this.renderWaveform();
+    } else {
+      if (container) container.style.display = 'none';
+    }
   },
 
   closeFullPlayer() {
@@ -747,29 +753,79 @@ const UI = {
   async renderWaveform() {
     const track = Player.currentTrack;
     if (!track) return;
+    const container = document.getElementById('waveform-container');
     const canvas = document.getElementById('waveform-canvas');
-    if (!canvas) return;
+    if (!container || !canvas) return;
+
+    // Show container
+    container.style.display = 'block';
 
     try {
-      const res = await fetch(track.url);
+      // Get audio data from the track blob
+      const url = Player.getTrackUrl(track);
+      if (!url) return;
+
+      const res = await fetch(url);
       const buf = await res.arrayBuffer();
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const audioBuf = await audioCtx.decodeAudioData(buf);
-      const peaks = Utils.getAudioPeaks(audioBuf, 200);
+      const peaks = Utils.getAudioPeaks(audioBuf, 300);
 
       const ctx = canvas.getContext('2d');
-      canvas.width = canvas.offsetWidth;
-      canvas.height = canvas.offsetHeight;
-      const w = canvas.width / peaks.length;
-      const h = canvas.height;
+      const dpr = window.devicePixelRatio || 1;
+      const rect = container.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      ctx.scale(dpr, dpr);
 
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = 'rgba(212, 175, 55, 0.6)';
-      peaks.forEach((p, i) => {
-        const barH = p * h * 0.8;
-        ctx.fillRect(i * w, (h - barH) / 2, w - 1, barH);
-      });
-    } catch(e) {}
+      const w = rect.width / peaks.length;
+      const h = rect.height;
+      const barW = Math.max(w - 1, 1);
+
+      this.waveformPeaks = peaks;
+      this.waveformBarW = barW;
+      this.waveformBarCount = peaks.length;
+
+      this.drawWaveform(ctx, peaks, barW, rect.width, h, 0);
+
+      // Clean up temp URL if it was a blob
+      if (url !== track.url) URL.revokeObjectURL(url);
+
+    } catch(e) {
+      console.error('Waveform render failed:', e);
+      container.style.display = 'none';
+    }
+  },
+
+  drawWaveform(ctx, peaks, barW, totalW, h, progress) {
+    ctx.clearRect(0, 0, totalW, h);
+    const progressX = progress * totalW;
+    const { r, g, b } = this.particleColors;
+
+    peaks.forEach((p, i) => {
+      const x = i * (totalW / peaks.length);
+      const barH = Math.max(p * h * 0.85, 2);
+      const y = (h - barH) / 2;
+
+      // Played vs unplayed color
+      const isPlayed = x < progressX;
+      const alpha = isPlayed ? 0.9 : 0.3;
+      const brightness = isPlayed ? 1 : 0.6;
+
+      ctx.fillStyle = `rgba(${Math.min(r * brightness, 255)}, ${Math.min(g * brightness, 255)}, ${Math.min(b * brightness, 255)}, ${alpha})`;
+      ctx.fillRect(x, y, barW, barH);
+    });
+  },
+
+  updateWaveformProgress(progress) {
+    if (!this.waveformPeaks || !SettingsManager.get('ui.waveformSeekbar')) return;
+    const canvas = document.getElementById('waveform-canvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    this.drawWaveform(ctx, this.waveformPeaks, this.waveformBarW, rect.width, rect.height, progress / 100);
   },
 
   onTrackChanged(track) {
@@ -825,6 +881,7 @@ const UI = {
     document.getElementById('fp-progress-bar').style.width = detail.progress + '%';
     document.getElementById('fp-progress-handle').style.left = detail.progress + '%';
     document.getElementById('np-progress').style.width = detail.progress + '%';
+    this.updateWaveformProgress(detail.progress);
   },
 
   onAudioPeak(detail) {
@@ -836,6 +893,7 @@ const UI = {
     if (!SettingsManager.get('ui.dynamicTheming')) return;
     document.documentElement.style.setProperty('--dynamic-primary', colors.dominant);
     document.documentElement.style.setProperty('--dynamic-vibrant', colors.vibrant);
+    this.setParticleColors(colors);
   },
 
   updatePlayerControls() {
@@ -876,23 +934,65 @@ const UI = {
     this.renderCurrentPage();
   },
 
-  // PARTICLES
+  // PARTICLES - Full Screen Background Audio Visualizer
+  particleColors: { r: 212, g: 175, b: 55 },
+  particleAccent: '#d4af37',
+
   initParticles() {
     const canvas = document.getElementById('particles-canvas');
     if (!canvas) return;
     this.particlesCtx = canvas.getContext('2d');
+    this.resizeParticles();
+    window.addEventListener('resize', () => this.resizeParticles());
+
     this.particles = [];
-    for (let i = 0; i < 50; i++) {
+    this.bars = []; // For bar visualizer mode
+    this.initParticleField();
+    this.animateParticles();
+  },
+
+  resizeParticles() {
+    const canvas = document.getElementById('particles-canvas');
+    if (!canvas) return;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  },
+
+  initParticleField() {
+    const canvas = document.getElementById('particles-canvas');
+    if (!canvas) return;
+    const w = canvas.width, h = canvas.height;
+    this.particles = [];
+    const count = Math.floor((w * h) / 8000); // Density based on screen size
+    for (let i = 0; i < count; i++) {
       this.particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        vx: (Math.random() - 0.5) * 0.5,
-        vy: (Math.random() - 0.5) * 0.5,
-        size: Math.random() * 2 + 1,
-        alpha: Math.random() * 0.5 + 0.1
+        x: Math.random() * w,
+        y: Math.random() * h,
+        baseX: Math.random() * w,
+        baseY: Math.random() * h,
+        vx: 0, vy: 0,
+        size: Math.random() * 2.5 + 0.5,
+        baseSize: Math.random() * 2.5 + 0.5,
+        alpha: Math.random() * 0.4 + 0.05,
+        phase: Math.random() * Math.PI * 2,
+        speed: Math.random() * 0.5 + 0.2
       });
     }
-    this.animateParticles();
+    // Initialize frequency bars at bottom
+    this.bars = [];
+    const barCount = Math.floor(w / 12);
+    for (let i = 0; i < barCount; i++) {
+      this.bars.push({ x: i * 12, height: 0, targetHeight: 0 });
+    }
+  },
+
+  setParticleColors(colors) {
+    if (!colors) return;
+    const m = colors.dominant?.match(/\d+/g);
+    if (m) {
+      this.particleColors = { r: parseInt(m[0]), g: parseInt(m[1]), b: parseInt(m[2]) };
+    }
+    this.particleAccent = colors.vibrant || colors.dominant || '#d4af37';
   },
 
   animateParticles() {
@@ -900,24 +1000,83 @@ const UI = {
     const canvas = document.getElementById('particles-canvas');
     if (!canvas || !SettingsManager.get('ui.particlesEnabled')) return;
     const ctx = this.particlesCtx;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
 
+    const peak = Player.peakSmooth || 0;
+    const intensity = SettingsManager.get('ui.particlesIntensity') || 0.6;
+    const time = Date.now() * 0.001;
+    const { r, g, b } = this.particleColors;
+
+    // Draw floating particles
     this.particles.forEach(p => {
-      p.x += p.vx * (1 + Player.peakSmooth * 5);
-      p.y += p.vy * (1 + Player.peakSmooth * 5);
-      if (p.x < 0) p.x = canvas.width;
-      if (p.x > canvas.width) p.x = 0;
-      if (p.y < 0) p.y = canvas.height;
-      if (p.y > canvas.height) p.y = 0;
+      // Audio-reactive movement
+      const audioForce = peak * intensity * 8;
+      p.vx += (Math.random() - 0.5) * 0.1 + Math.sin(time * p.speed + p.phase) * 0.05;
+      p.vy += (Math.random() - 0.5) * 0.1 - audioForce * 0.3; // Float up with beat
+
+      // Damping
+      p.vx *= 0.98;
+      p.vy *= 0.98;
+
+      p.x += p.vx;
+      p.y += p.vy;
+
+      // Wrap around
+      if (p.x < -10) p.x = w + 10;
+      if (p.x > w + 10) p.x = -10;
+      if (p.y < -10) p.y = h + 10;
+      if (p.y > h + 10) p.y = -10;
+
+      // Size pulses with beat
+      const sizePulse = 1 + peak * intensity * 2;
+      const currentSize = p.baseSize * sizePulse;
+
+      // Alpha pulses
+      const alphaPulse = p.alpha * (0.3 + peak * intensity * 1.5);
 
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(212, 175, 55, ${p.alpha * (0.5 + Player.peakSmooth)})`;
+      ctx.arc(p.x, p.y, currentSize, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(alphaPulse, 0.8)})`;
       ctx.fill();
     });
+
+    // Draw connecting lines between nearby particles (constellation effect)
+    const connectDist = 80 + peak * 60;
+    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${0.03 + peak * 0.08})`;
+    ctx.lineWidth = 0.5;
+    for (let i = 0; i < this.particles.length; i++) {
+      for (let j = i + 1; j < this.particles.length; j++) {
+        const dx = this.particles[i].x - this.particles[j].x;
+        const dy = this.particles[i].y - this.particles[j].y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < connectDist) {
+          ctx.beginPath();
+          ctx.moveTo(this.particles[i].x, this.particles[i].y);
+          ctx.lineTo(this.particles[j].x, this.particles[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Bottom frequency bars (subtle)
+    if (peak > 0.1) {
+      const barCount = this.bars.length;
+      const barWidth = w / barCount;
+      for (let i = 0; i < barCount; i++) {
+        this.bars[i].targetHeight = Math.random() * peak * h * 0.15 * intensity;
+        this.bars[i].height += (this.bars[i].targetHeight - this.bars[i].height) * 0.2;
+        if (this.bars[i].height > 2) {
+          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.04 + peak * 0.06})`;
+          ctx.fillRect(i * barWidth, h - this.bars[i].height, barWidth - 1, this.bars[i].height);
+        }
+      }
+    }
   },
 
-  updateParticles(peak) {},
+  updateParticles(peak) {
+    // Colors updated via setParticleColors from theme-colors event
+  },
 
   // MINIPLAYER GLOW
   initMiniplayerGlow() {},
@@ -1069,10 +1228,9 @@ const UI = {
     if (!btn) return;
     let pressTimer = null;
     let isLongPress = false;
-    const LONG_PRESS_MS = 600;
+    const LONG_PRESS_MS = 500;
 
     const startPress = (e) => {
-      if (e.button !== undefined && e.button !== 0) return;
       isLongPress = false;
       pressTimer = setTimeout(() => {
         isLongPress = true;
@@ -1096,12 +1254,11 @@ const UI = {
       btn.classList.remove('holding');
     };
 
-    btn.addEventListener('mousedown', startPress);
-    btn.addEventListener('touchstart', startPress, { passive: true });
-    btn.addEventListener('mouseup', endPress);
-    btn.addEventListener('touchend', endPress);
-    btn.addEventListener('mouseleave', cancelPress);
-    btn.addEventListener('touchcancel', cancelPress);
+    // Use pointer events for unified mouse + touch handling
+    btn.addEventListener('pointerdown', startPress);
+    btn.addEventListener('pointerup', endPress);
+    btn.addEventListener('pointerleave', cancelPress);
+    btn.addEventListener('pointercancel', cancelPress);
     btn.addEventListener('contextmenu', (e) => e.preventDefault());
   },
 

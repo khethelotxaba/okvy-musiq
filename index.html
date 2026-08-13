@@ -196,20 +196,20 @@
                 </div>
                 <div class="np-controls">
                     <button id="np-prev" class="control-btn" aria-label="Previous">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="15 6 9 12 15 18"/>
-                            <line x1="5" y1="6" x2="5" y2="18"/>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="16 6 10 12 16 18"/>
+                            <line x1="6" y1="6" x2="6" y2="18"/>
                         </svg>
                     </button>
                     <button id="np-play" class="control-btn play-btn" aria-label="Play/Pause">
-                        <svg id="np-play-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="10 8 16 12 10 16 10 8"/>
+                        <svg id="np-play-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="9 6 19 12 9 18 9 6"/>
                         </svg>
                     </button>
                     <button id="np-next" class="control-btn" aria-label="Next">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="9 6 15 12 9 18"/>
-                            <line x1="19" y1="6" x2="19" y2="18"/>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="8 6 18 12 8 18 8 6"/>
+                            <line x1="18" y1="6" x2="18" y2="18"/>
                         </svg>
                     </button>
                 </div>
@@ -239,7 +239,7 @@
                     <p id="fp-artist" class="fp-artist">Artist</p>
                 </div>
 
-                <!-- Waveform -->
+                <!-- Waveform Seekbar -->
                 <div class="waveform-container" id="waveform-container" style="display:none;">
                     <canvas id="waveform-canvas"></canvas>
                 </div>
@@ -257,37 +257,36 @@
 
                 <div class="fp-controls">
                     <button id="fp-shuffle" class="control-btn secondary" aria-label="Shuffle">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M16 3h5v5"/>
-                            <path d="M4 20L21 3"/>
-                            <path d="M21 16v5h-5"/>
-                            <path d="M15 15l6 6"/>
-                            <path d="M4 4l5 5"/>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 4h3l4 8 4-8h3"/>
+                            <path d="M4 20h3l7-14"/>
+                            <path d="M14 20h6"/>
+                            <path d="M17 17l3 3-3 3"/>
                         </svg>
                     </button>
                     <button id="fp-prev" class="control-btn" aria-label="Previous">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="15 6 9 12 15 18"/>
-                            <line x1="5" y1="6" x2="5" y2="18"/>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="16 6 10 12 16 18"/>
+                            <line x1="6" y1="6" x2="6" y2="18"/>
                         </svg>
                     </button>
                     <button id="fp-play" class="control-btn play-btn large" aria-label="Play/Pause">
-                        <svg id="fp-play-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="10 8 16 12 10 16 10 8"/>
+                        <svg id="fp-play-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="9 6 19 12 9 18 9 6"/>
                         </svg>
                     </button>
                     <button id="fp-next" class="control-btn" aria-label="Next">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="9 6 15 12 9 18"/>
-                            <line x1="19" y1="6" x2="19" y2="18"/>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="8 6 18 12 8 18 8 6"/>
+                            <line x1="18" y1="6" x2="18" y2="18"/>
                         </svg>
                     </button>
                     <button id="fp-repeat" class="control-btn secondary" aria-label="Repeat">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M17 1l4 4-4 4"/>
-                            <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-                            <path d="M7 23l-4-4 4-4"/>
-                            <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 2l4 4-4 4"/>
+                            <path d="M3 12V9a4 4 0 0 1 4-4h14"/>
+                            <path d="M7 22l-4-4 4-4"/>
+                            <path d="M21 12v3a4 4 0 0 1-4 4H3"/>
                         </svg>
                     </button>
                 </div>
