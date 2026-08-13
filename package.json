@@ -1,7 +1,7 @@
 {
   "name": "okvy-musiq",
-  "version": "2.2.0",
-  "description": "Okvy MusiQ - Local Music Player v2.2",
+  "version": "2.2.1",
+  "description": "Okvy MusiQ - Local Music Player v2.2.1",
   "main": "index.html",
   "scripts": {
     "build": "echo 'No build step needed for vanilla JS'",

@@ -15,6 +15,35 @@ const UI = {
     window.addEventListener('resize', Utils.debounce(() => this.checkLandscape(), 200));
   },
 
+  artworkCache: new Map(),
+
+  getArtworkUrl(track) {
+    if (!track) return 'assets/default-art.png';
+    // If it's already a data URL or external URL, use it
+    if (track.artwork && (track.artwork.startsWith('data:') || track.artwork.startsWith('http'))) {
+      return track.artwork;
+    }
+    // If we have an artwork blob, create a URL and cache it
+    if (track.artworkBlob) {
+      if (this.artworkCache.has(track.id)) {
+        return this.artworkCache.get(track.id);
+      }
+      const url = URL.createObjectURL(track.artworkBlob);
+      this.artworkCache.set(track.id, url);
+      return url;
+    }
+    // Legacy dead blob URL - ignore
+    if (track.artwork && track.artwork.startsWith('blob:')) {
+      return 'assets/default-art.png';
+    }
+    return track.artwork || 'assets/default-art.png';
+  },
+
+  clearArtworkCache() {
+    this.artworkCache.forEach(url => URL.revokeObjectURL(url));
+    this.artworkCache.clear();
+  },
+
   bindGlobalEvents() {
     document.getElementById('menu-toggle').addEventListener('click', () => this.toggleSidebar());
     document.getElementById('close-sidebar').addEventListener('click', () => this.toggleSidebar());
@@ -208,7 +237,7 @@ const UI = {
         oncontextmenu="UI.showTrackMenu('${track.id}', event); return false;"
       >
         ${this.selectionMode ? `<div class="track-check ${selected ? 'checked' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>` : ''}
-        <img class="track-art" src="${track.artwork || 'assets/default-art.png'}" alt="" loading="lazy">
+        <img class="track-art" src="${this.getArtworkUrl(track)}" alt="" loading="lazy">
         <div class="track-info">
           <span class="track-title">${Utils.escapeHtml(track.title || 'Unknown')}</span>
           <span class="track-meta">${Utils.escapeHtml(track.artist || '')} ${track.year ? '· ' + track.year : ''}</span>
@@ -260,17 +289,25 @@ const UI = {
   // ALBUMS
   async renderAlbums(container) {
     const albums = await Data.getAll('albums');
+    const tracks = await Data.getTracks();
     const cols = this.getGridColumns();
-    container.innerHTML = `<div class="grid-container" style="grid-template-columns: repeat(${cols}, 1fr);">${albums.map(a => `
+    container.innerHTML = `<div class="grid-container" style="grid-template-columns: repeat(${cols}, 1fr);">${albums.map(a => {
+      // Get artwork from first track that has valid art
+      let art = 'assets/default-art.png';
+      for (const tid of a.tracks) {
+        const t = tracks.find(tr => tr.id === tid);
+        if (t) { art = this.getArtworkUrl(t); break; }
+      }
+      return `
       <div class="grid-item" onclick="UI.playAlbum('${a.id}')">
         <div class="grid-art">
-          <img src="${a.artwork || 'assets/default-art.png'}" alt="" loading="lazy">
+          <img src="${art}" alt="" loading="lazy">
           <div class="grid-overlay"><button class="play-overlay"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div>
         </div>
         <span class="grid-title">${Utils.escapeHtml(a.name)}</span>
         <span class="grid-subtitle">${Utils.escapeHtml(a.artist)}</span>
       </div>
-    `).join('')}</div>`;
+    `}).join('')}</div>`;
   },
 
   async playAlbum(albumId) {
@@ -287,16 +324,23 @@ const UI = {
   // ARTISTS
   async renderArtists(container) {
     const artists = await Data.getAll('artists');
+    const tracks = await Data.getTracks();
     const cols = this.getGridColumns();
-    container.innerHTML = `<div class="grid-container" style="grid-template-columns: repeat(${cols}, 1fr);">${artists.map(a => `
+    container.innerHTML = `<div class="grid-container" style="grid-template-columns: repeat(${cols}, 1fr);">${artists.map(a => {
+      let art = 'assets/default-art.png';
+      for (const tid of a.tracks) {
+        const t = tracks.find(tr => tr.id === tid);
+        if (t) { art = this.getArtworkUrl(t); break; }
+      }
+      return `
       <div class="grid-item" onclick="UI.navigate('tracks', {artist: '${Utils.escapeHtml(a.name)}'})">
         <div class="grid-art circle">
-          <img src="${a.artwork || 'assets/default-art.png'}" alt="" loading="lazy">
+          <img src="${art}" alt="" loading="lazy">
         </div>
         <span class="grid-title">${Utils.escapeHtml(a.name)}</span>
         <span class="grid-subtitle">${a.tracks.length} tracks</span>
       </div>
-    `).join('')}</div>`;
+    `}).join('')}</div>`;
   },
 
   // GENRES
@@ -317,15 +361,22 @@ const UI = {
   // PLAYLISTS
   async renderPlaylists(container) {
     const playlists = await Data.getPlaylists();
+    const tracks = await Data.getTracks();
     container.innerHTML = `
       <div class="toolbar">
         <button class="btn-gold" onclick="UI.createPlaylist()">New Playlist</button>
         <button class="btn-outline" onclick="UI.importM3U()">Import M3U</button>
       </div>
-      <div class="playlist-list">${playlists.map(p => `
+      <div class="playlist-list">${await Promise.all(playlists.map(async p => {
+        let art = 'assets/default-art.png';
+        if (p.tracks.length > 0) {
+          const t = tracks.find(tr => tr.id === p.tracks[0]);
+          if (t) art = this.getArtworkUrl(t);
+        }
+        return `
         <div class="playlist-card glass" onclick="UI.openPlaylist('${p.id}')">
           <div class="playlist-art">
-            ${p.tracks.length > 0 ? `<img src="${(async() => { const t = await Data.getTrack(p.tracks[0]); return t?.artwork || 'assets/default-art.png'; })()}" alt="">` : '<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>'}
+            ${p.tracks.length > 0 ? `<img src="${art}" alt="">` : '<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>'}
           </div>
           <div class="playlist-info">
             <span class="playlist-name">${Utils.escapeHtml(p.name)}</span>
@@ -335,7 +386,7 @@ const UI = {
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
           </button>
         </div>
-      `).join('')}</div>
+      `})).join('')}</div>
     `;
   },
 
@@ -372,7 +423,7 @@ const UI = {
       <div class="queue-list">${queue.map((t, i) => `
         <div class="track-row ${i === idx ? 'playing' : ''}" data-index="${i}">
           <span class="queue-num">${i + 1}</span>
-          <img class="track-art" src="${t.artwork || 'assets/default-art.png'}" alt="">
+          <img class="track-art" src="${this.getArtworkUrl(t)}" alt="">
           <div class="track-info">
             <span class="track-title">${Utils.escapeHtml(t.title)}</span>
             <span class="track-meta">${Utils.escapeHtml(t.artist)}</span>

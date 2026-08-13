@@ -30,6 +30,8 @@ const Player = {
   peakSmooth: 0,
 
   currentPosition: 0,
+  currentBlobUrl: null,     // <-- Track current blob URL for cleanup
+  currentArtworkUrl: null,  // <-- Track artwork blob URL
 
   async init() {
     this.audio = new Audio();
@@ -58,13 +60,11 @@ const Player = {
     });
 
     // Volume zero detection
-    if ('onvolumechange' in this.audio) {
-      this.audio.addEventListener('volumechange', () => {
-        if (SettingsManager.get('playback.smartPause.onVolumeZero') && this.audio.volume === 0 && this.isPlaying) {
-          this.pause();
-        }
-      });
-    }
+    this.audio.addEventListener('volumechange', () => {
+      if (SettingsManager.get('playback.smartPause.onVolumeZero') && this.audio.volume === 0 && this.isPlaying) {
+        this.pause();
+      }
+    });
   },
 
   initAudioContext() {
@@ -86,10 +86,8 @@ const Player = {
     this.compressor.attack.value = 0.003;
     this.compressor.release.value = 0.25;
 
-    // Build EQ chain
     this.buildEQ();
 
-    // Connect: source -> EQ -> compressor -> gain -> analyser -> destination
     let lastNode = this.sourceNode;
     if (SettingsManager.get('audio.equalizerEnabled') && this.eqNodes.length > 0) {
       lastNode.connect(this.eqNodes[0]);
@@ -144,35 +142,95 @@ const Player = {
     if (this.eqNodes[index]) this.eqNodes[index].gain.value = value;
   },
 
+  // Create fresh blob URL from stored blob
+  getTrackUrl(track) {
+    if (!track) return null;
+    if (track.blob) {
+      return URL.createObjectURL(track.blob);
+    }
+    if (track.url) {
+      // Legacy support for old tracks that still have url strings
+      return track.url;
+    }
+    return null;
+  },
+
+  getTrackArtwork(track) {
+    if (!track) return null;
+    if (track.artworkBlob) {
+      return URL.createObjectURL(track.artworkBlob);
+    }
+    if (track.artwork) {
+      // Legacy or external URL
+      return track.artwork;
+    }
+    return null;
+  },
+
+  revokeCurrentUrls() {
+    if (this.currentBlobUrl) {
+      URL.revokeObjectURL(this.currentBlobUrl);
+      this.currentBlobUrl = null;
+    }
+    if (this.currentArtworkUrl) {
+      URL.revokeObjectURL(this.currentArtworkUrl);
+      this.currentArtworkUrl = null;
+    }
+  },
+
   async loadTrack(track, autoPlay = true) {
     if (!track) return;
+
+    // Clean up old URLs
+    this.revokeCurrentUrls();
+    this.saveListenProgress();
+
     this.currentTrack = track;
     this.currentPosition = 0;
     this.repeatCount = 0;
 
+    // Create fresh blob URL
+    const url = this.getTrackUrl(track);
+    if (!url) {
+      console.error('No audio source for track:', track.title);
+      UI.showToast('Cannot play: file not available');
+      // Skip to next
+      setTimeout(() => this.next(), 500);
+      return;
+    }
+    this.currentBlobUrl = url;
+
+    // Create artwork URL
+    const artwork = this.getTrackArtwork(track);
+    if (artwork && artwork.startsWith('blob:')) {
+      this.currentArtworkUrl = artwork;
+    }
+
     if (!this.audioCtx) this.initAudioContext();
     if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
 
-    this.audio.src = track.url;
+    this.audio.src = url;
     this.audio.load();
 
     // Dynamic theming
-    if (SettingsManager.get('ui.dynamicTheming') && track.artwork) {
-      const colors = await Utils.extractColors(track.artwork);
-      window.dispatchEvent(new CustomEvent('theme-colors', { detail: colors }));
+    if (SettingsManager.get('ui.dynamicTheming')) {
+      const artSrc = artwork || 'assets/default-art.png';
+      if (artSrc.startsWith('blob:') || artSrc.startsWith('http') || artSrc.startsWith('data:')) {
+        try {
+          const colors = await Utils.extractColors(artSrc);
+          window.dispatchEvent(new CustomEvent('theme-colors', { detail: colors }));
+        } catch(e) {}
+      }
     }
 
-    // Media session
-    this.updateMediaSession(track);
-
-    // History
+    this.updateMediaSession(track, artwork);
     this.startListenTracking();
 
     if (autoPlay) {
       await this.play();
     }
 
-    window.dispatchEvent(new CustomEvent('track-changed', { detail: track }));
+    window.dispatchEvent(new CustomEvent('track-changed', { detail: { ...track, artwork } }));
   },
 
   async play() {
@@ -186,14 +244,22 @@ const Player = {
       this.gainNode.gain.linearRampToValueAtTime(1, this.audioCtx.currentTime + fadeDur);
     }
 
-    await this.audio.play();
-    this.isPlaying = true;
-    this.isPaused = false;
+    try {
+      await this.audio.play();
+      this.isPlaying = true;
+      this.isPaused = false;
 
-    if (SettingsManager.get('audio.skipSilence')) this.startSkipSilence();
+      if (SettingsManager.get('audio.skipSilence')) this.startSkipSilence();
 
-    window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: true } }));
-    Utils.vibrate(15);
+      window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: true } }));
+      Utils.vibrate(15);
+    } catch(err) {
+      console.error('Play failed:', err);
+      // Don't crash - just show toast and move on
+      if (err.name !== 'AbortError') {
+        UI.showToast('Playback error: ' + (err.message || 'Unknown'));
+      }
+    }
   },
 
   async pause() {
@@ -281,12 +347,19 @@ const Player = {
     const nextTrack = this.queue[nextIdx];
     if (!nextTrack) return;
 
+    const url = this.getTrackUrl(nextTrack);
+    if (!url) { this.next(); return; }
+
     const duration = SettingsManager.get('audio.crossfadeDuration');
 
-    // Setup next audio
-    this.nextAudio = new Audio(nextTrack.url);
+    this.nextAudio = new Audio(url);
     this.nextAudio.preload = 'auto';
-    await new Promise(r => this.nextAudio.addEventListener('canplay', r, { once: true }));
+
+    await new Promise((resolve, reject) => {
+      this.nextAudio.addEventListener('canplay', resolve, { once: true });
+      this.nextAudio.addEventListener('error', reject, { once: true });
+      setTimeout(reject, 5000);
+    });
 
     this.nextSource = this.audioCtx.createMediaElementSource(this.nextAudio);
     this.nextGain = this.audioCtx.createGain();
@@ -302,15 +375,13 @@ const Player = {
 
     setTimeout(() => {
       this.audio.pause();
-      this.audio.src = '';
-      this.sourceNode.disconnect();
+      this.revokeCurrentUrls();
 
       this.audio = this.nextAudio;
       this.sourceNode = this.nextSource;
       this.gainNode = this.nextGain;
       this.gainNode.disconnect();
 
-      // Reconnect to chain
       let lastNode = this.sourceNode;
       if (SettingsManager.get('audio.equalizerEnabled') && this.eqNodes.length > 0) {
         lastNode.connect(this.eqNodes[0]);
@@ -329,8 +400,11 @@ const Player = {
 
       this.queueIndex = nextIdx;
       this.currentTrack = nextTrack;
+      this.currentBlobUrl = url;
       this.setupAudioEvents();
-      window.dispatchEvent(new CustomEvent('track-changed', { detail: nextTrack }));
+
+      const artwork = this.getTrackArtwork(nextTrack);
+      window.dispatchEvent(new CustomEvent('track-changed', { detail: { ...nextTrack, artwork } }));
     }, duration * 1000);
   },
 
@@ -338,10 +412,12 @@ const Player = {
     const nextIdx = this.queueIndex + 1;
     if (nextIdx >= this.queue.length) return;
     const nextTrack = this.queue[nextIdx];
-    if (!nextTrack?.url) return;
+    if (!nextTrack) return;
+    const url = this.getTrackUrl(nextTrack);
+    if (!url) return;
 
     const preload = new Audio();
-    preload.src = nextTrack.url;
+    preload.src = url;
     preload.preload = 'metadata';
     preload.load();
   },
@@ -404,10 +480,20 @@ const Player = {
 
   onError(e) {
     console.error('Audio error:', e);
-    window.dispatchEvent(new CustomEvent('player-error', { detail: e }));
+    const err = this.audio.error;
+    if (err) {
+      const msgs = {
+        1: 'Aborted',
+        2: 'Network error',
+        3: 'Decode error',
+        4: 'Format not supported'
+      };
+      UI.showToast('Audio error: ' + (msgs[err.code] || 'Unknown'));
+    }
+    // Try next track instead of crashing
+    setTimeout(() => this.next(), 1000);
   },
 
-  // Skip silence
   startSkipSilence() {
     if (!this.analyser) return;
     const dataArray = new Uint8Array(this.analyser.frequencyBinCount);
@@ -420,10 +506,8 @@ const Player = {
       const db = 20 * Math.log10(avg / 255);
 
       if (db < threshold) {
-        // Find next non-silent section
         const current = this.audio.currentTime;
         const duration = this.audio.duration;
-        // Simple approach: jump ahead 0.5s and check again
         if (current + 0.5 < duration) {
           this.audio.currentTime += 0.5;
         }
@@ -435,7 +519,6 @@ const Player = {
     if (this.skipSilenceInterval) { clearInterval(this.skipSilenceInterval); this.skipSilenceInterval = null; }
   },
 
-  // Peak visualization
   startPeakLoop() {
     const loop = () => {
       requestAnimationFrame(loop);
@@ -455,7 +538,6 @@ const Player = {
     requestAnimationFrame(loop);
   },
 
-  // Queue management
   setQueue(tracks, startIndex = 0) {
     this.queue = tracks;
     this.queueIndex = startIndex;
@@ -495,6 +577,7 @@ const Player = {
   clearQueue() {
     this.queue = [];
     this.queueIndex = 0;
+    this.revokeCurrentUrls();
     if (SettingsManager.get('playback.persistentQueue')) Data.saveQueue([], 0, 0);
     window.dispatchEvent(new CustomEvent('queue-updated', { detail: this.queue }));
   },
@@ -513,12 +596,11 @@ const Player = {
     this.currentPosition = saved.position || 0;
     if (this.queue[this.queueIndex]) {
       this.currentTrack = this.queue[this.queueIndex];
-      this.audio.src = this.currentTrack.url;
-      if (this.currentPosition > 0) this.audio.currentTime = this.currentPosition;
+      // Don't set audio.src here - blob URL would be invalid
+      // Just restore state, user presses play to create fresh URL
     }
   },
 
-  // Listen tracking
   listenStartTime: 0,
   listenTracked: false,
 
@@ -540,12 +622,10 @@ const Player = {
       this.listenTracked = true;
       await Data.addHistoryEntry(this.currentTrack.id, Math.round(elapsed * 1000), Math.round(this.currentPosition * 1000), completed);
 
-      // Scrobble
       if (SettingsManager.get('history.scrobbleEnabled')) {
         this.scrobbleTrack(this.currentTrack);
       }
 
-      // Update auto playlists
       if (SettingsManager.get('smart.mostPlayedAutoUpdate')) {
         await Data.refreshAutoPlaylists();
       }
@@ -556,7 +636,6 @@ const Player = {
     }
   },
 
-  // Last.fm scrobbling
   async scrobbleTrack(track) {
     const session = SettingsManager.get('history.lastFm.sessionKey');
     if (!session) return;
@@ -591,7 +670,6 @@ const Player = {
     return CryptoJS ? CryptoJS.MD5(sorted + secret).toString() : '';
   },
 
-  // Sleep timer
   startSleepTimer(minutes) {
     this.stopSleepTimer();
     if (SettingsManager.get('playback.sleepTimer.mode') === 'tracks') {
@@ -609,14 +687,13 @@ const Player = {
     this.sleepTracksRemaining = 0;
   },
 
-  // Media Session
-  updateMediaSession(track) {
+  updateMediaSession(track, artworkUrl) {
     if (!('mediaSession' in navigator)) return;
     navigator.mediaSession.metadata = new MediaMetadata({
       title: track.title || 'Unknown',
       artist: track.artist || 'Unknown Artist',
       album: track.album || 'Unknown Album',
-      artwork: track.artwork ? [{ src: track.artwork, sizes: '512x512', type: 'image/jpeg' }] : []
+      artwork: artworkUrl ? [{ src: artworkUrl, sizes: '512x512', type: 'image/jpeg' }] : []
     });
 
     navigator.mediaSession.setActionHandler('play', () => this.play());

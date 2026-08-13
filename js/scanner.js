@@ -40,7 +40,7 @@ const Scanner = {
       }
 
       // Filters
-      const minSize = SettingsManager.get('library.minFileSizeMB') * 1024 * 1024;
+      const minSize = (SettingsManager.get('library.minFileSizeMB') || 0.5) * 1024 * 1024;
       if (file.size < minSize) { this.scanned++; continue; }
 
       const path = file.webkitRelativePath || file.name;
@@ -56,7 +56,7 @@ const Scanner = {
       const track = await this.processFile(file, path, hash);
       if (track) {
         // Duration filter
-        const minDur = SettingsManager.get('library.minDurationSeconds') * 1000;
+        const minDur = (SettingsManager.get('library.minDurationSeconds') || 10) * 1000;
         if (track.duration && track.duration < minDur) { this.scanned++; continue; }
 
         newTracks.push(track);
@@ -67,13 +67,13 @@ const Scanner = {
       this.scanned++;
       this.progress = Math.round((this.scanned / this.total) * 100);
 
-      if (this.scanned % 10 === 0) {
+      if (this.scanned % 5 === 0) {
         window.dispatchEvent(new CustomEvent('scan-progress', { detail: { progress: this.progress, current: track?.title || file.name } }));
         await new Promise(r => setTimeout(r, 0));
       }
     }
 
-    // Save tracks
+    // Save tracks (blobs go into IndexedDB)
     for (const track of newTracks) {
       await Data.saveTrack(track);
     }
@@ -101,7 +101,7 @@ const Scanner = {
         fileName: file.name,
         size: file.size,
         hash: hash,
-        url: URL.createObjectURL(file),
+        blob: file,                    // <-- STORE THE ACTUAL FILE BLOB
         favorite: false,
         rating: 0,
         playCount: 0,
@@ -109,17 +109,24 @@ const Scanner = {
         dateAdded: Date.now()
       };
 
-      // Get audio duration
+      // Get audio duration using a temporary URL
+      const tempUrl = URL.createObjectURL(file);
       const audio = new Audio();
       audio.preload = 'metadata';
-      audio.src = track.url;
 
-      const onLoaded = () => {
+      const cleanup = () => { URL.revokeObjectURL(tempUrl); };
+
+      audio.addEventListener('loadedmetadata', () => {
         track.duration = Math.round(audio.duration * 1000);
-        audio.removeEventListener('loadedmetadata', onLoaded);
         audio.src = '';
-      };
-      audio.addEventListener('loadedmetadata', onLoaded);
+        cleanup();
+      }, { once: true });
+
+      audio.addEventListener('error', () => {
+        cleanup();
+      }, { once: true });
+
+      audio.src = tempUrl;
 
       // Read tags
       if (window.jsmediatags) {
@@ -142,11 +149,17 @@ const Scanner = {
               track.cleanTitle = Utils.removeFeaturedFromTitle(track.title);
             }
 
-            // Picture
+            // Picture - convert to data URL for persistent storage
             if (t.picture) {
               const pic = t.picture;
               const blob = new Blob([new Uint8Array(pic.data)], { type: pic.format });
-              track.artwork = URL.createObjectURL(blob);
+              track.artworkBlob = blob;  // Keep blob for player theming
+              // Also create data URL for reliable img src (persists across reloads)
+              const reader = new FileReader();
+              reader.onloadend = () => {
+                track.artwork = reader.result;
+              };
+              reader.readAsDataURL(blob);
             }
 
             // Mood from comment if enabled
@@ -191,6 +204,14 @@ const Scanner = {
     const genres = new Map();
 
     for (const track of tracks) {
+      // Generate artwork URL from blob if needed for indexing
+      let artwork = null;
+      if (track.artworkBlob) {
+        artwork = URL.createObjectURL(track.artworkBlob);
+        // We'll let the UI create URLs on demand, but for index display we need something
+        // Actually, let's just store a data URL or keep the blob reference
+      }
+
       // Albums
       if (track.album) {
         const albumId = Utils.hashString(track.album + (track.albumArtist || track.artist || ''));
@@ -200,13 +221,11 @@ const Scanner = {
             name: track.album,
             artist: track.albumArtist || track.artist || 'Unknown',
             year: track.year,
-            artwork: track.artwork,
             tracks: [],
             dateAdded: Date.now()
           });
         }
         albums.get(albumId).tracks.push(track.id);
-        if (track.artwork && !albums.get(albumId).artwork) albums.get(albumId).artwork = track.artwork;
       }
 
       // Artists
@@ -221,13 +240,11 @@ const Scanner = {
             name: artist,
             tracks: [],
             albums: new Set(),
-            artwork: null,
             dateAdded: Date.now()
           });
         }
         artists.get(artistId).tracks.push(track.id);
         if (track.album) artists.get(artistId).albums.add(track.album);
-        if (track.artwork && !artists.get(artistId).artwork) artists.get(artistId).artwork = track.artwork;
       }
 
       // Genres
@@ -239,12 +256,10 @@ const Scanner = {
             id: genreId,
             name: genre,
             tracks: [],
-            artwork: null,
             dateAdded: Date.now()
           });
         }
         genres.get(genreId).tracks.push(track.id);
-        if (track.artwork && !genres.get(genreId).artwork) genres.get(genreId).artwork = track.artwork;
       }
     }
 
@@ -269,7 +284,6 @@ const Scanner = {
     const existing = await Data.getTracks();
     for (const t of tracks) {
       if (existing.find(e => e.path === t.path)) continue;
-      // For M3U imports without actual files, create placeholder tracks
       const track = {
         id: Utils.generateId(),
         path: t.path,
@@ -277,7 +291,6 @@ const Scanner = {
         artist: 'Unknown Artist',
         album: 'Unknown Album',
         duration: t.duration ? t.duration * 1000 : 0,
-        artwork: t.albumArt || null,
         favorite: false,
         rating: 0,
         playCount: 0,

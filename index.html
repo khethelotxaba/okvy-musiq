@@ -354,16 +354,30 @@
     <script>
         window.onerror = function(msg, url, line, col, error) {
             console.error('Global error:', msg, 'at', url, line, col);
-            document.getElementById('critical-error').classList.remove('hidden');
-            document.getElementById('error-message').textContent = msg + ' (Line ' + line + ')';
-            document.getElementById('app').style.display = 'none';
+            // Only show critical screen for actual syntax/loading errors, not runtime audio errors
+            if (msg && (msg.includes('SyntaxError') || msg.includes('Module') || msg.includes('import'))) {
+                document.getElementById('critical-error').classList.remove('hidden');
+                document.getElementById('error-message').textContent = msg + ' (Line ' + line + ')';
+                document.getElementById('app').style.display = 'none';
+            }
             return true;
         };
         window.onunhandledrejection = function(event) {
             console.error('Unhandled rejection:', event.reason);
-            document.getElementById('critical-error').classList.remove('hidden');
-            document.getElementById('error-message').textContent = 'Promise error: ' + (event.reason?.message || 'Unknown');
-            document.getElementById('app').style.display = 'none';
+            // Don't kill the app for audio/source errors - just log them
+            const reason = event.reason;
+            const msg = reason?.message || String(reason);
+            if (msg.includes('no supported source') || msg.includes('Failed to load') || msg.includes('audio') || msg.includes('blob')) {
+                console.warn('Audio source error (non-fatal):', msg);
+                event.preventDefault();
+                return;
+            }
+            // Only show critical error for truly fatal issues
+            if (msg.includes('SyntaxError') || msg.includes('Module') || msg.includes('import') || msg.includes('undefined is not a function')) {
+                document.getElementById('critical-error').classList.remove('hidden');
+                document.getElementById('error-message').textContent = 'Promise error: ' + msg;
+                document.getElementById('app').style.display = 'none';
+            }
         };
     </script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
