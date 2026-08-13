@@ -1,0 +1,12 @@
+{
+  "appId": "com.okvy.musiq",
+  "appName": "Okvy MusiQ",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 2000,
+      "backgroundColor": "#0a0a0a"
+    }
+  }
+}
