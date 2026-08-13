@@ -71,17 +71,29 @@ jobs:
           print("Manifest updated")
           PYEOF
 
-      - name: Add splash screen colors
+      - name: Update splash colors
         run: |
-          cat > android/app/src/main/res/values/colors.xml << 'XMLEOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <resources>
-              <color name="colorPrimary">#0a0a0a</color>
-              <color name="colorPrimaryDark">#0a0a0a</color>
-              <color name="colorAccent">#d4af37</color>
-              <color name="ic_launcher_background">#0a0a0a</color>
-          </resources>
-          XMLEOF
+          python3 << 'PYEOF'
+          colors = "android/app/src/main/res/values/colors.xml"
+          with open(colors, "r") as f:
+              content = f.read()
+          # Replace existing colors, don't add duplicates
+          content = content.replace(
+              "<color name="colorPrimary">#00875f</color>",
+              "<color name="colorPrimary">#0a0a0a</color>"
+          )
+          content = content.replace(
+              "<color name="colorPrimaryDark">#00785a</color>",
+              "<color name="colorPrimaryDark">#0a0a0a</color>"
+          )
+          content = content.replace(
+              "<color name="colorAccent">#0056e0</color>",
+              "<color name="colorAccent">#d4af37</color>"
+          )
+          with open(colors, "w") as f:
+              f.write(content)
+          print("Colors updated")
+          PYEOF
 
       - name: Sync Capacitor
         run: npx cap sync android
