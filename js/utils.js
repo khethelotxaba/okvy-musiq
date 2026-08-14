@@ -96,6 +96,36 @@ const Utils = {
     return yiq >= 128 ? '#0a0a0a' : '#ffffff';
   },
 
+    getLuminance(rgbStr) {
+    const m = rgbStr.match(/\d+/g);
+    if (!m) return 0;
+    const [r, g, b] = m.map(Number);
+    const rs = r / 255, gs = g / 255, bs = b / 255;
+    const rl = rs <= 0.03928 ? rs / 12.92 : Math.pow((rs + 0.055) / 1.055, 2.4);
+    const gl = gs <= 0.03928 ? gs / 12.92 : Math.pow((gs + 0.055) / 1.055, 2.4);
+    const bl = bs <= 0.03928 ? bs / 12.92 : Math.pow((bs + 0.055) / 1.055, 2.4);
+    return 0.2126 * rl + 0.7152 * gl + 0.0722 * bl;
+  },
+
+  pickSmartTint(palette, isDark) {
+    if (!palette || palette.length === 0) return null;
+    const scored = palette.map(color => {
+      const lum = this.getLuminance(color);
+      const m = color.match(/\d+/g).map(Number);
+      const max = Math.max(...m), min = Math.min(...m);
+      const saturation = max === 0 ? 0 : (max - min) / max;
+      return { color, lum, saturation };
+    });
+    const colorful = scored.filter(s => s.saturation > 0.12);
+    const candidates = colorful.length > 0 ? colorful : scored;
+    if (isDark) {
+      candidates.sort((a, b) => (b.lum * 0.6 + b.saturation * 0.4) - (a.lum * 0.6 + a.saturation * 0.4));
+    } else {
+      candidates.sort((a, b) => ((1 - b.lum) * 0.6 + b.saturation * 0.4) - ((1 - a.lum) * 0.6 + a.saturation * 0.4));
+    }
+    return candidates[0].color;
+  },
+
   splitArtists(str) {
     if (!str) return [];
     const seps = SettingsManager.get('library.artistSeparators') || [';', '/', ','];
