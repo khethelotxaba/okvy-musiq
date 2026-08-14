@@ -19,11 +19,9 @@ const UI = {
 
   getArtworkUrl(track) {
     if (!track) return 'assets/default-art.png';
-    // If it's already a data URL or external URL, use it
     if (track.artwork && (track.artwork.startsWith('data:') || track.artwork.startsWith('http'))) {
       return track.artwork;
     }
-    // If we have an artwork blob, create a URL and cache it
     if (track.artworkBlob) {
       if (this.artworkCache.has(track.id)) {
         return this.artworkCache.get(track.id);
@@ -32,7 +30,6 @@ const UI = {
       this.artworkCache.set(track.id, url);
       return url;
     }
-    // Legacy dead blob URL - ignore
     if (track.artwork && track.artwork.startsWith('blob:')) {
       return 'assets/default-art.png';
     }
@@ -292,7 +289,6 @@ const UI = {
     const tracks = await Data.getTracks();
     const cols = this.getGridColumns();
     container.innerHTML = `<div class="grid-container" style="grid-template-columns: repeat(${cols}, 1fr);">${albums.map(a => {
-      // Get artwork from first track that has valid art
       let art = 'assets/default-art.png';
       for (const tid of a.tracks) {
         const t = tracks.find(tr => tr.id === tid);
@@ -736,12 +732,16 @@ const UI = {
   // FULL PLAYER
   openFullPlayer() {
     document.getElementById('full-player').classList.add('open');
-    const container = document.getElementById('waveform-container');
+    const waveformContainer = document.getElementById('waveform-container');
+    const progressBarContainer = document.getElementById('fp-progress-container');
+
     if (SettingsManager.get('ui.waveformSeekbar')) {
-      if (container) container.style.display = 'block';
+      if (waveformContainer) waveformContainer.style.display = 'block';
+      if (progressBarContainer) progressBarContainer.style.display = 'none';
       this.renderWaveform();
     } else {
-      if (container) container.style.display = 'none';
+      if (waveformContainer) waveformContainer.style.display = 'none';
+      if (progressBarContainer) progressBarContainer.style.display = 'block';
     }
   },
 
@@ -757,11 +757,9 @@ const UI = {
     const canvas = document.getElementById('waveform-canvas');
     if (!container || !canvas) return;
 
-    // Show container
     container.style.display = 'block';
 
     try {
-      // Get audio data from the track blob
       const url = Player.getTrackUrl(track);
       if (!url) return;
 
@@ -769,7 +767,8 @@ const UI = {
       const buf = await res.arrayBuffer();
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const audioBuf = await audioCtx.decodeAudioData(buf);
-      const peaks = Utils.getAudioPeaks(audioBuf, 300);
+      const peaks = Utils.getAudioPeaks(audioBuf, 40); // Reduced from 300
+      audioCtx.close();
 
       const ctx = canvas.getContext('2d');
       const dpr = window.devicePixelRatio || 1;
@@ -782,7 +781,7 @@ const UI = {
 
       const w = rect.width / peaks.length;
       const h = rect.height;
-      const barW = Math.max(w - 1, 1);
+      const barW = Math.max(w - 2, 2);
 
       this.waveformPeaks = peaks;
       this.waveformBarW = barW;
@@ -790,12 +789,19 @@ const UI = {
 
       this.drawWaveform(ctx, peaks, barW, rect.width, h, 0);
 
-      // Clean up temp URL if it was a blob
+      // Click to seek
+      canvas.onclick = (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const pct = ((e.clientX - rect.left) / rect.width) * 100;
+        Player.seek(pct);
+      };
+
       if (url !== track.url) URL.revokeObjectURL(url);
 
     } catch(e) {
       console.error('Waveform render failed:', e);
       container.style.display = 'none';
+      document.getElementById('fp-progress-container').style.display = 'block';
     }
   },
 
@@ -809,7 +815,6 @@ const UI = {
       const barH = Math.max(p * h * 0.85, 2);
       const y = (h - barH) / 2;
 
-      // Played vs unplayed color
       const isPlayed = x < progressX;
       const alpha = isPlayed ? 0.9 : 0.3;
       const brightness = isPlayed ? 1 : 0.6;
@@ -849,9 +854,7 @@ const UI = {
 
   onPlaybackState(state) {
     const isPlaying = state.playing;
-    const wasReset = state.reset;
 
-    // Morph mini player icon
     const npIcon = document.querySelector('#np-play svg');
     if (npIcon) {
       if (isPlaying) {
@@ -861,7 +864,6 @@ const UI = {
       }
     }
 
-    // Morph full player icon
     const fpIcon = document.querySelector('#fp-play svg');
     if (fpIcon) {
       if (isPlaying) {
@@ -946,7 +948,7 @@ const UI = {
     window.addEventListener('resize', () => this.resizeParticles());
 
     this.particles = [];
-    this.bars = []; // For bar visualizer mode
+    this.bars = [];
     this.initParticleField();
     this.animateParticles();
   },
@@ -963,7 +965,7 @@ const UI = {
     if (!canvas) return;
     const w = canvas.width, h = canvas.height;
     this.particles = [];
-    const count = Math.floor((w * h) / 8000); // Density based on screen size
+    const count = Math.floor((w * h) / 12000);
     for (let i = 0; i < count; i++) {
       this.particles.push({
         x: Math.random() * w,
@@ -971,18 +973,17 @@ const UI = {
         baseX: Math.random() * w,
         baseY: Math.random() * h,
         vx: 0, vy: 0,
-        size: Math.random() * 2.5 + 0.5,
-        baseSize: Math.random() * 2.5 + 0.5,
-        alpha: Math.random() * 0.4 + 0.05,
+        size: Math.random() * 2 + 0.5,
+        baseSize: Math.random() * 2 + 0.5,
+        alpha: Math.random() * 0.3 + 0.1,
         phase: Math.random() * Math.PI * 2,
-        speed: Math.random() * 0.5 + 0.2
+        speed: Math.random() * 0.2 + 0.05
       });
     }
-    // Initialize frequency bars at bottom
     this.bars = [];
-    const barCount = Math.floor(w / 12);
+    const barCount = Math.floor(w / 16);
     for (let i = 0; i < barCount; i++) {
-      this.bars.push({ x: i * 12, height: 0, targetHeight: 0 });
+      this.bars.push({ x: i * 16, height: 0, targetHeight: 0 });
     }
   },
 
@@ -1008,42 +1009,34 @@ const UI = {
     const time = Date.now() * 0.001;
     const { r, g, b } = this.particleColors;
 
-    // Draw floating particles
     this.particles.forEach(p => {
-      // Audio-reactive movement
-      const audioForce = peak * intensity * 8;
-      p.vx += (Math.random() - 0.5) * 0.1 + Math.sin(time * p.speed + p.phase) * 0.05;
-      p.vy += (Math.random() - 0.5) * 0.1 - audioForce * 0.3; // Float up with beat
+      const audioForce = peak * intensity * 1.5;
+      p.vx += (Math.random() - 0.5) * 0.02 + Math.sin(time * p.speed * 0.5 + p.phase) * 0.015;
+      p.vy += (Math.random() - 0.5) * 0.02 - audioForce * 0.08;
 
-      // Damping
-      p.vx *= 0.98;
-      p.vy *= 0.98;
+      p.vx *= 0.99;
+      p.vy *= 0.99;
 
       p.x += p.vx;
       p.y += p.vy;
 
-      // Wrap around
       if (p.x < -10) p.x = w + 10;
       if (p.x > w + 10) p.x = -10;
       if (p.y < -10) p.y = h + 10;
       if (p.y > h + 10) p.y = -10;
 
-      // Size pulses with beat
-      const sizePulse = 1 + peak * intensity * 2;
+      const sizePulse = 1 + peak * intensity * 4;
       const currentSize = p.baseSize * sizePulse;
-
-      // Alpha pulses
-      const alphaPulse = p.alpha * (0.3 + peak * intensity * 1.5);
+      const alphaPulse = p.alpha * (0.5 + peak * intensity * 3);
 
       ctx.beginPath();
       ctx.arc(p.x, p.y, currentSize, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(alphaPulse, 0.8)})`;
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(alphaPulse, 0.9)})`;
       ctx.fill();
     });
 
-    // Draw connecting lines between nearby particles (constellation effect)
-    const connectDist = 80 + peak * 60;
-    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${0.03 + peak * 0.08})`;
+    const connectDist = 60 + peak * 40;
+    ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${0.02 + peak * 0.1})`;
     ctx.lineWidth = 0.5;
     for (let i = 0; i < this.particles.length; i++) {
       for (let j = i + 1; j < this.particles.length; j++) {
@@ -1059,16 +1052,15 @@ const UI = {
       }
     }
 
-    // Bottom frequency bars (subtle)
-    if (peak > 0.1) {
+    if (peak > 0.05) {
       const barCount = this.bars.length;
       const barWidth = w / barCount;
       for (let i = 0; i < barCount; i++) {
-        this.bars[i].targetHeight = Math.random() * peak * h * 0.15 * intensity;
-        this.bars[i].height += (this.bars[i].targetHeight - this.bars[i].height) * 0.2;
+        this.bars[i].targetHeight = Math.random() * peak * h * 0.12 * intensity;
+        this.bars[i].height += (this.bars[i].targetHeight - this.bars[i].height) * 0.15;
         if (this.bars[i].height > 2) {
-          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.04 + peak * 0.06})`;
-          ctx.fillRect(i * barWidth, h - this.bars[i].height, barWidth - 1, this.bars[i].height);
+          ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${0.03 + peak * 0.08})`;
+          ctx.fillRect(i * barWidth, h - this.bars[i].height, barWidth - 2, this.bars[i].height);
         }
       }
     }
@@ -1226,40 +1218,10 @@ const UI = {
 
   setupPlayButton(btn) {
     if (!btn) return;
-    let pressTimer = null;
-    let isLongPress = false;
-    const LONG_PRESS_MS = 500;
-
-    const startPress = (e) => {
-      isLongPress = false;
-      pressTimer = setTimeout(() => {
-        isLongPress = true;
-        btn.classList.add('holding');
-        Utils.vibrate(20);
-      }, LONG_PRESS_MS);
-    };
-
-    const endPress = (e) => {
-      clearTimeout(pressTimer);
-      btn.classList.remove('holding');
-      if (isLongPress) {
-        Player.resetTrack();
-      } else {
-        Player.togglePlay();
-      }
-    };
-
-    const cancelPress = () => {
-      clearTimeout(pressTimer);
-      btn.classList.remove('holding');
-    };
-
-    // Use pointer events for unified mouse + touch handling
-    btn.addEventListener('pointerdown', startPress);
-    btn.addEventListener('pointerup', endPress);
-    btn.addEventListener('pointerleave', cancelPress);
-    btn.addEventListener('pointercancel', cancelPress);
-    btn.addEventListener('contextmenu', (e) => e.preventDefault());
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      Player.togglePlay();
+    });
   },
 
   // SIDEBAR
