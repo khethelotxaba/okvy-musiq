@@ -805,22 +805,29 @@ const UI = {
     }
   },
 
-  drawWaveform(ctx, peaks, barW, totalW, h, progress) {
+ drawWaveform(ctx, peaks, barW, totalW, h, progress) {
     ctx.clearRect(0, 0, totalW, h);
     const progressX = progress * totalW;
     const { r, g, b } = this.particleColors;
+    const radius = Math.min(barW / 2, 3);
 
     peaks.forEach((p, i) => {
       const x = i * (totalW / peaks.length);
       const barH = Math.max(p * h * 0.85, 2);
       const y = (h - barH) / 2;
-
       const isPlayed = x < progressX;
       const alpha = isPlayed ? 0.9 : 0.3;
       const brightness = isPlayed ? 1 : 0.6;
 
       ctx.fillStyle = `rgba(${Math.min(r * brightness, 255)}, ${Math.min(g * brightness, 255)}, ${Math.min(b * brightness, 255)}, ${alpha})`;
-      ctx.fillRect(x, y, barW, barH);
+
+      if (ctx.roundRect) {
+        ctx.beginPath();
+        ctx.roundRect(x, y, barW, barH, radius);
+        ctx.fill();
+      } else {
+        ctx.fillRect(x, y, barW, barH);
+      }
     });
   },
 
@@ -893,9 +900,23 @@ const UI = {
 
   onThemeColors(colors) {
     if (!SettingsManager.get('ui.dynamicTheming')) return;
-    document.documentElement.style.setProperty('--dynamic-primary', colors.dominant);
-    document.documentElement.style.setProperty('--dynamic-vibrant', colors.vibrant);
-    this.setParticleColors(colors);
+    const themeMode = SettingsManager.get('ui.themeMode') || 'dark';
+    const isDark = ['dark', 'black'].includes(themeMode);
+    const smartTint = Utils.pickSmartTint(colors.palette, isDark) || colors.dominant;
+    const vibrant = colors.vibrant || smartTint;
+
+    document.documentElement.style.setProperty('--dynamic-primary', smartTint);
+    document.documentElement.style.setProperty('--dynamic-vibrant', vibrant);
+
+    const m = smartTint.match(/\d+/g);
+    if (m) {
+      const [r, g, b] = m.map(Number);
+      document.documentElement.style.setProperty('--dynamic-primary-transparent', `rgba(${r}, ${g}, ${b}, 0.15)`);
+      document.documentElement.style.setProperty('--dynamic-muted', `rgba(${Math.round(r * 0.55)}, ${Math.round(g * 0.55)}, ${Math.round(b * 0.55)}, 0.7)`);
+      document.documentElement.style.setProperty('--shadow-gold', `0 4px 20px rgba(${r}, ${g}, ${b}, 0.25)`);
+    }
+
+    this.setParticleColors({ dominant: smartTint, vibrant });
   },
 
   updatePlayerControls() {
@@ -1073,12 +1094,13 @@ const UI = {
   // MINIPLAYER GLOW
   initMiniplayerGlow() {},
 
-  updateMiniplayerGlow(peak) {
+ updateMiniplayerGlow(peak) {
     const bar = document.getElementById('now-playing-bar');
     if (!bar) return;
     const intensity = SettingsManager.get('ui.particlesIntensity') || 0.6;
     const alpha = peak * intensity;
-    bar.style.boxShadow = `0 -4px 20px rgba(212, 175, 55, ${alpha})`;
+    const { r, g, b } = this.particleColors;
+    bar.style.boxShadow = `0 -4px 20px rgba(${r}, ${g}, ${b}, ${alpha})`;
   },
 
   // LANDSCAPE
