@@ -56,13 +56,11 @@ const UI = {
       });
     });
 
-    // Player bar
     document.getElementById('np-track').addEventListener('click', () => this.openFullPlayer());
     this.setupPlayButton(document.getElementById('np-play'));
     document.getElementById('np-prev').addEventListener('click', () => Player.prev());
     document.getElementById('np-next').addEventListener('click', () => Player.next());
 
-    // Full player
     document.getElementById('fp-close').addEventListener('click', () => this.closeFullPlayer());
     this.setupPlayButton(document.getElementById('fp-play'));
     document.getElementById('fp-prev').addEventListener('click', () => Player.prev());
@@ -73,7 +71,6 @@ const UI = {
     document.getElementById('fp-add').addEventListener('click', () => this.showPlaylistModal());
     document.getElementById('fp-share').addEventListener('click', () => this.shareTrack());
 
-    // Progress
     const fpProgress = document.getElementById('fp-progress-container');
     if (fpProgress) {
       fpProgress.addEventListener('click', (e) => {
@@ -83,11 +80,9 @@ const UI = {
       });
     }
 
-    // Playlist modal
     document.getElementById('close-playlist-modal').addEventListener('click', () => this.hidePlaylistModal());
     document.getElementById('create-playlist-btn').addEventListener('click', () => this.createPlaylistFromModal());
 
-    // Events
     window.addEventListener('track-changed', (e) => this.onTrackChanged(e.detail));
     window.addEventListener('playback-state', (e) => this.onPlaybackState(e.detail));
     window.addEventListener('time-update', (e) => this.onTimeUpdate(e.detail));
@@ -140,11 +135,12 @@ const UI = {
 
   capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); },
 
-  // HOME
   async renderHome(container) {
     const tracks = await Data.getTracks();
-    const stats = await Data.getAll('stats');
     const totalTime = await Data.getTotalListenTime();
+    const history = await Data.getHistory();
+    const recentHistory = history.slice(-10).reverse();
+    const recentTracks = await Promise.all(recentHistory.map(h => Data.getTrack(h.trackId)));
 
     container.innerHTML = `
       <div class="home-grid">
@@ -163,28 +159,34 @@ const UI = {
         </div>
 
         ${tracks.length > 0 ? `
-          <div class="section-header"><h2>Recent</h2></div>
-          <div class="track-list">${(await Data.getHistory()).slice(-10).reverse().map(h => `
-            <div class="track-row" data-id="${h.trackId}" onclick="UI.playTrackById('${h.trackId}')">
-              <span class="track-title">${Utils.escapeHtml(h.trackId)}</span>
-            </div>
-          `).join('')}</div>
+          ${recentTracks.filter(Boolean).length > 0 ? `
+            <div class="section-header"><h2>Recent</h2></div>
+            <div class="track-list">${recentTracks.filter(Boolean).map(t => `
+              <div class="track-row" data-id="${t.id}" onclick="UI.playTrackById('${t.id}')">
+                <img class="track-art" src="${this.getArtworkUrl(t)}" alt="" loading="lazy">
+                <div class="track-info">
+                  <span class="track-title">${Utils.escapeHtml(t.title || 'Unknown')}</span>
+                  <span class="track-meta">${Utils.escapeHtml(t.artist || '')}</span>
+                </div>
+                <span class="track-duration">${Utils.formatDuration(t.duration)}</span>
+              </div>
+            `).join('')}</div>
+          ` : ''}
 
           <div class="section-header"><h2>Quick Access</h2></div>
           <div class="quick-grid">
-            <div class="quick-card" onclick="UI.navigate('tracks')"><span>Tracks</span></div>
-            <div class="quick-card" onclick="UI.navigate('albums')"><span>Albums</span></div>
-            <div class="quick-card" onclick="UI.navigate('artists')"><span>Artists</span></div>
-            <div class="quick-card" onclick="UI.navigate('playlists')"><span>Playlists</span></div>
-            <div class="quick-card" onclick="UI.navigate('queue')"><span>Queue</span></div>
-            <div class="quick-card" onclick="UI.navigate('settings')"><span>Settings</span></div>
+            <div class="quick-card glass" onclick="UI.navigate('tracks')"><span>Tracks</span></div>
+            <div class="quick-card glass" onclick="UI.navigate('albums')"><span>Albums</span></div>
+            <div class="quick-card glass" onclick="UI.navigate('artists')"><span>Artists</span></div>
+            <div class="quick-card glass" onclick="UI.navigate('playlists')"><span>Playlists</span></div>
+            <div class="quick-card glass" onclick="UI.navigate('queue')"><span>Queue</span></div>
+            <div class="quick-card glass" onclick="UI.navigate('settings')"><span>Settings</span></div>
           </div>
         ` : ''}
       </div>
     `;
   },
 
-  // TRACKS
   async renderTracks(container, params = {}) {
     let tracks = params.tracks || await Data.getTracks();
     if (params.artist) tracks = tracks.filter(t => t.artist === params.artist || (t.featuredArtists || []).includes(params.artist));
@@ -220,7 +222,7 @@ const UI = {
           <button class="btn-gold" onclick="UI.playSelected()">Play</button>
           <button class="btn-outline" onclick="UI.addSelectedToQueue()">Queue</button>
           <button class="btn-outline" onclick="UI.clearSelection()">Clear</button>
-        ` : `<button class="icon-btn" onclick="UI.toggleSelectionMode()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></button>`}
+        ` : `<button class="icon-btn" onclick="UI.toggleSelectionMode()" title="Select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></button>`}
       </div>
       <div class="track-list">${tracks.map(t => this.renderTrackRow(t)).join('')}</div>
     `;
@@ -266,10 +268,8 @@ const UI = {
   async playTrackById(id, mode) {
     const track = await Data.getTrack(id);
     if (!track) return;
-
     const playMode = mode || SettingsManager.get('playback.trackPlayMode');
     const allTracks = await Data.getTracks();
-
     let queue = [];
     if (playMode === 'selected') queue = [track];
     else if (playMode === 'context') queue = allTracks;
@@ -277,13 +277,11 @@ const UI = {
     else if (playMode === 'artist' && track.artist) queue = allTracks.filter(t => t.artist === track.artist || (t.featuredArtists || []).includes(track.artist));
     else if (playMode === 'genre' && track.genre) queue = allTracks.filter(t => t.genre && t.genre.includes(track.genre));
     else queue = allTracks;
-
     const idx = queue.findIndex(t => t.id === id);
     Player.setQueue(queue, idx >= 0 ? idx : 0);
     Player.loadTrack(track);
   },
 
-  // ALBUMS
   async renderAlbums(container) {
     const albums = await Data.getAll('albums');
     const tracks = await Data.getTracks();
@@ -317,7 +315,6 @@ const UI = {
     }
   },
 
-  // ARTISTS
   async renderArtists(container) {
     const artists = await Data.getAll('artists');
     const tracks = await Data.getTracks();
@@ -339,7 +336,6 @@ const UI = {
     `}).join('')}</div>`;
   },
 
-  // GENRES
   async renderGenres(container) {
     const genres = await Data.getAll('genres');
     const cols = this.getGridColumns();
@@ -354,7 +350,6 @@ const UI = {
     `).join('')}</div>`;
   },
 
-  // PLAYLISTS
   async renderPlaylists(container) {
     const playlists = await Data.getPlaylists();
     const tracks = await Data.getTracks();
@@ -394,7 +389,6 @@ const UI = {
       const t = await Data.getTrack(tid);
       if (t) tracks.push(t);
     }
-
     const container = document.getElementById('page-container');
     document.getElementById('page-title').textContent = Utils.escapeHtml(pl.name);
     container.innerHTML = `
@@ -407,7 +401,6 @@ const UI = {
     `;
   },
 
-  // QUEUE
   async renderQueue(container) {
     const queue = Player.queue;
     const idx = Player.queueIndex;
@@ -434,7 +427,6 @@ const UI = {
     `;
   },
 
-  // FOLDERS
   async renderFolders(container) {
     const folders = await Data.getFolders();
     container.innerHTML = `
@@ -452,7 +444,6 @@ const UI = {
     `;
   },
 
-  // SEARCH
   async renderSearch(container) {
     container.innerHTML = `
       <div class="search-box glass">
@@ -466,11 +457,9 @@ const UI = {
       </div>
       <div id="search-results" class="track-list"></div>
     `;
-
     const artists = await Data.getAll('artists');
     const genres = await Data.getAll('genres');
     const years = [...new Set((await Data.getTracks()).map(t => t.year).filter(Boolean))].sort((a,b) => b-a);
-
     document.getElementById('filter-artist').innerHTML += artists.map(a => `<option value="${Utils.escapeHtml(a.name)}">${Utils.escapeHtml(a.name)}</option>`).join('');
     document.getElementById('filter-genre').innerHTML += genres.map(g => `<option value="${Utils.escapeHtml(g.name)}">${Utils.escapeHtml(g.name)}</option>`).join('');
     document.getElementById('filter-year').innerHTML += years.map(y => `<option value="${y}">${y}</option>`).join('');
@@ -484,7 +473,6 @@ const UI = {
     if (artist) filters.artist = artist;
     if (genre) filters.genre = genre;
     if (year) { filters.yearMin = parseInt(year); filters.yearMax = parseInt(year); }
-
     const results = await Data.searchTracks(query, filters);
     const container = document.getElementById('search-results');
     container.innerHTML = results.map(t => this.renderTrackRow(t)).join('');
@@ -492,7 +480,6 @@ const UI = {
 
   onSearchFilter() { this.onSearch(document.getElementById('search-input')?.value || ''); },
 
-  // FAVORITES
   async renderFavorites(container) {
     const tracks = await Data.getTracks();
     const favs = tracks.filter(t => t.favorite);
@@ -502,7 +489,6 @@ const UI = {
     `;
   },
 
-  // SETTINGS
   async renderSettings(container) {
     container.innerHTML = `
       <div class="settings-list">
@@ -516,7 +502,6 @@ const UI = {
           <button class="btn-outline" onclick="UI.scanMusic()">Scan Music</button>
           <button class="btn-outline danger" onclick="Data.clearLibrary(); UI.showToast('Library cleared')">Clear Library</button>
         </div>
-
         <div class="settings-group">
           <h3>Audio</h3>
           ${this.renderSetting('toggle', 'audio.equalizerEnabled', 'Equalizer')}
@@ -527,7 +512,6 @@ const UI = {
           ${this.renderSetting('toggle', 'audio.gaplessPlayback', 'Gapless Playback')}
           ${this.renderSetting('toggle', 'audio.normalization', 'Volume Normalization')}
         </div>
-
         <div class="settings-group">
           <h3>Playback</h3>
           ${this.renderSetting('toggle', 'playback.persistentQueue', 'Persistent Queue')}
@@ -536,14 +520,12 @@ const UI = {
           ${this.renderSetting('number', 'playback.repeatNTimes', 'Repeat N Times', {min:1, max:20})}
           ${this.renderSetting('toggle', 'playback.shuffleMode', 'Shuffle')}
         </div>
-
         <div class="settings-group">
           <h3>Sleep Timer</h3>
           ${this.renderSetting('toggle', 'playback.sleepTimer.enabled', 'Enable Sleep Timer')}
           ${this.renderSetting('select', 'playback.sleepTimer.mode', 'Mode', {options: {tracks:'Tracks', minutes:'Minutes'}})}
           ${this.renderSetting('number', 'playback.sleepTimer.value', 'Value')}
         </div>
-
         <div class="settings-group">
           <h3>Smart Pause</h3>
           ${this.renderSetting('toggle', 'playback.smartPause.onCall', 'Pause on Call')}
@@ -551,7 +533,6 @@ const UI = {
           ${this.renderSetting('toggle', 'playback.smartPause.onAppSwitch', 'Pause on App Switch')}
           ${this.renderSetting('toggle', 'playback.smartPause.onHeadphoneDisconnect', 'Pause on Headphone Disconnect')}
         </div>
-
         <div class="settings-group">
           <h3>UI</h3>
           ${this.renderSetting('toggle', 'ui.dynamicTheming', 'Dynamic Theming')}
@@ -563,14 +544,12 @@ const UI = {
           ${this.renderSetting('toggle', 'ui.waveformSeekbar', 'Waveform Seekbar')}
           ${this.renderSetting('toggle', 'ui.animatingThumbnail', 'Animating Thumbnail')}
         </div>
-
         <div class="settings-group">
           <h3>Smart Features</h3>
           ${this.renderSetting('toggle', 'smart.smortEnabled', 'Smort Mix')}
           ${this.renderSetting('toggle', 'smart.mostPlayedAutoUpdate', 'Auto-update Most Played')}
           ${this.renderSetting('toggle', 'smart.lostMemoriesEnabled', 'Lost Memories')}
         </div>
-
         <div class="settings-group">
           <h3>History & Scrobbling</h3>
           ${this.renderSetting('number', 'history.minListenSeconds', 'Min Listen Seconds')}
@@ -580,7 +559,6 @@ const UI = {
           ${this.renderSetting('text', 'history.lastFm.apiSecret', 'Last.fm API Secret')}
           ${this.renderSetting('toggle', 'history.totalListenTimer', 'Track Total Listen Time')}
         </div>
-
         <div class="settings-group">
           <h3>Lyrics</h3>
           ${this.renderSetting('toggle', 'lyrics.enabled', 'Enable Lyrics')}
@@ -588,7 +566,6 @@ const UI = {
           ${this.renderSetting('select', 'lyrics.preferredFormat', 'Preferred Format', {options: {auto:'Auto', lrc:'LRC', ttml:'TTML', embedded:'Embedded'}})}
           ${this.renderSetting('toggle', 'lyrics.highlightCurrentLine', 'Highlight Current Line')}
         </div>
-
         <button class="btn-gold btn-full" onclick="SettingsManager.save(); UI.showToast('Settings saved')">Save Settings</button>
         <button class="btn-outline danger btn-full" onclick="SettingsManager.reset()">Reset All Settings</button>
       </div>
@@ -599,30 +576,14 @@ const UI = {
   renderSetting(type, path, label, opts = {}) {
     const val = SettingsManager.get(path);
     const id = 'setting-' + path.replace(/\./g, '-');
-
     if (type === 'toggle') {
-      return `<label class="setting-row">
-        <span>${label}</span>
-        <div class="toggle-switch">
-          <input type="checkbox" id="${id}" data-path="${path}" ${val ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
-        </div>
-      </label>`;
+      return `<label class="setting-row"><span>${label}</span><div class="toggle-switch"><input type="checkbox" id="${id}" data-path="${path}" ${val ? 'checked' : ''}><span class="toggle-slider"></span></div></label>`;
     } else if (type === 'select') {
-      return `<label class="setting-row">
-        <span>${label}</span>
-        <select id="${id}" data-path="${path}">${Object.entries(opts.options || {}).map(([k,v]) => `<option value="${k}" ${val===k?'selected':''}>${v}</option>`).join('')}</select>
-      </label>`;
+      return `<label class="setting-row"><span>${label}</span><select id="${id}" data-path="${path}">${Object.entries(opts.options || {}).map(([k,v]) => `<option value="${k}" ${val===k?'selected':''}>${v}</option>`).join('')}</select></label>`;
     } else if (type === 'number') {
-      return `<label class="setting-row">
-        <span>${label}</span>
-        <input type="number" id="${id}" data-path="${path}" value="${val}" min="${opts.min||0}" max="${opts.max||9999}" step="${opts.step||1}">
-      </label>`;
+      return `<label class="setting-row"><span>${label}</span><input type="number" id="${id}" data-path="${path}" value="${val}" min="${opts.min||0}" max="${opts.max||9999}" step="${opts.step||1}"></label>`;
     } else if (type === 'text') {
-      return `<label class="setting-row">
-        <span>${label}</span>
-        <input type="text" id="${id}" data-path="${path}" value="${val||''}">
-      </label>`;
+      return `<label class="setting-row"><span>${label}</span><input type="text" id="${id}" data-path="${path}" value="${val||''}"></label>`;
     }
     return '';
   },
@@ -638,13 +599,11 @@ const UI = {
     });
   },
 
-  // EQUALIZER
   renderEqualizer(container) {
     const preset = SettingsManager.get('audio.eqCurrentPreset');
     const presets = SettingsManager.get('audio.eqPresets');
     const freqs = [32, 64, 125, 250, 500, 1, 2, 4, 8, 16];
     const units = ['Hz','Hz','Hz','Hz','Hz','kHz','kHz','kHz','kHz','kHz'];
-
     container.innerHTML = `
       <div class="eq-container">
         <div class="eq-presets">
@@ -656,8 +615,7 @@ const UI = {
         <div class="eq-bands">
           ${freqs.map((f, i) => `
             <div class="eq-band">
-              <input type="range" min="-12" max="12" step="0.5" value="0" 
-                oninput="UI.setEQBand(${i}, this.value)" class="eq-slider" orient="vertical">
+              <input type="range" min="-12" max="12" step="0.5" value="0" oninput="UI.setEQBand(${i}, this.value)" class="eq-slider" orient="vertical">
               <span class="eq-freq">${f}${units[i]}</span>
             </div>
           `).join('')}
@@ -672,7 +630,6 @@ const UI = {
     const preset = presets.find(p => p.name === name);
     const values = preset ? preset.values : SettingsManager.get('audio.eqCustomValues');
     SettingsManager.set('audio.eqCurrentPreset', name);
-
     document.querySelectorAll('.eq-slider').forEach((slider, i) => {
       if (values[i] !== undefined) {
         slider.value = values[i];
@@ -690,25 +647,21 @@ const UI = {
     SettingsManager.set('audio.eqCurrentPreset', 'Custom');
   },
 
-  // LYRICS
   async renderLyrics(container) {
     const track = Player.currentTrack;
     if (!track) {
       container.innerHTML = '<div class="empty-state">No track playing</div>';
       return;
     }
-
     let lyrics = [];
     if (track.lyrics && !track.lyrics.startsWith(SettingsManager.get('lyrics.ignoreEmbeddedPrefix'))) {
       lyrics = Utils.lrcParse(track.lyrics);
     }
-
     container.innerHTML = `
       <div class="lyrics-container" id="lyrics-display">
         ${lyrics.length > 0 ? lyrics.map((l, i) => `<div class="lyric-line" data-time="${l.time}" id="lyric-${i}">${Utils.escapeHtml(l.text)}</div>`).join('') : '<div class="empty-state">No lyrics available</div>'}
       </div>
     `;
-
     if (lyrics.length > 0) {
       this.lyricsInterval = setInterval(() => this.highlightLyric(lyrics), 200);
     }
@@ -729,19 +682,17 @@ const UI = {
     });
   },
 
-  // FULL PLAYER
   openFullPlayer() {
     document.getElementById('full-player').classList.add('open');
     const waveformContainer = document.getElementById('waveform-container');
     const progressBarContainer = document.getElementById('fp-progress-container');
-
     if (SettingsManager.get('ui.waveformSeekbar')) {
       if (waveformContainer) waveformContainer.style.display = 'block';
-      if (progressBarContainer) progressBarContainer.style.display = 'none';
+      if (progressBarContainer) progressBarContainer.classList.add('hidden');
       this.renderWaveform();
     } else {
       if (waveformContainer) waveformContainer.style.display = 'none';
-      if (progressBarContainer) progressBarContainer.style.display = 'block';
+      if (progressBarContainer) progressBarContainer.classList.remove('hidden');
     }
   },
 
@@ -756,20 +707,16 @@ const UI = {
     const container = document.getElementById('waveform-container');
     const canvas = document.getElementById('waveform-canvas');
     if (!container || !canvas) return;
-
     container.style.display = 'block';
-
     try {
       const url = Player.getTrackUrl(track);
       if (!url) return;
-
       const res = await fetch(url);
       const buf = await res.arrayBuffer();
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const audioBuf = await audioCtx.decodeAudioData(buf);
-      const peaks = Utils.getAudioPeaks(audioBuf, 40); // Reduced from 300
+      const peaks = Utils.getAudioPeaks(audioBuf, 40);
       audioCtx.close();
-
       const ctx = canvas.getContext('2d');
       const dpr = window.devicePixelRatio || 1;
       const rect = container.getBoundingClientRect();
@@ -778,39 +725,31 @@ const UI = {
       canvas.style.width = rect.width + 'px';
       canvas.style.height = rect.height + 'px';
       ctx.scale(dpr, dpr);
-
       const w = rect.width / peaks.length;
       const h = rect.height;
       const barW = Math.max(w - 2, 2);
-
       this.waveformPeaks = peaks;
       this.waveformBarW = barW;
       this.waveformBarCount = peaks.length;
-
       this.drawWaveform(ctx, peaks, barW, rect.width, h, 0);
-
-      // Click to seek
       canvas.onclick = (e) => {
         const rect = canvas.getBoundingClientRect();
         const pct = ((e.clientX - rect.left) / rect.width) * 100;
         Player.seek(pct);
       };
-
       if (url !== track.url) URL.revokeObjectURL(url);
-
     } catch(e) {
       console.error('Waveform render failed:', e);
       container.style.display = 'none';
-      document.getElementById('fp-progress-container').style.display = 'block';
+      document.getElementById('fp-progress-container').classList.remove('hidden');
     }
   },
 
- drawWaveform(ctx, peaks, barW, totalW, h, progress) {
+  drawWaveform(ctx, peaks, barW, totalW, h, progress) {
     ctx.clearRect(0, 0, totalW, h);
     const progressX = progress * totalW;
     const { r, g, b } = this.particleColors;
     const radius = Math.min(barW / 2, 3);
-
     peaks.forEach((p, i) => {
       const x = i * (totalW / peaks.length);
       const barH = Math.max(p * h * 0.85, 2);
@@ -818,9 +757,7 @@ const UI = {
       const isPlayed = x < progressX;
       const alpha = isPlayed ? 0.9 : 0.3;
       const brightness = isPlayed ? 1 : 0.6;
-
       ctx.fillStyle = `rgba(${Math.min(r * brightness, 255)}, ${Math.min(g * brightness, 255)}, ${Math.min(b * brightness, 255)}, ${alpha})`;
-
       if (ctx.roundRect) {
         ctx.beginPath();
         ctx.roundRect(x, y, barW, barH, radius);
@@ -841,45 +778,40 @@ const UI = {
   },
 
   onTrackChanged(track) {
+    const artUrl = this.getArtworkUrl(track);
     document.getElementById('now-playing-bar').classList.remove('hidden');
     document.getElementById('np-title').textContent = track.title || 'Unknown';
     document.getElementById('np-artist').textContent = track.artist || '-';
-    document.getElementById('np-art').src = track.artwork || 'assets/default-art.png';
-
+    document.getElementById('np-art').src = artUrl;
     document.getElementById('fp-title').textContent = track.title || 'Unknown';
     document.getElementById('fp-artist').textContent = track.artist || '-';
-    document.getElementById('fp-art').src = track.artwork || 'assets/default-art.png';
-    document.getElementById('fp-bg-img').src = track.artwork || 'assets/default-art.png';
+    document.getElementById('fp-art').src = artUrl;
+    document.getElementById('fp-bg-img').src = artUrl;
     document.getElementById('fp-favorite').classList.toggle('active', track.favorite);
-
     document.getElementById('sidebar-title').textContent = track.title || 'Not Playing';
     document.getElementById('sidebar-artist').textContent = track.artist || '-';
-    document.getElementById('sidebar-art').src = track.artwork || 'assets/default-art.png';
-
+    document.getElementById('sidebar-art').src = artUrl;
     this.updatePlayerControls();
   },
 
   onPlaybackState(state) {
     const isPlaying = state.playing;
-
     const npIcon = document.querySelector('#np-play svg');
     if (npIcon) {
       if (isPlaying) {
-        npIcon.innerHTML = '<line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/>';
+        npIcon.innerHTML = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
       } else {
-        npIcon.innerHTML = '<polygon points="10 8 16 12 10 16 10 8"/>';
+        npIcon.innerHTML = '<polygon points="8 5 19 12 8 19 8 5"/>';
       }
     }
-
     const fpIcon = document.querySelector('#fp-play svg');
     if (fpIcon) {
       if (isPlaying) {
-        fpIcon.innerHTML = '<line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/>';
+        fpIcon.innerHTML = '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>';
       } else {
-        fpIcon.innerHTML = '<polygon points="10 8 16 12 10 16 10 8"/>';
+        fpIcon.innerHTML = '<polygon points="8 5 19 12 8 19 8 5"/>';
       }
     }
-
     const art = document.getElementById('fp-art');
     if (art) art.classList.toggle('playing', isPlaying && SettingsManager.get('ui.animatingThumbnail'));
   },
@@ -904,10 +836,8 @@ const UI = {
     const isDark = ['dark', 'black'].includes(themeMode);
     const smartTint = Utils.pickSmartTint(colors.palette, isDark) || colors.dominant;
     const vibrant = colors.vibrant || smartTint;
-
     document.documentElement.style.setProperty('--dynamic-primary', smartTint);
     document.documentElement.style.setProperty('--dynamic-vibrant', vibrant);
-
     const m = smartTint.match(/\d+/g);
     if (m) {
       const [r, g, b] = m.map(Number);
@@ -915,7 +845,6 @@ const UI = {
       document.documentElement.style.setProperty('--dynamic-muted', `rgba(${Math.round(r * 0.55)}, ${Math.round(g * 0.55)}, ${Math.round(b * 0.55)}, 0.7)`);
       document.documentElement.style.setProperty('--shadow-gold', `0 4px 20px rgba(${r}, ${g}, ${b}, 0.25)`);
     }
-
     this.setParticleColors({ dominant: smartTint, vibrant });
   },
 
@@ -957,7 +886,6 @@ const UI = {
     this.renderCurrentPage();
   },
 
-  // PARTICLES - Full Screen Background Audio Visualizer
   particleColors: { r: 212, g: 175, b: 55 },
   particleAccent: '#d4af37',
 
@@ -967,7 +895,6 @@ const UI = {
     this.particlesCtx = canvas.getContext('2d');
     this.resizeParticles();
     window.addEventListener('resize', () => this.resizeParticles());
-
     this.particles = [];
     this.bars = [];
     this.initParticleField();
@@ -989,15 +916,11 @@ const UI = {
     const count = Math.floor((w * h) / 12000);
     for (let i = 0; i < count; i++) {
       this.particles.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        baseX: Math.random() * w,
-        baseY: Math.random() * h,
+        x: Math.random() * w, y: Math.random() * h,
+        baseX: Math.random() * w, baseY: Math.random() * h,
         vx: 0, vy: 0,
-        size: Math.random() * 2 + 0.5,
-        baseSize: Math.random() * 2 + 0.5,
-        alpha: Math.random() * 0.3 + 0.1,
-        phase: Math.random() * Math.PI * 2,
+        size: Math.random() * 2 + 0.5, baseSize: Math.random() * 2 + 0.5,
+        alpha: Math.random() * 0.3 + 0.1, phase: Math.random() * Math.PI * 2,
         speed: Math.random() * 0.2 + 0.05
       });
     }
@@ -1024,38 +947,28 @@ const UI = {
     const ctx = this.particlesCtx;
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-
     const peak = Player.peakSmooth || 0;
     const intensity = SettingsManager.get('ui.particlesIntensity') || 0.6;
     const time = Date.now() * 0.001;
     const { r, g, b } = this.particleColors;
-
     this.particles.forEach(p => {
       const audioForce = peak * intensity * 1.5;
       p.vx += (Math.random() - 0.5) * 0.02 + Math.sin(time * p.speed * 0.5 + p.phase) * 0.015;
       p.vy += (Math.random() - 0.5) * 0.02 - audioForce * 0.08;
-
-      p.vx *= 0.99;
-      p.vy *= 0.99;
-
-      p.x += p.vx;
-      p.y += p.vy;
-
+      p.vx *= 0.99; p.vy *= 0.99;
+      p.x += p.vx; p.y += p.vy;
       if (p.x < -10) p.x = w + 10;
       if (p.x > w + 10) p.x = -10;
       if (p.y < -10) p.y = h + 10;
       if (p.y > h + 10) p.y = -10;
-
       const sizePulse = 1 + peak * intensity * 4;
       const currentSize = p.baseSize * sizePulse;
       const alphaPulse = p.alpha * (0.5 + peak * intensity * 3);
-
       ctx.beginPath();
       ctx.arc(p.x, p.y, currentSize, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(alphaPulse, 0.9)})`;
       ctx.fill();
     });
-
     const connectDist = 60 + peak * 40;
     ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${0.02 + peak * 0.1})`;
     ctx.lineWidth = 0.5;
@@ -1072,7 +985,6 @@ const UI = {
         }
       }
     }
-
     if (peak > 0.05) {
       const barCount = this.bars.length;
       const barWidth = w / barCount;
@@ -1087,14 +999,11 @@ const UI = {
     }
   },
 
-  updateParticles(peak) {
-    // Colors updated via setParticleColors from theme-colors event
-  },
+  updateParticles(peak) {},
 
-  // MINIPLAYER GLOW
   initMiniplayerGlow() {},
 
- updateMiniplayerGlow(peak) {
+  updateMiniplayerGlow(peak) {
     const bar = document.getElementById('now-playing-bar');
     if (!bar) return;
     const intensity = SettingsManager.get('ui.particlesIntensity') || 0.6;
@@ -1103,11 +1012,9 @@ const UI = {
     bar.style.boxShadow = `0 -4px 20px rgba(${r}, ${g}, ${b}, ${alpha})`;
   },
 
-  // LANDSCAPE
   checkLandscape() {
     const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
     document.body.classList.toggle('landscape', isLandscape);
-
     const layout = SettingsManager.get('ui.landscapeLayout');
     if (layout === 'sidebar' || (layout === 'auto' && isLandscape)) {
       document.getElementById('sidebar').classList.add('persistent');
@@ -1126,7 +1033,6 @@ const UI = {
     return 2;
   },
 
-  // SELECTION
   toggleSelectionMode() {
     this.selectionMode = !this.selectionMode;
     this.selectedTracks.clear();
@@ -1156,10 +1062,9 @@ const UI = {
   },
 
   addSelectedToQueue() {
-    // Implementation
+    // TODO: implement add to queue
   },
 
-  // PLAYLIST MODAL
   async showPlaylistModal() {
     const track = Player.currentTrack;
     if (!track) return;
@@ -1246,7 +1151,6 @@ const UI = {
     });
   },
 
-  // SIDEBAR
   async renderSidebarPlaylists() {
     const playlists = await Data.getPlaylists();
     const container = document.getElementById('user-playlists');
@@ -1259,7 +1163,6 @@ const UI = {
     `).join('');
   },
 
-  // TOAST
   showToast(message) {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -1273,7 +1176,6 @@ const UI = {
     }, 3000);
   },
 
-  // SCAN
   scanMusic() {
     const input = document.createElement('input');
     input.type = 'file';
@@ -1312,7 +1214,6 @@ const UI = {
     this.navigate(this.currentPage);
   },
 
-  // Folders
   addFolder() {
     document.getElementById('folder-input')?.click();
   },
@@ -1330,7 +1231,6 @@ const UI = {
     this.renderCurrentPage();
   },
 
-  // Track menu
   showTrackMenu(id, event) {
     event.stopPropagation();
   },
