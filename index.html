@@ -1,388 +1,266 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#0a0a0a">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Okvy MusiQ</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/styles.css">
-    <script>
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').catch(console.error);
-      }
-    </script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#050505">
+  <title>Okvy MusiQ v3</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/styles.css">
 </head>
-<body>
-    <!-- Critical Error Fallback -->
-    <div id="critical-error" class="critical-error hidden">
-        <div class="error-glass">
-            <div class="error-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#d4af37" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
-            <h2>Something went wrong</h2>
-            <p id="error-message">The app failed to initialize.</p>
-            <button onclick="location.reload()" class="btn-gold">Reload App</button>
-        </div>
+<body class="theme-dark">
+
+  <!-- Background Particles -->
+  <canvas id="particles-canvas"></canvas>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="glass">
+    <div class="sidebar-header">
+      <div class="logo">
+        <span class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </span>
+        <span>OKVY MUSIQ</span>
+      </div>
+      <button id="close-sidebar" class="icon-btn ghost">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
 
-    <!-- Particles Overlay -->
-    <canvas id="particles-canvas"></canvas>
+    <nav class="sidebar-nav">
+      <a href="#home" class="nav-item active" data-page="home">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span>Home</span>
+      </a>
+      <a href="#tracks" class="nav-item" data-page="tracks">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span>Tracks</span>
+      </a>
+      <a href="#albums" class="nav-item" data-page="albums">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></svg>
+        <span>Albums</span>
+      </a>
+      <a href="#artists" class="nav-item" data-page="artists">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span>Artists</span>
+      </a>
+      <a href="#genres" class="nav-item" data-page="genres">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+        <span>Genres</span>
+      </a>
+      <a href="#playlists" class="nav-item" data-page="playlists">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <span>Playlists</span>
+      </a>
+      <a href="#folders" class="nav-item" data-page="folders">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <span>Folders</span>
+      </a>
+      <div class="nav-divider"></div>
+      <a href="#favorites" class="nav-item" data-page="favorites">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <span>Favorites</span>
+      </a>
+      <a href="#queue" class="nav-item" data-page="queue">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        <span>Queue</span>
+      </a>
+      <div class="nav-divider"></div>
+      <a href="#settings" class="nav-item" data-page="settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.67 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.67 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.67a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Settings</span>
+      </a>
+    </nav>
 
-    <!-- App Container -->
-    <div id="app" class="app">
-        <!-- Side Navigation -->
-        <aside id="sidebar" class="sidebar" aria-label="Main navigation">
-            <div class="sidebar-blur"></div>
-            <div class="sidebar-content">
-                <div class="sidebar-header">
-                    <div class="logo">
-                        <div class="logo-icon">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"/>
-                                <polygon points="10 8 16 12 10 16 10 8"/>
-                            </svg>
-                        </div>
-                        <span class="logo-text">Okvy<span class="gold">MusiQ</span></span>
-                    </div>
-                    <button id="close-sidebar" class="icon-btn" aria-label="Close menu">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18"/>
-                            <line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                    </button>
-                </div>
-
-                <nav class="nav-menu">
-                    <a href="#home" class="nav-item active" data-page="home">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-                            <polyline points="9 22 9 12 15 12 15 22"/>
-                        </svg>
-                        <span>Home</span>
-                    </a>
-                    <a href="#search" class="nav-item" data-page="search">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="11" cy="11" r="8"/>
-                            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                        </svg>
-                        <span>Search</span>
-                    </a>
-                    <a href="#library" class="nav-item" data-page="tracks">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z"/>
-                            <path d="M12 7v6l4 2"/>
-                        </svg>
-                        <span>Tracks</span>
-                    </a>
-                    <a href="#albums" class="nav-item" data-page="albums">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <polyline points="21 15 16 10 5 21"/>
-                        </svg>
-                        <span>Albums</span>
-                    </a>
-                    <a href="#artists" class="nav-item" data-page="artists">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                            <circle cx="12" cy="7" r="4"/>
-                        </svg>
-                        <span>Artists</span>
-                    </a>
-                    <a href="#genres" class="nav-item" data-page="genres">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 18V5l12-2v13"/>
-                            <circle cx="6" cy="18" r="3"/>
-                            <circle cx="18" cy="16" r="3"/>
-                        </svg>
-                        <span>Genres</span>
-                    </a>
-                    <a href="#playlists" class="nav-item" data-page="playlists">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/>
-                            <line x1="9" y1="9" x2="15" y2="9"/>
-                            <line x1="9" y1="15" x2="15" y2="15"/>
-                        </svg>
-                        <span>Playlists</span>
-                    </a>
-                    <a href="#queue" class="nav-item" data-page="queue">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="8" y1="6" x2="21" y2="6"/>
-                            <line x1="8" y1="12" x2="21" y2="12"/>
-                            <line x1="8" y1="18" x2="21" y2="18"/>
-                            <line x1="3" y1="6" x2="3.01" y2="6"/>
-                            <line x1="3" y1="12" x2="3.01" y2="12"/>
-                            <line x1="3" y1="18" x2="3.01" y2="18"/>
-                        </svg>
-                        <span>Queue</span>
-                    </a>
-                    <a href="#folders" class="nav-item" data-page="folders">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                        </svg>
-                        <span>Folders</span>
-                    </a>
-                    <a href="#favorites" class="nav-item" data-page="favorites">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                        </svg>
-                        <span>Favorites</span>
-                    </a>
-                    <a href="#settings" class="nav-item" data-page="settings">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"/>
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 5 15.4a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                        </svg>
-                        <span>Settings</span>
-                    </a>
-                </nav>
-
-                <div class="sidebar-section">
-                    <h3 class="section-label">Your Playlists</h3>
-                    <div id="user-playlists" class="playlist-list"></div>
-                </div>
-
-                <div class="sidebar-footer">
-                    <div class="mini-player-sidebar">
-                        <img id="sidebar-art" src="assets/default-art.png" alt="" class="mini-art">
-                        <div class="mini-info">
-                            <span id="sidebar-title" class="mini-title">Not Playing</span>
-                            <span id="sidebar-artist" class="mini-artist">-</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </aside>
-
-        <div id="sidebar-overlay" class="sidebar-overlay"></div>
-
-        <main class="main-content">
-            <header class="top-bar">
-                <button id="menu-toggle" class="icon-btn" aria-label="Open menu">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="3" y1="12" x2="21" y2="12"/>
-                        <line x1="3" y1="6" x2="21" y2="6"/>
-                        <line x1="3" y1="18" x2="21" y2="18"/>
-                    </svg>
-                </button>
-                <h1 id="page-title" class="page-title">Home</h1>
-                <button id="search-toggle" class="icon-btn" aria-label="Search">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"/>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                </button>
-            </header>
-
-            <div id="page-container" class="page-container"></div>
-        </main>
-
-        <!-- Now Playing Bar -->
-        <div id="now-playing-bar" class="now-playing-bar hidden">
-            <div class="np-progress-container">
-                <div id="np-progress" class="np-progress"></div>
-            </div>
-            <div class="np-content">
-                <div class="np-track" id="np-track">
-                    <img id="np-art" src="assets/default-art.png" alt="" class="np-art">
-                    <div class="np-info">
-                        <span id="np-title" class="np-title">Select a song</span>
-                        <span id="np-artist" class="np-artist">-</span>
-                    </div>
-                </div>
-                <div class="np-controls">
-                    <button id="np-prev" class="control-btn" aria-label="Previous">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="16 6 10 12 16 18"/>
-                            <line x1="6" y1="6" x2="6" y2="18"/>
-                        </svg>
-                    </button>
-                    <button id="np-play" class="control-btn play-btn" aria-label="Play/Pause">
-                        <svg id="np-play-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="9 6 19 12 9 18 9 6"/>
-                        </svg>
-                    </button>
-                    <button id="np-next" class="control-btn" aria-label="Next">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="8 6 18 12 8 18 8 6"/>
-                            <line x1="18" y1="6" x2="18" y2="18"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Full Player -->
-        <div id="full-player" class="full-player">
-            <div class="full-player-bg">
-                <img id="fp-bg-img" src="assets/default-art.png" alt="">
-                <div class="full-player-blur"></div>
-            </div>
-            <div class="full-player-content">
-                <button id="fp-close" class="icon-btn fp-close" aria-label="Close player">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <line x1="18" y1="6" x2="6" y2="18"/>
-                        <line x1="6" y1="6" x2="18" y2="18"/>
-                    </svg>
-                </button>
-
-                <div class="fp-art-container">
-                    <img id="fp-art" src="assets/default-art.png" alt="" class="fp-art">
-                </div>
-
-                <div class="fp-info">
-                    <h2 id="fp-title" class="fp-title">Title</h2>
-                    <p id="fp-artist" class="fp-artist">Artist</p>
-                </div>
-
-                <!-- Waveform Seekbar -->
-                <div class="waveform-container" id="waveform-container" style="display:none;">
-                    <canvas id="waveform-canvas"></canvas>
-                </div>
-
-                <div class="fp-progress-section">
-                    <div class="progress-bar-container" id="fp-progress-container">
-                        <div id="fp-progress-bar" class="progress-bar"></div>
-                        <div id="fp-progress-handle" class="progress-handle"></div>
-                    </div>
-                    <div class="time-display">
-                        <span id="fp-current">0:00</span>
-                        <span id="fp-duration">0:00</span>
-                    </div>
-                </div>
-
-                <div class="fp-controls">
-                    <button id="fp-shuffle" class="control-btn secondary" aria-label="Shuffle">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M4 4h3l4 8 4-8h3"/>
-                            <path d="M4 20h3l7-14"/>
-                            <path d="M14 20h6"/>
-                            <path d="M17 17l3 3-3 3"/>
-                        </svg>
-                    </button>
-                    <button id="fp-prev" class="control-btn" aria-label="Previous">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="16 6 10 12 16 18"/>
-                            <line x1="6" y1="6" x2="6" y2="18"/>
-                        </svg>
-                    </button>
-                    <button id="fp-play" class="control-btn play-btn large" aria-label="Play/Pause">
-                        <svg id="fp-play-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="9 6 19 12 9 18 9 6"/>
-                        </svg>
-                    </button>
-                    <button id="fp-next" class="control-btn" aria-label="Next">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <polygon points="8 6 18 12 8 18 8 6"/>
-                            <line x1="18" y1="6" x2="18" y2="18"/>
-                        </svg>
-                    </button>
-                    <button id="fp-repeat" class="control-btn secondary" aria-label="Repeat">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M17 2l4 4-4 4"/>
-                            <path d="M3 12V9a4 4 0 0 1 4-4h14"/>
-                            <path d="M7 22l-4-4 4-4"/>
-                            <path d="M21 12v3a4 4 0 0 1-4 4H3"/>
-                        </svg>
-                    </button>
-                </div>
-
-                <div class="fp-actions">
-                    <button id="fp-favorite" class="action-btn" aria-label="Add to favorites">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                        </svg>
-                    </button>
-                    <button id="fp-add" class="action-btn" aria-label="Add to playlist">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2"/>
-                            <line x1="12" y1="8" x2="12" y2="16"/>
-                            <line x1="8" y1="12" x2="16" y2="12"/>
-                        </svg>
-                    </button>
-                    <button id="fp-share" class="action-btn" aria-label="Share">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="18" cy="5" r="3"/>
-                            <circle cx="6" cy="12" r="3"/>
-                            <circle cx="18" cy="19" r="3"/>
-                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                        </svg>
-                    </button>
-                    <button id="fp-lyrics-btn" class="action-btn" aria-label="Lyrics" onclick="UI.navigate('lyrics')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                            <polyline points="14 2 14 8 20 8"/>
-                            <line x1="16" y1="13" x2="8" y2="13"/>
-                            <line x1="16" y1="17" x2="8" y2="17"/>
-                            <polyline points="10 9 9 9 8 9"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Toast Container -->
-        <div id="toast-container" class="toast-container"></div>
-
-        <!-- Playlist Modal -->
-        <div id="playlist-modal" class="modal">
-            <div class="modal-glass">
-                <div class="modal-header">
-                    <h3>Add to Playlist</h3>
-                    <button id="close-playlist-modal" class="icon-btn">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="18" y1="6" x2="6" y2="18"/>
-                            <line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                    </button>
-                </div>
-                <div id="playlist-modal-list" class="modal-list"></div>
-                <button id="create-playlist-btn" class="btn-gold btn-full">Create New Playlist</button>
-            </div>
-        </div>
+    <div class="sidebar-player glass">
+      <img id="sidebar-art" src="assets/default-art.png" alt="">
+      <div class="sidebar-track-info">
+        <span id="sidebar-title" class="ellipsis">Not Playing</span>
+        <span id="sidebar-artist" class="ellipsis">-</span>
+      </div>
     </div>
 
-    <script>
-        window.onerror = function(msg, url, line, col, error) {
-            console.error('Global error:', msg, 'at', url, line, col);
-            // Only show critical screen for actual syntax/loading errors, not runtime audio errors
-            if (msg && (msg.includes('SyntaxError') || msg.includes('Module') || msg.includes('import'))) {
-                document.getElementById('critical-error').classList.remove('hidden');
-                document.getElementById('error-message').textContent = msg + ' (Line ' + line + ')';
-                document.getElementById('app').style.display = 'none';
-            }
-            return true;
-        };
-        window.onunhandledrejection = function(event) {
-            console.error('Unhandled rejection:', event.reason);
-            // Don't kill the app for audio/source errors - just log them
-            const reason = event.reason;
-            const msg = reason?.message || String(reason);
-            if (msg.includes('no supported source') || msg.includes('Failed to load') || msg.includes('audio') || msg.includes('blob')) {
-                console.warn('Audio source error (non-fatal):', msg);
-                event.preventDefault();
-                return;
-            }
-            // Only show critical error for truly fatal issues
-            if (msg.includes('SyntaxError') || msg.includes('Module') || msg.includes('import') || msg.includes('undefined is not a function')) {
-                document.getElementById('critical-error').classList.remove('hidden');
-                document.getElementById('error-message').textContent = 'Promise error: ' + msg;
-                document.getElementById('app').style.display = 'none';
-            }
-        };
-    </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
-    <script src="js/config.js"></script>
-    <script src="js/utils.js"></script>
-    <script src="js/scanner.js"></script>
-    <script src="js/data.js"></script>
-    <script src="js/player.js"></script>
-    <script src="js/ui.js"></script>
-    <script src="js/app.js"></script>
+    <div class="sidebar-playlists">
+      <div class="sidebar-section-title">Your Playlists</div>
+      <div id="user-playlists"></div>
+    </div>
+  </aside>
+
+  <!-- Overlay -->
+  <div id="sidebar-overlay"></div>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <header class="top-bar glass">
+      <button id="menu-toggle" class="icon-btn ghost">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <h1 id="page-title">Home</h1>
+      <button id="search-toggle" class="icon-btn ghost">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </button>
+    </header>
+
+    <div id="page-container" class="page-container"></div>
+  </main>
+
+  <!-- Now Playing Bar (Mini Player) -->
+  <div id="now-playing-bar" class="glass hidden">
+    <div class="np-track" id="np-track">
+      <div class="np-art-wrap">
+        <img id="np-art" src="assets/default-art.png" alt="">
+      </div>
+      <div class="np-info">
+        <span id="np-title" class="ellipsis">Not Playing</span>
+        <span id="np-artist" class="ellipsis">-</span>
+      </div>
+    </div>
+    <div class="np-controls">
+      <button id="np-prev" class="icon-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+      </button>
+      <button id="np-play" class="np-play-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg>
+      </button>
+      <button id="np-next" class="icon-btn">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+      </button>
+    </div>
+    <div class="np-progress-track">
+      <div id="np-progress" class="np-progress-bar"></div>
+    </div>
+  </div>
+
+  <!-- Full Player Overlay -->
+  <div id="full-player">
+    <div class="fp-bg">
+      <img id="fp-bg-img" src="" alt="">
+      <div class="fp-bg-overlay"></div>
+    </div>
+
+    <div class="fp-header">
+      <button id="fp-close" class="icon-btn ghost">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <span class="fp-now-playing">NOW PLAYING</span>
+      <button class="icon-btn ghost placeholder" title="More">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+      </button>
+    </div>
+
+    <div class="fp-content">
+      <!-- Artwork -->
+      <div class="fp-artwork-section">
+        <div class="fp-artwork-glass"></div>
+        <img id="fp-art" src="assets/default-art.png" alt="">
+      </div>
+
+      <!-- Track Info -->
+      <div class="fp-track-info">
+        <h2 id="fp-title" class="ellipsis">Unknown</h2>
+        <p id="fp-artist" class="ellipsis">Unknown Artist</p>
+      </div>
+
+      <!-- Waveform Seekbar -->
+      <div id="waveform-container" class="waveform-container">
+        <canvas id="waveform-canvas"></canvas>
+      </div>
+
+      <!-- Fallback Line Seekbar -->
+      <div id="fp-progress-container" class="progress-container hidden">
+        <div class="progress-track">
+          <div id="fp-progress-bar" class="progress-fill"></div>
+          <div id="fp-progress-handle" class="progress-handle"></div>
+        </div>
+      </div>
+
+      <div class="fp-time">
+        <span id="fp-current">0:00</span>
+        <span id="fp-duration">0:00</span>
+      </div>
+
+      <!-- Primary Controls -->
+      <div class="fp-controls-primary">
+        <button id="fp-shuffle" class="icon-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/><line x1="15" y1="15" x2="21" y2="21"/><line x1="4" y1="4" x2="9" y2="9"/></svg>
+        </button>
+        <button id="fp-prev" class="icon-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+        </button>
+        <button id="fp-play" class="fp-play-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="10 8 16 12 10 16 10 8"/></svg>
+        </button>
+        <button id="fp-next" class="icon-btn">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
+        </button>
+        <button id="fp-repeat" class="icon-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        </button>
+      </div>
+
+      <!-- Secondary Controls -->
+      <div class="fp-controls-secondary">
+        <button id="fp-favorite" class="icon-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        </button>
+        <button id="fp-add" class="icon-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        </button>
+        <button id="fp-share" class="icon-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        </button>
+        <button class="icon-btn" onclick="UI.navigate('lyrics')" title="Lyrics">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        </button>
+        <button class="icon-btn" onclick="UI.navigate('queue')" title="Queue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        </button>
+        <button class="icon-btn" onclick="UI.navigate('equalizer')" title="Equalizer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+        </button>
+        <!-- Placeholders for future features -->
+        <button class="icon-btn placeholder" title="Sleep Timer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </button>
+        <button class="icon-btn placeholder" title="Cast">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><line x1="2" y1="20" x2="2.01" y2="20"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Playlist Modal -->
+  <div id="playlist-modal" class="modal">
+    <div class="modal-content glass">
+      <div class="modal-header">
+        <h3>Add to Playlist</h3>
+        <button id="close-playlist-modal" class="icon-btn ghost">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div id="playlist-modal-list" class="modal-list"></div>
+      <button id="create-playlist-btn" class="btn-gold btn-full">Create New Playlist</button>
+    </div>
+  </div>
+
+  <!-- Toast Container -->
+  <div id="toast-container"></div>
+
+  <!-- Critical Error -->
+  <div id="critical-error" class="hidden">
+    <div class="error-content glass">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <h2>Something went wrong</h2>
+      <p id="error-message"></p>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/scanner.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>
