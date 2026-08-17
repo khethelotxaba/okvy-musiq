@@ -695,8 +695,22 @@ const UI = {
       const alpha = isPlayed ? 0.9 : 0.3;
       const brightness = isPlayed ? 1 : 0.6;
       ctx.fillStyle = `rgba(${Math.min(r * brightness, 255)}, ${Math.min(g * brightness, 255)}, ${Math.min(b * brightness, 255)}, ${alpha})`;
-      ctx.fillRect(x, y, barW, barH);
+      const radius = Math.min(barW / 2, 3);
+      this._roundRect(ctx, x, y, barW, barH, radius);
+      ctx.fill();
     });
+  },
+
+  _roundRect(ctx, x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
   },
 
   updateWaveformProgress(progress) {
