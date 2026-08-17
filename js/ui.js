@@ -152,6 +152,7 @@ const UI = {
       case 'settings': this.renderSettings(container); break;
       case 'lyrics': this.renderLyrics(container); break;
       case 'equalizer': this.renderEqualizer(container); break;
+      case 'album-detail': this.renderAlbumDetail(container, params); break;
     }
     window.scrollTo(0, 0);
   },
@@ -339,7 +340,7 @@ const UI = {
       <div class="grid-container ${viewClass}">${albums.map(a => {
         let art = 'assets/default-art.png';
         for (const tid of a.tracks) { const t = tracks.find(tr => tr.id === tid); if (t) { art = this.getArtworkUrl(t); break; } }
-        return `<div class="grid-item" onclick="UI.playAlbum('${a.id}')"><div class="grid-art"><img src="${art}" alt="" loading="lazy"><div class="grid-overlay"><button class="play-overlay"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div></div><span class="grid-title">${Utils.escapeHtml(a.name)}</span><span class="grid-subtitle">${Utils.escapeHtml(a.artist)}</span></div>`;
+                return `<div class="grid-item" onclick="UI.openAlbum('${a.id}')"><div class="grid-art"><img src="${art}" alt="" loading="lazy"><div class="grid-overlay"><button class="play-overlay"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div></div><span class="grid-title">${Utils.escapeHtml(a.name)}</span><span class="grid-subtitle">${Utils.escapeHtml(a.artist)}</span></div>`;
       }).join('')}</div>`;
   },
 
@@ -349,6 +350,24 @@ const UI = {
     const tracks = await Data.getTracks();
     const albumTracks = album.tracks.map(id => tracks.find(t => t.id === id)).filter(Boolean);
     if (albumTracks.length > 0) { Player.setQueue(albumTracks, 0); Player.loadTrack(albumTracks[0]); }
+  },
+
+    async shuffleAlbum(albumId) {
+    const album = await Data.get('albums', albumId);
+    if (!album) return;
+    const allTracks = await Data.getTracks();
+    const tracks = album.tracks.map(id => allTracks.find(t => t.id === id)).filter(Boolean);
+    if (tracks.length === 0) return;
+    for (let i = tracks.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [tracks[i], tracks[j]] = [tracks[j], tracks[i]];
+    }
+    Player.setQueue(tracks, 0);
+    Player.loadTrack(tracks[0]);
+  },
+
+    async openAlbum(albumId) {
+    this.navigate('album-detail', { albumId });
   },
 
     async renderArtists(container) {
@@ -391,6 +410,41 @@ const UI = {
         for (const tid of a.tracks) { const t = tracks.find(tr => tr.id === tid); if (t) { art = this.getArtworkUrl(t); break; } }
         return `<div class="grid-item" onclick="UI.navigate('tracks', {artist: '${Utils.escapeHtml(a.name)}'})"><div class="grid-art circle"><img src="${art}" alt="" loading="lazy"></div><span class="grid-title">${Utils.escapeHtml(a.name)}</span><span class="grid-subtitle">${a.tracks.length} tracks</span></div>`;
       }).join('')}</div>`;
+  },
+
+    async renderAlbumDetail(container, params) {
+    const album = await Data.get('albums', params.albumId);
+    if (!album) {
+      container.innerHTML = '<p style="color:var(--text-secondary);text-align:center;padding:40px;">Album not found</p>';
+      return;
+    }
+    const allTracks = await Data.getTracks();
+    const tracks = album.tracks.map(id => allTracks.find(t => t.id === id)).filter(Boolean);
+
+    let art = 'assets/default-art.png';
+    for (const t of tracks) { if (t) { art = this.getArtworkUrl(t); break; } }
+
+    const totalDuration = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+    const year = album.year || (tracks[0]?.year || '');
+    const artist = album.artist || (tracks[0]?.artist || 'Unknown Artist');
+
+    document.getElementById('page-title').textContent = Utils.escapeHtml(album.name);
+
+    container.innerHTML = `
+      <div class="album-detail-header">
+        <div class="album-detail-art"><img src="${art}" alt="" loading="lazy"></div>
+        <div class="album-detail-info">
+          <div class="album-detail-label">Album</div>
+          <div class="album-detail-title">${Utils.escapeHtml(album.name)}</div>
+          <div class="album-detail-meta">${Utils.escapeHtml(artist)} ${year ? '· ' + year : ''} · ${tracks.length} tracks · ${Utils.formatDuration(totalDuration)}</div>
+          <div class="album-detail-actions">
+            <button class="btn-gold" onclick="UI.playAlbum('${album.id}')">Play</button>
+            <button class="btn-outline" onclick="UI.shuffleAlbum('${album.id}')">Shuffle</button>
+          </div>
+        </div>
+      </div>
+      <div class="track-list">${tracks.map((t, i) => this.renderTrackRow(t, i + 1)).join('')}</div>
+    `;
   },
 
     async renderGenres(container) {
