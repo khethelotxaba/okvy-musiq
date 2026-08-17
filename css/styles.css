@@ -1028,6 +1028,92 @@ html, body {
   text-shadow: 0 2px 12px rgba(var(--accent-rgb), 0.3);
 }
 
+/* Album Detail Header */
+.album-detail-header {
+  display: flex;
+  gap: 20px;
+  align-items: flex-end;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.album-detail-art {
+  width: 160px;
+  height: 160px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  flex-shrink: 0;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  background: var(--bg-elevated);
+}
+.album-detail-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.album-detail-info {
+  flex: 1;
+  min-width: 0;
+}
+.album-detail-label {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.album-detail-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+  margin-bottom: 8px;
+  word-break: break-word;
+}
+.album-detail-meta {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+.album-detail-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.album-detail-actions .btn-gold {
+  padding: 10px 28px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: var(--radius-full);
+}
+.album-detail-actions .btn-outline {
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: var(--radius-full);
+}
+
+@media (max-width: 480px) {
+  .album-detail-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+  }
+  .album-detail-art {
+    width: 180px;
+    height: 180px;
+  }
+  .album-detail-title {
+    font-size: 22px;
+  }
+  .album-detail-actions {
+    justify-content: center;
+  }
+}
+
 /* Collage view */
 .grid-container.collage {
   grid-template-columns: repeat(2, minmax(0, 1fr));
