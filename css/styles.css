@@ -1016,6 +1016,95 @@ html, body {
   text-shadow: 0 2px 12px rgba(var(--accent-rgb), 0.3);
 }
 
+/* Explicit grid column sizes */
+.grid-container.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-container.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-container.grid-cols-4 { grid-template-columns: repeat(4, 1fr); }
+.grid-container.grid-cols-5 { grid-template-columns: repeat(5, 1fr); }
+
+/* Collage view */
+.grid-container.collage {
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.grid-container.collage .grid-item:nth-child(5n+1) {
+  grid-column: span 2;
+}
+.grid-container.collage .grid-art {
+  border-radius: var(--radius-lg);
+}
+.grid-container.collage .grid-title {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 28px 12px 10px;
+  margin: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,0.75));
+  color: #fff;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+.grid-container.collage .grid-subtitle {
+  display: none;
+}
+.grid-container.collage .grid-item {
+  position: relative;
+}
+.grid-container.collage .grid-item:nth-child(5n+1) .grid-title {
+  font-size: 17px;
+  padding-bottom: 14px;
+}
+.grid-container.collage .grid-overlay {
+  display: none;
+}
+
+/* View toolbar */
+.view-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.view-toolbar-left,
+.view-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.view-toggle-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+.view-toggle-btn:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+.view-toggle-btn.active {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+.view-toggle-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
 /* Playlist Card */
 .playlist-card {
   display: flex;
