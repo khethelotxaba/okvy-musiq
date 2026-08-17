@@ -297,7 +297,7 @@ const UI = {
     Player.loadTrack(track);
   },
 
-   async renderAlbums(container) {
+    async renderAlbums(container) {
     let albums = await Data.getAll('albums');
     const tracks = await Data.getTracks();
     const sort = SettingsManager.get('ui.albumSort') || 'name';
@@ -317,11 +317,11 @@ const UI = {
     container.innerHTML = `
       <div class="view-toolbar">
         <div class="view-toolbar-left">
-          <button class="view-toggle-btn ${view === 'grid' && cols === 3 ? 'active' : ''}" onclick="UI.setGridView('grid', 3)" title="3x3 Grid">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <button class="view-toggle-btn ${view === 'grid' && cols === 3 ? 'active' : ''}" onclick="UI.setGridView('grid', 3)" title="3 columns">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/></svg>
           </button>
-          <button class="view-toggle-btn ${view === 'grid' && cols === 4 ? 'active' : ''}" onclick="UI.setGridView('grid', 4)" title="4x4 Grid">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="9.5" y="3" width="4" height="4" rx="1"/><rect x="16" y="3" width="4" height="4" rx="1"/><rect x="3" y="9.5" width="4" height="4" rx="1"/><rect x="9.5" y="9.5" width="4" height="4" rx="1"/><rect x="16" y="9.5" width="4" height="4" rx="1"/><rect x="3" y="16" width="4" height="4" rx="1"/><rect x="9.5" y="16" width="4" height="4" rx="1"/><rect x="16" y="16" width="4" height="4" rx="1"/></svg>
+          <button class="view-toggle-btn ${view === 'grid' && cols === 4 ? 'active' : ''}" onclick="UI.setGridView('grid', 4)" title="4 columns">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="4.5" height="4.5" rx="1"/><rect x="9.75" y="2" width="4.5" height="4.5" rx="1"/><rect x="17.5" y="2" width="4.5" height="4.5" rx="1"/><rect x="2" y="9.75" width="4.5" height="4.5" rx="1"/><rect x="9.75" y="9.75" width="4.5" height="4.5" rx="1"/><rect x="17.5" y="9.75" width="4.5" height="4.5" rx="1"/><rect x="2" y="17.5" width="4.5" height="4.5" rx="1"/><rect x="9.75" y="17.5" width="4.5" height="4.5" rx="1"/><rect x="17.5" y="17.5" width="4.5" height="4.5" rx="1"/></svg>
           </button>
           <button class="view-toggle-btn ${view === 'collage' ? 'active' : ''}" onclick="UI.setGridView('collage', 2)" title="Collage">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="9" height="9" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="15" y="12" width="6" height="9" rx="1"/><rect x="3" y="15" width="9" height="6" rx="1"/></svg>
@@ -332,7 +332,7 @@ const UI = {
             <option value="name" ${sort === 'name' ? 'selected' : ''}>Name</option>
             <option value="artist" ${sort === 'artist' ? 'selected' : ''}>Artist</option>
             <option value="year" ${sort === 'year' ? 'selected' : ''}>Year</option>
-            <option value="tracks" ${sort === 'tracks' ? 'selected' : ''}>Track Count</option>
+            <option value="tracks" ${sort === 'tracks' ? 'selected' : ''}>Tracks</option>
           </select>
         </div>
       </div>
@@ -351,7 +351,7 @@ const UI = {
     if (albumTracks.length > 0) { Player.setQueue(albumTracks, 0); Player.loadTrack(albumTracks[0]); }
   },
 
-   async renderArtists(container) {
+    async renderArtists(container) {
     let artists = await Data.getAll('artists');
     const tracks = await Data.getTracks();
     const sort = SettingsManager.get('ui.artistSort') || 'name';
@@ -369,11 +369,11 @@ const UI = {
     container.innerHTML = `
       <div class="view-toolbar">
         <div class="view-toolbar-left">
-          <button class="view-toggle-btn ${view === 'grid' && cols === 3 ? 'active' : ''}" onclick="UI.setGridView('grid', 3)" title="3x3 Grid">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <button class="view-toggle-btn ${view === 'grid' && cols === 3 ? 'active' : ''}" onclick="UI.setGridView('grid', 3)" title="3 columns">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/></svg>
           </button>
-          <button class="view-toggle-btn ${view === 'grid' && cols === 4 ? 'active' : ''}" onclick="UI.setGridView('grid', 4)" title="4x4 Grid">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="9.5" y="3" width="4" height="4" rx="1"/><rect x="16" y="3" width="4" height="4" rx="1"/><rect x="3" y="9.5" width="4" height="4" rx="1"/><rect x="9.5" y="9.5" width="4" height="4" rx="1"/><rect x="16" y="9.5" width="4" height="4" rx="1"/><rect x="3" y="16" width="4" height="4" rx="1"/><rect x="9.5" y="16" width="4" height="4" rx="1"/><rect x="16" y="16" width="4" height="4" rx="1"/></svg>
+          <button class="view-toggle-btn ${view === 'grid' && cols === 4 ? 'active' : ''}" onclick="UI.setGridView('grid', 4)" title="4 columns">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="4.5" height="4.5" rx="1"/><rect x="9.75" y="2" width="4.5" height="4.5" rx="1"/><rect x="17.5" y="2" width="4.5" height="4.5" rx="1"/><rect x="2" y="9.75" width="4.5" height="4.5" rx="1"/><rect x="9.75" y="9.75" width="4.5" height="4.5" rx="1"/><rect x="17.5" y="9.75" width="4.5" height="4.5" rx="1"/><rect x="2" y="17.5" width="4.5" height="4.5" rx="1"/><rect x="9.75" y="17.5" width="4.5" height="4.5" rx="1"/><rect x="17.5" y="17.5" width="4.5" height="4.5" rx="1"/></svg>
           </button>
           <button class="view-toggle-btn ${view === 'collage' ? 'active' : ''}" onclick="UI.setGridView('collage', 2)" title="Collage">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="9" height="9" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="15" y="12" width="6" height="9" rx="1"/><rect x="3" y="15" width="9" height="6" rx="1"/></svg>
@@ -382,7 +382,7 @@ const UI = {
         <div class="view-toolbar-right">
           <select class="sort-select" onchange="UI.setArtistSort(this.value)">
             <option value="name" ${sort === 'name' ? 'selected' : ''}>Name</option>
-            <option value="tracks" ${sort === 'tracks' ? 'selected' : ''}>Track Count</option>
+            <option value="tracks" ${sort === 'tracks' ? 'selected' : ''}>Tracks</option>
           </select>
         </div>
       </div>
@@ -393,14 +393,14 @@ const UI = {
       }).join('')}</div>`;
   },
 
-  async renderGenres(container) {
+    async renderGenres(container) {
     const genres = await Data.getAll('genres');
     const cols = this.getGridColumns();
-    container.innerHTML = `<div class="grid-container" style="grid-template-columns: repeat(${cols}, 1fr);">${genres.map(g => `
+    const viewClass = `grid-cols-${cols}`;
+    container.innerHTML = `<div class="grid-container ${viewClass}">${genres.map(g => `
       <div class="grid-item" onclick="UI.navigate('tracks', {genre: '${Utils.escapeHtml(g.name)}'})"><div class="grid-art gradient"><span class="genre-icon">${g.name.charAt(0).toUpperCase()}</span></div><span class="grid-title">${Utils.escapeHtml(g.name)}</span><span class="grid-subtitle">${g.tracks.length} tracks</span></div>
     `).join('')}</div>`;
   },
-
   async renderPlaylists(container) {
     const playlists = await Data.getPlaylists();
     const tracks = await Data.getTracks();
@@ -1023,7 +1023,7 @@ const UI = {
     document.body.classList.toggle('landscape', isLandscape);
   },
 
-    getGridColumns() {
+      getGridColumns() {
     const view = SettingsManager.get('ui.gridViewStyle') || 'grid';
     if (view === 'collage') return 2;
     const setting = SettingsManager.get('ui.gridColumns');
@@ -1035,7 +1035,7 @@ const UI = {
     return 2;
   },
 
-    setGridView(style, cols) {
+  setGridView(style, cols) {
     SettingsManager.set('ui.gridViewStyle', style);
     SettingsManager.set('ui.gridColumns', cols);
     SettingsManager.save();
