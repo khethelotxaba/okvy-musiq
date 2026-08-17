@@ -297,15 +297,50 @@ const UI = {
     Player.loadTrack(track);
   },
 
-  async renderAlbums(container) {
-    const albums = await Data.getAll('albums');
+   async renderAlbums(container) {
+    let albums = await Data.getAll('albums');
     const tracks = await Data.getTracks();
+    const sort = SettingsManager.get('ui.albumSort') || 'name';
+    const view = SettingsManager.get('ui.gridViewStyle') || 'grid';
     const cols = this.getGridColumns();
-    container.innerHTML = `<div class="grid-container" style="grid-template-columns: repeat(${cols}, 1fr);">${albums.map(a => {
-      let art = 'assets/default-art.png';
-      for (const tid of a.tracks) { const t = tracks.find(tr => tr.id === tid); if (t) { art = this.getArtworkUrl(t); break; } }
-      return `<div class="grid-item" onclick="UI.playAlbum('${a.id}')"><div class="grid-art"><img src="${art}" alt="" loading="lazy"><div class="grid-overlay"><button class="play-overlay"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div></div><span class="grid-title">${Utils.escapeHtml(a.name)}</span><span class="grid-subtitle">${Utils.escapeHtml(a.artist)}</span></div>`;
-    }).join('')}</div>`;
+
+    albums = [...albums].sort((a, b) => {
+      if (sort === 'name') return a.name.localeCompare(b.name);
+      if (sort === 'artist') return (a.artist || '').localeCompare(b.artist || '');
+      if (sort === 'year') return (a.year || 0) - (b.year || 0);
+      if (sort === 'tracks') return (b.tracks?.length || 0) - (a.tracks?.length || 0);
+      return 0;
+    });
+
+    const viewClass = view === 'collage' ? 'collage' : `grid-cols-${cols}`;
+
+    container.innerHTML = `
+      <div class="view-toolbar">
+        <div class="view-toolbar-left">
+          <button class="view-toggle-btn ${view === 'grid' && cols === 3 ? 'active' : ''}" onclick="UI.setGridView('grid', 3)" title="3x3 Grid">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          </button>
+          <button class="view-toggle-btn ${view === 'grid' && cols === 4 ? 'active' : ''}" onclick="UI.setGridView('grid', 4)" title="4x4 Grid">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="9.5" y="3" width="4" height="4" rx="1"/><rect x="16" y="3" width="4" height="4" rx="1"/><rect x="3" y="9.5" width="4" height="4" rx="1"/><rect x="9.5" y="9.5" width="4" height="4" rx="1"/><rect x="16" y="9.5" width="4" height="4" rx="1"/><rect x="3" y="16" width="4" height="4" rx="1"/><rect x="9.5" y="16" width="4" height="4" rx="1"/><rect x="16" y="16" width="4" height="4" rx="1"/></svg>
+          </button>
+          <button class="view-toggle-btn ${view === 'collage' ? 'active' : ''}" onclick="UI.setGridView('collage', 2)" title="Collage">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="9" height="9" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="15" y="12" width="6" height="9" rx="1"/><rect x="3" y="15" width="9" height="6" rx="1"/></svg>
+          </button>
+        </div>
+        <div class="view-toolbar-right">
+          <select class="sort-select" onchange="UI.setAlbumSort(this.value)">
+            <option value="name" ${sort === 'name' ? 'selected' : ''}>Name</option>
+            <option value="artist" ${sort === 'artist' ? 'selected' : ''}>Artist</option>
+            <option value="year" ${sort === 'year' ? 'selected' : ''}>Year</option>
+            <option value="tracks" ${sort === 'tracks' ? 'selected' : ''}>Track Count</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid-container ${viewClass}">${albums.map(a => {
+        let art = 'assets/default-art.png';
+        for (const tid of a.tracks) { const t = tracks.find(tr => tr.id === tid); if (t) { art = this.getArtworkUrl(t); break; } }
+        return `<div class="grid-item" onclick="UI.playAlbum('${a.id}')"><div class="grid-art"><img src="${art}" alt="" loading="lazy"><div class="grid-overlay"><button class="play-overlay"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div></div><span class="grid-title">${Utils.escapeHtml(a.name)}</span><span class="grid-subtitle">${Utils.escapeHtml(a.artist)}</span></div>`;
+      }).join('')}</div>`;
   },
 
   async playAlbum(albumId) {
@@ -316,15 +351,46 @@ const UI = {
     if (albumTracks.length > 0) { Player.setQueue(albumTracks, 0); Player.loadTrack(albumTracks[0]); }
   },
 
-  async renderArtists(container) {
-    const artists = await Data.getAll('artists');
+   async renderArtists(container) {
+    let artists = await Data.getAll('artists');
     const tracks = await Data.getTracks();
+    const sort = SettingsManager.get('ui.artistSort') || 'name';
+    const view = SettingsManager.get('ui.gridViewStyle') || 'grid';
     const cols = this.getGridColumns();
-    container.innerHTML = `<div class="grid-container" style="grid-template-columns: repeat(${cols}, 1fr);">${artists.map(a => {
-      let art = 'assets/default-art.png';
-      for (const tid of a.tracks) { const t = tracks.find(tr => tr.id === tid); if (t) { art = this.getArtworkUrl(t); break; } }
-      return `<div class="grid-item" onclick="UI.navigate('tracks', {artist: '${Utils.escapeHtml(a.name)}'})"><div class="grid-art circle"><img src="${art}" alt="" loading="lazy"></div><span class="grid-title">${Utils.escapeHtml(a.name)}</span><span class="grid-subtitle">${a.tracks.length} tracks</span></div>`;
-    }).join('')}</div>`;
+
+    artists = [...artists].sort((a, b) => {
+      if (sort === 'name') return a.name.localeCompare(b.name);
+      if (sort === 'tracks') return (b.tracks?.length || 0) - (a.tracks?.length || 0);
+      return 0;
+    });
+
+    const viewClass = view === 'collage' ? 'collage' : `grid-cols-${cols}`;
+
+    container.innerHTML = `
+      <div class="view-toolbar">
+        <div class="view-toolbar-left">
+          <button class="view-toggle-btn ${view === 'grid' && cols === 3 ? 'active' : ''}" onclick="UI.setGridView('grid', 3)" title="3x3 Grid">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          </button>
+          <button class="view-toggle-btn ${view === 'grid' && cols === 4 ? 'active' : ''}" onclick="UI.setGridView('grid', 4)" title="4x4 Grid">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="9.5" y="3" width="4" height="4" rx="1"/><rect x="16" y="3" width="4" height="4" rx="1"/><rect x="3" y="9.5" width="4" height="4" rx="1"/><rect x="9.5" y="9.5" width="4" height="4" rx="1"/><rect x="16" y="9.5" width="4" height="4" rx="1"/><rect x="3" y="16" width="4" height="4" rx="1"/><rect x="9.5" y="16" width="4" height="4" rx="1"/><rect x="16" y="16" width="4" height="4" rx="1"/></svg>
+          </button>
+          <button class="view-toggle-btn ${view === 'collage' ? 'active' : ''}" onclick="UI.setGridView('collage', 2)" title="Collage">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="9" height="9" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="15" y="12" width="6" height="9" rx="1"/><rect x="3" y="15" width="9" height="6" rx="1"/></svg>
+          </button>
+        </div>
+        <div class="view-toolbar-right">
+          <select class="sort-select" onchange="UI.setArtistSort(this.value)">
+            <option value="name" ${sort === 'name' ? 'selected' : ''}>Name</option>
+            <option value="tracks" ${sort === 'tracks' ? 'selected' : ''}>Track Count</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid-container ${viewClass}">${artists.map(a => {
+        let art = 'assets/default-art.png';
+        for (const tid of a.tracks) { const t = tracks.find(tr => tr.id === tid); if (t) { art = this.getArtworkUrl(t); break; } }
+        return `<div class="grid-item" onclick="UI.navigate('tracks', {artist: '${Utils.escapeHtml(a.name)}'})"><div class="grid-art circle"><img src="${art}" alt="" loading="lazy"></div><span class="grid-title">${Utils.escapeHtml(a.name)}</span><span class="grid-subtitle">${a.tracks.length} tracks</span></div>`;
+      }).join('')}</div>`;
   },
 
   async renderGenres(container) {
@@ -491,6 +557,8 @@ const UI = {
           ${this.renderSetting('toggle', 'ui.waveformSeekbar', 'Waveform Seekbar')}
           ${this.renderSetting('number', 'ui.waveformBars', 'Waveform Bars', {min:40, max:160, step:10})}
           ${this.renderSetting('toggle', 'ui.animatingThumbnail', 'Animating Thumbnail')}
+                    ${this.renderSetting('select', 'ui.gridColumns', 'Grid Columns', {options: {auto:'Auto', 2:'2 columns', 3:'3 columns', 4:'4 columns', 5:'5 columns'}})}
+          ${this.renderSetting('select', 'ui.gridViewStyle', 'Grid View Style', {options: {grid:'Grid', collage:'Collage'}})}
         </div>
         <div class="settings-group">
           <h3>Smart Features</h3>
@@ -955,14 +1023,35 @@ const UI = {
     document.body.classList.toggle('landscape', isLandscape);
   },
 
-  getGridColumns() {
+    getGridColumns() {
+    const view = SettingsManager.get('ui.gridViewStyle') || 'grid';
+    if (view === 'collage') return 2;
     const setting = SettingsManager.get('ui.gridColumns');
-    if (setting !== 'auto') return setting;
+    if (setting !== 'auto') return parseInt(setting);
     const w = window.innerWidth;
     if (w >= 1200) return 5;
     if (w >= 900) return 4;
     if (w >= 600) return 3;
     return 2;
+  },
+
+    setGridView(style, cols) {
+    SettingsManager.set('ui.gridViewStyle', style);
+    SettingsManager.set('ui.gridColumns', cols);
+    SettingsManager.save();
+    this.renderCurrentPage();
+  },
+
+  setAlbumSort(sort) {
+    SettingsManager.set('ui.albumSort', sort);
+    SettingsManager.save();
+    this.renderCurrentPage();
+  },
+
+  setArtistSort(sort) {
+    SettingsManager.set('ui.artistSort', sort);
+    SettingsManager.save();
+    this.renderCurrentPage();
   },
 
   toggleSelectionMode() {
