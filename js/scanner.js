@@ -135,6 +135,7 @@ const Scanner = {
             const t = tag.tags;
             track.title = t.title || this.cleanFileName(file.name);
             track.artist = t.artist || 'Unknown Artist';
+            track.albumArtist = t.albumArtist || t.artist || 'Unknown Artist';
             track.album = t.album || 'Unknown Album';
             track.genre = t.genre || '';
             track.year = t.year ? parseInt(t.year) : null;
@@ -212,9 +213,12 @@ const Scanner = {
         // Actually, let's just store a data URL or keep the blob reference
       }
 
-      // Albums
+            // Albums
       if (track.album) {
-        const albumId = Utils.hashString(track.album + (track.albumArtist || track.artist || ''));
+        const allowMultiple = SettingsManager.get('library.allowMultipleAlbums');
+        const albumId = allowMultiple
+          ? Utils.hashString(track.album + (track.albumArtist || track.artist || ''))
+          : Utils.hashString(track.album);
         if (!albums.has(albumId)) {
           albums.set(albumId, {
             id: albumId,
