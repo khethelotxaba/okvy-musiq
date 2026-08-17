@@ -27,6 +27,7 @@ const CONFIG = {
     gridColumns: 'auto',
     landscapeLayout: 'auto',
     waveformSeekbar: true,
+    waveformBars: 80,
     animatingThumbnail: true,
     showUpdateIcon: true,
     glassIntensity: 0.15,

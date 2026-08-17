@@ -489,6 +489,7 @@ const UI = {
           ${this.renderSetting('select', 'ui.miniplayerGlowMode', 'Glow Mode', {options: {static:'Static', dynamic:'Dynamic', off:'Off'}})}
           ${this.renderSetting('select', 'ui.vibrationMode', 'Vibration', {options: {none:'None', vibrate:'Vibrate', haptic:'Haptic'}})}
           ${this.renderSetting('toggle', 'ui.waveformSeekbar', 'Waveform Seekbar')}
+          ${this.renderSetting('number', 'ui.waveformBars', 'Waveform Bars', {min:40, max:160, step:10})}
           ${this.renderSetting('toggle', 'ui.animatingThumbnail', 'Animating Thumbnail')}
         </div>
         <div class="settings-group">
@@ -612,12 +613,15 @@ const UI = {
 
   openFullPlayer() {
     document.getElementById('full-player').classList.add('open');
-    const container = document.getElementById('waveform-container');
+    const waveformContainer = document.getElementById('waveform-container');
+    const lineBar = document.getElementById('fp-progress-container');
     if (SettingsManager.get('ui.waveformSeekbar')) {
-      if (container) container.style.display = 'block';
+      if (waveformContainer) waveformContainer.style.display = 'block';
+      if (lineBar) lineBar.style.display = 'none';
       this.renderWaveform();
     } else {
-      if (container) container.style.display = 'none';
+      if (waveformContainer) waveformContainer.style.display = 'none';
+      if (lineBar) lineBar.style.display = 'block';
     }
   },
 
@@ -633,6 +637,21 @@ const UI = {
     const canvas = document.getElementById('waveform-canvas');
     if (!container || !canvas) return;
     container.style.display = 'block';
+
+    // Clear old content immediately so stale waveform never shows
+    const clearCtx = canvas.getContext('2d');
+    clearCtx.clearRect(0, 0, canvas.width || 1, canvas.height || 1);
+
+    // One-time click-to-seek listener
+    if (!this._waveformClickBound) {
+      canvas.addEventListener('click', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const pct = ((e.clientX - rect.left) / rect.width) * 100;
+        Player.seek(pct);
+      });
+      this._waveformClickBound = true;
+    }
+
     try {
       const url = Player.getTrackUrl(track);
       if (!url) return;
@@ -640,7 +659,8 @@ const UI = {
       const buf = await res.arrayBuffer();
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const audioBuf = await audioCtx.decodeAudioData(buf);
-      const peaks = Utils.getAudioPeaks(audioBuf, 300);
+      const barCount = Math.max(40, Math.min(160, SettingsManager.get('ui.waveformBars') || 80));
+      const peaks = Utils.getAudioPeaks(audioBuf, barCount);
       const ctx = canvas.getContext('2d');
       const dpr = window.devicePixelRatio || 1;
       const rect = container.getBoundingClientRect();
@@ -703,6 +723,11 @@ const UI = {
     this.updatePlayerControls();
     if (this.currentPage === 'tracks' || this.currentPage === 'favorites' || this.currentPage === 'queue') {
       this.renderCurrentPage();
+    }
+    // Re-render waveform on track change if full player is open
+    const fp = document.getElementById('full-player');
+    if (fp && fp.classList.contains('open') && SettingsManager.get('ui.waveformSeekbar')) {
+      this.renderWaveform();
     }
   },
 
