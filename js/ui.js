@@ -7,6 +7,7 @@ const UI = {
 
   async init() {
     this.bindGlobalEvents();
+    this.bindTabBar();
     this.renderSidebarPlaylists();
     this.navigate('home');
     this.initParticles();
@@ -19,11 +20,9 @@ const UI = {
 
   getArtworkUrl(track) {
     if (!track) return 'assets/default-art.png';
-    // If it's already a data URL or external URL, use it
     if (track.artwork && (track.artwork.startsWith('data:') || track.artwork.startsWith('http'))) {
       return track.artwork;
     }
-    // If we have an artwork blob, create a URL and cache it
     if (track.artworkBlob) {
       if (this.artworkCache.has(track.id)) {
         return this.artworkCache.get(track.id);
@@ -32,7 +31,6 @@ const UI = {
       this.artworkCache.set(track.id, url);
       return url;
     }
-    // Legacy dead blob URL - ignore
     if (track.artwork && track.artwork.startsWith('blob:')) {
       return 'assets/default-art.png';
     }
@@ -59,13 +57,11 @@ const UI = {
       });
     });
 
-    // Player bar
     document.getElementById('np-track').addEventListener('click', () => this.openFullPlayer());
     this.setupPlayButton(document.getElementById('np-play'));
     document.getElementById('np-prev').addEventListener('click', () => Player.prev());
     document.getElementById('np-next').addEventListener('click', () => Player.next());
 
-    // Full player
     document.getElementById('fp-close').addEventListener('click', () => this.closeFullPlayer());
     this.setupPlayButton(document.getElementById('fp-play'));
     document.getElementById('fp-prev').addEventListener('click', () => Player.prev());
@@ -76,7 +72,6 @@ const UI = {
     document.getElementById('fp-add').addEventListener('click', () => this.showPlaylistModal());
     document.getElementById('fp-share').addEventListener('click', () => this.shareTrack());
 
-    // Progress
     const fpProgress = document.getElementById('fp-progress-container');
     if (fpProgress) {
       fpProgress.addEventListener('click', (e) => {
@@ -86,11 +81,9 @@ const UI = {
       });
     }
 
-    // Playlist modal
     document.getElementById('close-playlist-modal').addEventListener('click', () => this.hidePlaylistModal());
     document.getElementById('create-playlist-btn').addEventListener('click', () => this.createPlaylistFromModal());
 
-    // Events
     window.addEventListener('track-changed', (e) => this.onTrackChanged(e.detail));
     window.addEventListener('playback-state', (e) => this.onPlaybackState(e.detail));
     window.addEventListener('time-update', (e) => this.onTimeUpdate(e.detail));
@@ -100,6 +93,31 @@ const UI = {
     window.addEventListener('scan-complete', (e) => this.onScanComplete(e.detail));
     window.addEventListener('queue-updated', () => this.renderQueue());
     window.addEventListener('setting-changed', (e) => this.onSettingChanged(e.detail));
+  },
+
+  bindTabBar() {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const tab = btn.dataset.tab;
+        if (tab) {
+          this.navigate(tab);
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+        }
+      });
+    });
+  },
+
+  updateTabBar(page) {
+    const tabMap = {
+      'home': 'home', 'tracks': 'tracks', 'albums': 'tracks', 'artists': 'tracks',
+      'genres': 'tracks', 'playlists': 'tracks', 'search': 'search',
+      'settings': 'settings', 'favorites': 'tracks', 'queue': 'tracks', 'folders': 'tracks'
+    };
+    const activeTab = tabMap[page] || 'home';
+    document.querySelectorAll('.tab-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.tab === activeTab);
+    });
   },
 
   toggleSidebar(show) {
@@ -114,14 +132,12 @@ const UI = {
     this.currentPage = page;
     this.selectedTracks.clear();
     this.selectionMode = false;
-
     document.querySelectorAll('.nav-item').forEach(i => i.classList.toggle('active', i.dataset.page === page));
     document.getElementById('page-title').textContent = this.capitalize(page);
-
+    this.updateTabBar(page);
     const container = document.getElementById('page-container');
     container.innerHTML = '';
     container.className = 'page-container page-' + page;
-
     switch(page) {
       case 'home': this.renderHome(container); break;
       case 'tracks': this.renderTracks(container, params); break;
@@ -137,65 +153,75 @@ const UI = {
       case 'lyrics': this.renderLyrics(container); break;
       case 'equalizer': this.renderEqualizer(container); break;
     }
-
     window.scrollTo(0, 0);
   },
 
   capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); },
 
-  // HOME
+  getGreeting() {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  },
+
   async renderHome(container) {
     const tracks = await Data.getTracks();
     const stats = await Data.getAll('stats');
     const totalTime = await Data.getTotalListenTime();
-
+    const history = await Data.getHistory();
+    const recentTracks = [];
+    const seen = new Set();
+    for (let i = history.length - 1; i >= 0 && recentTracks.length < 10; i--) {
+      const t = await Data.getTrack(history[i].trackId);
+      if (t && !seen.has(t.id)) { seen.add(t.id); recentTracks.push(t); }
+    }
     container.innerHTML = `
-      <div class="home-grid">
-        <div class="hero-card glass">
+      <div class="hero-section">
+        <div class="hero-greeting">${this.getGreeting()}</div>
+        <div class="hero-sub">${tracks.length > 0 ? 'Your music, your way.' : 'Ready to discover your sound?'}</div>
+        <div class="hero-card">
           <div class="hero-stats">
-            <div class="stat-item">
-              <span class="stat-value">${tracks.length}</span>
-              <span class="stat-label">Tracks</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-value">${Utils.formatDuration(totalTime)}</span>
-              <span class="stat-label">Listened</span>
-            </div>
+            <div class="stat-item"><span class="stat-value">${tracks.length}</span><span class="stat-label">Tracks</span></div>
+            <div class="stat-item"><span class="stat-value">${Utils.formatDuration(totalTime)}</span><span class="stat-label">Listened</span></div>
+            <div class="stat-item"><span class="stat-value">${stats.length}</span><span class="stat-label">Played</span></div>
           </div>
           ${tracks.length === 0 ? `<button class="btn-gold btn-large" onclick="UI.scanMusic()">Scan Music</button>` : ''}
         </div>
-
-        ${tracks.length > 0 ? `
-          <div class="section-header"><h2>Recent</h2></div>
-          <div class="track-list">${(await Data.getHistory()).slice(-10).reverse().map(h => `
-            <div class="track-row" data-id="${h.trackId}" onclick="UI.playTrackById('${h.trackId}')">
-              <span class="track-title">${Utils.escapeHtml(h.trackId)}</span>
-            </div>
-          `).join('')}</div>
-
-          <div class="section-header"><h2>Quick Access</h2></div>
-          <div class="quick-grid">
-            <div class="quick-card" onclick="UI.navigate('tracks')"><span>Tracks</span></div>
-            <div class="quick-card" onclick="UI.navigate('albums')"><span>Albums</span></div>
-            <div class="quick-card" onclick="UI.navigate('artists')"><span>Artists</span></div>
-            <div class="quick-card" onclick="UI.navigate('playlists')"><span>Playlists</span></div>
-            <div class="quick-card" onclick="UI.navigate('queue')"><span>Queue</span></div>
-            <div class="quick-card" onclick="UI.navigate('settings')"><span>Settings</span></div>
-          </div>
-        ` : ''}
       </div>
+      ${recentTracks.length > 0 ? `
+        <div class="section-header"><h2>Recently Played</h2><button class="section-action" onclick="UI.navigate('tracks')">See All</button></div>
+        <div class="h-scroll">
+          ${recentTracks.map(t => `
+            <div class="h-scroll-item" onclick="UI.playTrackById('${t.id}')">
+              <div class="grid-art"><img src="${this.getArtworkUrl(t)}" alt="" loading="lazy"><div class="grid-overlay"><button class="play-overlay"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div></div>
+              <span class="grid-title">${Utils.escapeHtml(t.title || 'Unknown')}</span>
+              <span class="grid-subtitle">${Utils.escapeHtml(t.artist || '')}</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      ${tracks.length > 0 ? `
+        <div class="section-header"><h2>Browse</h2></div>
+        <div class="chip-bar">
+          <button class="chip" onclick="UI.navigate('tracks')">Tracks</button>
+          <button class="chip" onclick="UI.navigate('albums')">Albums</button>
+          <button class="chip" onclick="UI.navigate('artists')">Artists</button>
+          <button class="chip" onclick="UI.navigate('genres')">Genres</button>
+          <button class="chip" onclick="UI.navigate('playlists')">Playlists</button>
+          <button class="chip" onclick="UI.navigate('queue')">Queue</button>
+          <button class="chip" onclick="UI.navigate('favorites')">Favorites</button>
+        </div>
+      ` : ''}
     `;
   },
 
-  // TRACKS
   async renderTracks(container, params = {}) {
     let tracks = params.tracks || await Data.getTracks();
     if (params.artist) tracks = tracks.filter(t => t.artist === params.artist || (t.featuredArtists || []).includes(params.artist));
     if (params.genre) tracks = tracks.filter(t => t.genre && t.genre.includes(params.genre));
-
     const sortBy = params.sortBy || 'title';
     const sortDir = params.sortDir || 'asc';
-
     tracks.sort((a,b) => {
       let va = a[sortBy] || '', vb = b[sortBy] || '';
       if (typeof va === 'string') va = va.toLowerCase();
@@ -204,39 +230,32 @@ const UI = {
       if (va > vb) return sortDir === 'asc' ? 1 : -1;
       return 0;
     });
-
     container.innerHTML = `
       <div class="toolbar">
-        <select class="sort-select" onchange="UI.sortTracks(this.value)">
-          <option value="title">Title</option>
-          <option value="artist">Artist</option>
-          <option value="album">Album</option>
-          <option value="year">Year</option>
-          <option value="dateAdded">Date Added</option>
-          <option value="duration">Duration</option>
-          <option value="rating">Rating</option>
-        </select>
-        <button class="icon-btn" onclick="UI.toggleSortDir()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
-        </button>
+        <select class="sort-select" onchange="UI.sortTracks(this.value)"><option value="title">Title</option><option value="artist">Artist</option><option value="album">Album</option><option value="year">Year</option><option value="dateAdded">Date Added</option><option value="duration">Duration</option><option value="rating">Rating</option></select>
+        <button class="icon-btn" onclick="UI.toggleSortDir()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 16V4M7 4L3 8M7 4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg></button>
         ${this.selectionMode ? `
           <button class="btn-gold" onclick="UI.playSelected()">Play</button>
           <button class="btn-outline" onclick="UI.addSelectedToQueue()">Queue</button>
           <button class="btn-outline" onclick="UI.clearSelection()">Clear</button>
         ` : `<button class="icon-btn" onclick="UI.toggleSelectionMode()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></button>`}
       </div>
-      <div class="track-list">${tracks.map(t => this.renderTrackRow(t)).join('')}</div>
+      <div class="track-list">${tracks.map((t, i) => this.renderTrackRow(t, i + 1)).join('')}</div>
     `;
   },
 
-  renderTrackRow(track) {
+  renderTrackRow(track, num) {
     const selected = this.selectedTracks.has(track.id);
+    const isPlaying = Player.currentTrack && Player.currentTrack.id === track.id;
     return `
-      <div class="track-row ${selected ? 'selected' : ''}" data-id="${track.id}"
+      <div class="track-row ${selected ? 'selected' : ''} ${isPlaying ? 'playing' : ''}" data-id="${track.id}"
         onclick="UI.handleTrackClick('${track.id}', event)"
         oncontextmenu="UI.showTrackMenu('${track.id}', event); return false;"
       >
         ${this.selectionMode ? `<div class="track-check ${selected ? 'checked' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>` : ''}
+        ${!this.selectionMode && isPlaying && Player.isPlaying ? `
+          <div class="playing-bars"><span></span><span></span><span></span></div>
+        ` : `<span class="track-num">${num || ''}</span>`}
         <img class="track-art" src="${this.getArtworkUrl(track)}" alt="" loading="lazy">
         <div class="track-info">
           <span class="track-title">${Utils.escapeHtml(track.title || 'Unknown')}</span>
@@ -245,9 +264,7 @@ const UI = {
         <span class="track-duration">${Utils.formatDuration(track.duration)}</span>
         <div class="track-actions">
           <button class="icon-btn small" onclick="event.stopPropagation(); UI.toggleTrackFavorite('${track.id}')">
-            <svg viewBox="0 0 24 24" fill="${track.favorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
+            <svg viewBox="0 0 24 24" fill="${track.favorite ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
           </button>
           <button class="icon-btn small" onclick="event.stopPropagation(); UI.showTrackMenu('${track.id}', event)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/></svg>
@@ -258,10 +275,7 @@ const UI = {
   },
 
   handleTrackClick(id, event) {
-    if (this.selectionMode) {
-      this.toggleTrackSelection(id);
-      return;
-    }
+    if (this.selectionMode) { this.toggleTrackSelection(id); return; }
     if (event && (event.target.closest('.track-actions') || event.target.closest('.track-check'))) return;
     this.playTrackById(id);
   },
@@ -269,10 +283,8 @@ const UI = {
   async playTrackById(id, mode) {
     const track = await Data.getTrack(id);
     if (!track) return;
-
     const playMode = mode || SettingsManager.get('playback.trackPlayMode');
     const allTracks = await Data.getTracks();
-
     let queue = [];
     if (playMode === 'selected') queue = [track];
     else if (playMode === 'context') queue = allTracks;
@@ -280,34 +292,20 @@ const UI = {
     else if (playMode === 'artist' && track.artist) queue = allTracks.filter(t => t.artist === track.artist || (t.featuredArtists || []).includes(track.artist));
     else if (playMode === 'genre' && track.genre) queue = allTracks.filter(t => t.genre && t.genre.includes(track.genre));
     else queue = allTracks;
-
     const idx = queue.findIndex(t => t.id === id);
     Player.setQueue(queue, idx >= 0 ? idx : 0);
     Player.loadTrack(track);
   },
 
-  // ALBUMS
   async renderAlbums(container) {
     const albums = await Data.getAll('albums');
     const tracks = await Data.getTracks();
     const cols = this.getGridColumns();
     container.innerHTML = `<div class="grid-container" style="grid-template-columns: repeat(${cols}, 1fr);">${albums.map(a => {
-      // Get artwork from first track that has valid art
       let art = 'assets/default-art.png';
-      for (const tid of a.tracks) {
-        const t = tracks.find(tr => tr.id === tid);
-        if (t) { art = this.getArtworkUrl(t); break; }
-      }
-      return `
-      <div class="grid-item" onclick="UI.playAlbum('${a.id}')">
-        <div class="grid-art">
-          <img src="${art}" alt="" loading="lazy">
-          <div class="grid-overlay"><button class="play-overlay"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div>
-        </div>
-        <span class="grid-title">${Utils.escapeHtml(a.name)}</span>
-        <span class="grid-subtitle">${Utils.escapeHtml(a.artist)}</span>
-      </div>
-    `}).join('')}</div>`;
+      for (const tid of a.tracks) { const t = tracks.find(tr => tr.id === tid); if (t) { art = this.getArtworkUrl(t); break; } }
+      return `<div class="grid-item" onclick="UI.playAlbum('${a.id}')"><div class="grid-art"><img src="${art}" alt="" loading="lazy"><div class="grid-overlay"><button class="play-overlay"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div></div><span class="grid-title">${Utils.escapeHtml(a.name)}</span><span class="grid-subtitle">${Utils.escapeHtml(a.artist)}</span></div>`;
+    }).join('')}</div>`;
   },
 
   async playAlbum(albumId) {
@@ -315,78 +313,38 @@ const UI = {
     if (!album) return;
     const tracks = await Data.getTracks();
     const albumTracks = album.tracks.map(id => tracks.find(t => t.id === id)).filter(Boolean);
-    if (albumTracks.length > 0) {
-      Player.setQueue(albumTracks, 0);
-      Player.loadTrack(albumTracks[0]);
-    }
+    if (albumTracks.length > 0) { Player.setQueue(albumTracks, 0); Player.loadTrack(albumTracks[0]); }
   },
 
-  // ARTISTS
   async renderArtists(container) {
     const artists = await Data.getAll('artists');
     const tracks = await Data.getTracks();
     const cols = this.getGridColumns();
     container.innerHTML = `<div class="grid-container" style="grid-template-columns: repeat(${cols}, 1fr);">${artists.map(a => {
       let art = 'assets/default-art.png';
-      for (const tid of a.tracks) {
-        const t = tracks.find(tr => tr.id === tid);
-        if (t) { art = this.getArtworkUrl(t); break; }
-      }
-      return `
-      <div class="grid-item" onclick="UI.navigate('tracks', {artist: '${Utils.escapeHtml(a.name)}'})">
-        <div class="grid-art circle">
-          <img src="${art}" alt="" loading="lazy">
-        </div>
-        <span class="grid-title">${Utils.escapeHtml(a.name)}</span>
-        <span class="grid-subtitle">${a.tracks.length} tracks</span>
-      </div>
-    `}).join('')}</div>`;
+      for (const tid of a.tracks) { const t = tracks.find(tr => tr.id === tid); if (t) { art = this.getArtworkUrl(t); break; } }
+      return `<div class="grid-item" onclick="UI.navigate('tracks', {artist: '${Utils.escapeHtml(a.name)}'})"><div class="grid-art circle"><img src="${art}" alt="" loading="lazy"></div><span class="grid-title">${Utils.escapeHtml(a.name)}</span><span class="grid-subtitle">${a.tracks.length} tracks</span></div>`;
+    }).join('')}</div>`;
   },
 
-  // GENRES
   async renderGenres(container) {
     const genres = await Data.getAll('genres');
     const cols = this.getGridColumns();
     container.innerHTML = `<div class="grid-container" style="grid-template-columns: repeat(${cols}, 1fr);">${genres.map(g => `
-      <div class="grid-item" onclick="UI.navigate('tracks', {genre: '${Utils.escapeHtml(g.name)}'})">
-        <div class="grid-art gradient">
-          <span class="genre-icon">${g.name.charAt(0).toUpperCase()}</span>
-        </div>
-        <span class="grid-title">${Utils.escapeHtml(g.name)}</span>
-        <span class="grid-subtitle">${g.tracks.length} tracks</span>
-      </div>
+      <div class="grid-item" onclick="UI.navigate('tracks', {genre: '${Utils.escapeHtml(g.name)}'})"><div class="grid-art gradient"><span class="genre-icon">${g.name.charAt(0).toUpperCase()}</span></div><span class="grid-title">${Utils.escapeHtml(g.name)}</span><span class="grid-subtitle">${g.tracks.length} tracks</span></div>
     `).join('')}</div>`;
   },
 
-  // PLAYLISTS
   async renderPlaylists(container) {
     const playlists = await Data.getPlaylists();
     const tracks = await Data.getTracks();
     container.innerHTML = `
-      <div class="toolbar">
-        <button class="btn-gold" onclick="UI.createPlaylist()">New Playlist</button>
-        <button class="btn-outline" onclick="UI.importM3U()">Import M3U</button>
-      </div>
+      <div class="toolbar"><button class="btn-gold" onclick="UI.createPlaylist()">New Playlist</button><button class="btn-outline" onclick="UI.importM3U()">Import M3U</button></div>
       <div class="playlist-list">${await Promise.all(playlists.map(async p => {
         let art = 'assets/default-art.png';
-        if (p.tracks.length > 0) {
-          const t = tracks.find(tr => tr.id === p.tracks[0]);
-          if (t) art = this.getArtworkUrl(t);
-        }
-        return `
-        <div class="playlist-card glass" onclick="UI.openPlaylist('${p.id}')">
-          <div class="playlist-art">
-            ${p.tracks.length > 0 ? `<img src="${art}" alt="">` : '<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>'}
-          </div>
-          <div class="playlist-info">
-            <span class="playlist-name">${Utils.escapeHtml(p.name)}</span>
-            <span class="playlist-count">${p.tracks.length} tracks ${p.auto ? '· Auto' : ''}</span>
-          </div>
-          <button class="icon-btn" onclick="event.stopPropagation(); UI.playPlaylist('${p.id}')">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-          </button>
-        </div>
-      `})).join('')}</div>
+        if (p.tracks.length > 0) { const t = tracks.find(tr => tr.id === p.tracks[0]); if (t) art = this.getArtworkUrl(t); }
+        return `<div class="playlist-card" onclick="UI.openPlaylist('${p.id}')"><div class="playlist-art">${p.tracks.length > 0 ? `<img src="${art}" alt="">` : '<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>'}</div><div class="playlist-info"><span class="playlist-name">${Utils.escapeHtml(p.name)}</span><span class="playlist-count">${p.tracks.length} tracks ${p.auto ? '· Auto' : ''}</span></div><button class="icon-btn" onclick="event.stopPropagation(); UI.playPlaylist('${p.id}')"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button></div>`;
+      })).join('')}</div>
     `;
   },
 
@@ -394,40 +352,25 @@ const UI = {
     const pl = await Data.getPlaylist(id);
     if (!pl) return;
     const tracks = [];
-    for (const tid of pl.tracks) {
-      const t = await Data.getTrack(tid);
-      if (t) tracks.push(t);
-    }
-
+    for (const tid of pl.tracks) { const t = await Data.getTrack(tid); if (t) tracks.push(t); }
     const container = document.getElementById('page-container');
     document.getElementById('page-title').textContent = Utils.escapeHtml(pl.name);
     container.innerHTML = `
-      <div class="toolbar">
-        <button class="btn-gold" onclick="UI.playPlaylist('${id}')">Play All</button>
-        <button class="btn-outline" onclick="UI.exportPlaylistM3U('${id}')">Export M3U</button>
-        ${!pl.auto ? `<button class="btn-outline danger" onclick="UI.deletePlaylist('${id}')">Delete</button>` : ''}
-      </div>
-      <div class="track-list">${tracks.map(t => this.renderTrackRow(t)).join('')}</div>
+      <div class="toolbar"><button class="btn-gold" onclick="UI.playPlaylist('${id}')">Play All</button><button class="btn-outline" onclick="UI.exportPlaylistM3U('${id}')">Export M3U</button>${!pl.auto ? `<button class="btn-outline danger" onclick="UI.deletePlaylist('${id}')">Delete</button>` : ''}</div>
+      <div class="track-list">${tracks.map((t, i) => this.renderTrackRow(t, i + 1)).join('')}</div>
     `;
   },
 
-  // QUEUE
   async renderQueue(container) {
     const queue = Player.queue;
     const idx = Player.queueIndex;
     container.innerHTML = `
-      <div class="toolbar">
-        <button class="btn-outline" onclick="Player.clearQueue()">Clear</button>
-        <button class="btn-outline" onclick="UI.saveQueueAsPlaylist()">Save as Playlist</button>
-      </div>
-      <div class="queue-list">${queue.map((t, i) => `
+      <div class="toolbar"><button class="btn-outline" onclick="Player.clearQueue()">Clear</button><button class="btn-outline" onclick="UI.saveQueueAsPlaylist()">Save as Playlist</button></div>
+      <div class="track-list">${queue.map((t, i) => `
         <div class="track-row ${i === idx ? 'playing' : ''}" data-index="${i}">
-          <span class="queue-num">${i + 1}</span>
+          ${i === idx && Player.isPlaying ? `<div class="playing-bars"><span></span><span></span><span></span></div>` : `<span class="queue-num">${i + 1}</span>`}
           <img class="track-art" src="${this.getArtworkUrl(t)}" alt="">
-          <div class="track-info">
-            <span class="track-title">${Utils.escapeHtml(t.title)}</span>
-            <span class="track-meta">${Utils.escapeHtml(t.artist)}</span>
-          </div>
+          <div class="track-info"><span class="track-title">${Utils.escapeHtml(t.title)}</span><span class="track-meta">${Utils.escapeHtml(t.artist)}</span></div>
           <span class="track-duration">${Utils.formatDuration(t.duration)}</span>
           <div class="track-actions">
             <button class="icon-btn small" onclick="UI.playQueueIndex(${i})"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
@@ -438,30 +381,24 @@ const UI = {
     `;
   },
 
-  // FOLDERS
   async renderFolders(container) {
     const folders = await Data.getFolders();
     container.innerHTML = `
-      <div class="toolbar">
-        <button class="btn-gold" onclick="UI.addFolder()">Add Folder</button>
-      </div>
+      <div class="toolbar"><button class="btn-gold" onclick="UI.addFolder()">Add Folder</button></div>
       <div class="folder-list">${folders.map(f => `
-        <div class="folder-card glass">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-          <span class="folder-path">${Utils.escapeHtml(f.path)}</span>
-          <button class="icon-btn" onclick="UI.removeFolder('${f.path}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-        </div>
+        <div class="folder-card"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><span class="folder-path">${Utils.escapeHtml(f.path)}</span><button class="icon-btn" onclick="UI.removeFolder('${f.path}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
       `).join('')}</div>
       <input type="file" id="folder-input" webkitdirectory directory multiple style="display:none" onchange="UI.onFolderSelected(this.files)">
     `;
   },
 
-  // SEARCH
   async renderSearch(container) {
     container.innerHTML = `
-      <div class="search-box glass">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="search-input" placeholder="Search tracks, albums, artists..." oninput="UI.onSearch(this.value)">
+      <div class="search-hero">
+        <div class="search-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input type="text" id="search-input" placeholder="Search tracks, albums, artists..." oninput="UI.onSearch(this.value)">
+        </div>
       </div>
       <div class="search-filters">
         <select id="filter-artist" onchange="UI.onSearchFilter()"><option value="">All Artists</option></select>
@@ -470,11 +407,9 @@ const UI = {
       </div>
       <div id="search-results" class="track-list"></div>
     `;
-
     const artists = await Data.getAll('artists');
     const genres = await Data.getAll('genres');
     const years = [...new Set((await Data.getTracks()).map(t => t.year).filter(Boolean))].sort((a,b) => b-a);
-
     document.getElementById('filter-artist').innerHTML += artists.map(a => `<option value="${Utils.escapeHtml(a.name)}">${Utils.escapeHtml(a.name)}</option>`).join('');
     document.getElementById('filter-genre').innerHTML += genres.map(g => `<option value="${Utils.escapeHtml(g.name)}">${Utils.escapeHtml(g.name)}</option>`).join('');
     document.getElementById('filter-year').innerHTML += years.map(y => `<option value="${y}">${y}</option>`).join('');
@@ -488,25 +423,19 @@ const UI = {
     if (artist) filters.artist = artist;
     if (genre) filters.genre = genre;
     if (year) { filters.yearMin = parseInt(year); filters.yearMax = parseInt(year); }
-
     const results = await Data.searchTracks(query, filters);
     const container = document.getElementById('search-results');
-    container.innerHTML = results.map(t => this.renderTrackRow(t)).join('');
+    container.innerHTML = results.map((t, i) => this.renderTrackRow(t, i + 1)).join('');
   },
 
   onSearchFilter() { this.onSearch(document.getElementById('search-input')?.value || ''); },
 
-  // FAVORITES
   async renderFavorites(container) {
     const tracks = await Data.getTracks();
     const favs = tracks.filter(t => t.favorite);
-    container.innerHTML = `
-      <div class="section-header"><h2>Favorites (${favs.length})</h2></div>
-      <div class="track-list">${favs.map(t => this.renderTrackRow(t)).join('')}</div>
-    `;
+    container.innerHTML = `<div class="section-header"><h2>Favorites (${favs.length})</h2></div><div class="track-list">${favs.map((t, i) => this.renderTrackRow(t, i + 1)).join('')}</div>`;
   },
 
-  // SETTINGS
   async renderSettings(container) {
     container.innerHTML = `
       <div class="settings-list">
@@ -520,7 +449,6 @@ const UI = {
           <button class="btn-outline" onclick="UI.scanMusic()">Scan Music</button>
           <button class="btn-outline danger" onclick="Data.clearLibrary(); UI.showToast('Library cleared')">Clear Library</button>
         </div>
-
         <div class="settings-group">
           <h3>Audio</h3>
           ${this.renderSetting('toggle', 'audio.equalizerEnabled', 'Equalizer')}
@@ -531,7 +459,6 @@ const UI = {
           ${this.renderSetting('toggle', 'audio.gaplessPlayback', 'Gapless Playback')}
           ${this.renderSetting('toggle', 'audio.normalization', 'Volume Normalization')}
         </div>
-
         <div class="settings-group">
           <h3>Playback</h3>
           ${this.renderSetting('toggle', 'playback.persistentQueue', 'Persistent Queue')}
@@ -540,14 +467,12 @@ const UI = {
           ${this.renderSetting('number', 'playback.repeatNTimes', 'Repeat N Times', {min:1, max:20})}
           ${this.renderSetting('toggle', 'playback.shuffleMode', 'Shuffle')}
         </div>
-
         <div class="settings-group">
           <h3>Sleep Timer</h3>
           ${this.renderSetting('toggle', 'playback.sleepTimer.enabled', 'Enable Sleep Timer')}
           ${this.renderSetting('select', 'playback.sleepTimer.mode', 'Mode', {options: {tracks:'Tracks', minutes:'Minutes'}})}
           ${this.renderSetting('number', 'playback.sleepTimer.value', 'Value')}
         </div>
-
         <div class="settings-group">
           <h3>Smart Pause</h3>
           ${this.renderSetting('toggle', 'playback.smartPause.onCall', 'Pause on Call')}
@@ -555,7 +480,6 @@ const UI = {
           ${this.renderSetting('toggle', 'playback.smartPause.onAppSwitch', 'Pause on App Switch')}
           ${this.renderSetting('toggle', 'playback.smartPause.onHeadphoneDisconnect', 'Pause on Headphone Disconnect')}
         </div>
-
         <div class="settings-group">
           <h3>UI</h3>
           ${this.renderSetting('toggle', 'ui.dynamicTheming', 'Dynamic Theming')}
@@ -567,14 +491,12 @@ const UI = {
           ${this.renderSetting('toggle', 'ui.waveformSeekbar', 'Waveform Seekbar')}
           ${this.renderSetting('toggle', 'ui.animatingThumbnail', 'Animating Thumbnail')}
         </div>
-
         <div class="settings-group">
           <h3>Smart Features</h3>
           ${this.renderSetting('toggle', 'smart.smortEnabled', 'Smort Mix')}
           ${this.renderSetting('toggle', 'smart.mostPlayedAutoUpdate', 'Auto-update Most Played')}
           ${this.renderSetting('toggle', 'smart.lostMemoriesEnabled', 'Lost Memories')}
         </div>
-
         <div class="settings-group">
           <h3>History & Scrobbling</h3>
           ${this.renderSetting('number', 'history.minListenSeconds', 'Min Listen Seconds')}
@@ -584,7 +506,6 @@ const UI = {
           ${this.renderSetting('text', 'history.lastFm.apiSecret', 'Last.fm API Secret')}
           ${this.renderSetting('toggle', 'history.totalListenTimer', 'Track Total Listen Time')}
         </div>
-
         <div class="settings-group">
           <h3>Lyrics</h3>
           ${this.renderSetting('toggle', 'lyrics.enabled', 'Enable Lyrics')}
@@ -592,7 +513,6 @@ const UI = {
           ${this.renderSetting('select', 'lyrics.preferredFormat', 'Preferred Format', {options: {auto:'Auto', lrc:'LRC', ttml:'TTML', embedded:'Embedded'}})}
           ${this.renderSetting('toggle', 'lyrics.highlightCurrentLine', 'Highlight Current Line')}
         </div>
-
         <button class="btn-gold btn-full" onclick="SettingsManager.save(); UI.showToast('Settings saved')">Save Settings</button>
         <button class="btn-outline danger btn-full" onclick="SettingsManager.reset()">Reset All Settings</button>
       </div>
@@ -603,30 +523,14 @@ const UI = {
   renderSetting(type, path, label, opts = {}) {
     const val = SettingsManager.get(path);
     const id = 'setting-' + path.replace(/\./g, '-');
-
     if (type === 'toggle') {
-      return `<label class="setting-row">
-        <span>${label}</span>
-        <div class="toggle-switch">
-          <input type="checkbox" id="${id}" data-path="${path}" ${val ? 'checked' : ''}>
-          <span class="toggle-slider"></span>
-        </div>
-      </label>`;
+      return `<label class="setting-row"><span>${label}</span><div class="toggle-switch"><input type="checkbox" id="${id}" data-path="${path}" ${val ? 'checked' : ''}><span class="toggle-slider"></span></div></label>`;
     } else if (type === 'select') {
-      return `<label class="setting-row">
-        <span>${label}</span>
-        <select id="${id}" data-path="${path}">${Object.entries(opts.options || {}).map(([k,v]) => `<option value="${k}" ${val===k?'selected':''}>${v}</option>`).join('')}</select>
-      </label>`;
+      return `<label class="setting-row"><span>${label}</span><select id="${id}" data-path="${path}">${Object.entries(opts.options || {}).map(([k,v]) => `<option value="${k}" ${val===k?'selected':''}>${v}</option>`).join('')}</select></label>`;
     } else if (type === 'number') {
-      return `<label class="setting-row">
-        <span>${label}</span>
-        <input type="number" id="${id}" data-path="${path}" value="${val}" min="${opts.min||0}" max="${opts.max||9999}" step="${opts.step||1}">
-      </label>`;
+      return `<label class="setting-row"><span>${label}</span><input type="number" id="${id}" data-path="${path}" value="${val}" min="${opts.min||0}" max="${opts.max||9999}" step="${opts.step||1}"></label>`;
     } else if (type === 'text') {
-      return `<label class="setting-row">
-        <span>${label}</span>
-        <input type="text" id="${id}" data-path="${path}" value="${val||''}">
-      </label>`;
+      return `<label class="setting-row"><span>${label}</span><input type="text" id="${id}" data-path="${path}" value="${val||''}"></label>`;
     }
     return '';
   },
@@ -642,30 +546,15 @@ const UI = {
     });
   },
 
-  // EQUALIZER
   renderEqualizer(container) {
     const preset = SettingsManager.get('audio.eqCurrentPreset');
     const presets = SettingsManager.get('audio.eqPresets');
     const freqs = [32, 64, 125, 250, 500, 1, 2, 4, 8, 16];
     const units = ['Hz','Hz','Hz','Hz','Hz','kHz','kHz','kHz','kHz','kHz'];
-
     container.innerHTML = `
       <div class="eq-container">
-        <div class="eq-presets">
-          <select onchange="UI.loadEQPreset(this.value)">
-            ${presets.map(p => `<option value="${p.name}" ${p.name===preset?'selected':''}>${p.name}</option>`).join('')}
-            <option value="Custom" ${preset==='Custom'?'selected':''}>Custom</option>
-          </select>
-        </div>
-        <div class="eq-bands">
-          ${freqs.map((f, i) => `
-            <div class="eq-band">
-              <input type="range" min="-12" max="12" step="0.5" value="0" 
-                oninput="UI.setEQBand(${i}, this.value)" class="eq-slider" orient="vertical">
-              <span class="eq-freq">${f}${units[i]}</span>
-            </div>
-          `).join('')}
-        </div>
+        <div class="eq-presets"><select onchange="UI.loadEQPreset(this.value)">${presets.map(p => `<option value="${p.name}" ${p.name===preset?'selected':''}>${p.name}</option>`).join('')}<option value="Custom" ${preset==='Custom'?'selected':''}>Custom</option></select></div>
+        <div class="eq-bands">${freqs.map((f, i) => `<div class="eq-band"><input type="range" min="-12" max="12" step="0.5" value="0" oninput="UI.setEQBand(${i}, this.value)" class="eq-slider" orient="vertical"><span class="eq-freq">${f}${units[i]}</span></div>`).join('')}</div>
       </div>
     `;
     this.loadEQPreset(preset);
@@ -676,12 +565,8 @@ const UI = {
     const preset = presets.find(p => p.name === name);
     const values = preset ? preset.values : SettingsManager.get('audio.eqCustomValues');
     SettingsManager.set('audio.eqCurrentPreset', name);
-
     document.querySelectorAll('.eq-slider').forEach((slider, i) => {
-      if (values[i] !== undefined) {
-        slider.value = values[i];
-        Player.setEQBand(i, values[i]);
-      }
+      if (values[i] !== undefined) { slider.value = values[i]; Player.setEQBand(i, values[i]); }
     });
   },
 
@@ -694,25 +579,17 @@ const UI = {
     SettingsManager.set('audio.eqCurrentPreset', 'Custom');
   },
 
-  // LYRICS
   async renderLyrics(container) {
     const track = Player.currentTrack;
     if (!track) {
       container.innerHTML = '<div class="empty-state">No track playing</div>';
       return;
     }
-
     let lyrics = [];
     if (track.lyrics && !track.lyrics.startsWith(SettingsManager.get('lyrics.ignoreEmbeddedPrefix'))) {
       lyrics = Utils.lrcParse(track.lyrics);
     }
-
-    container.innerHTML = `
-      <div class="lyrics-container" id="lyrics-display">
-        ${lyrics.length > 0 ? lyrics.map((l, i) => `<div class="lyric-line" data-time="${l.time}" id="lyric-${i}">${Utils.escapeHtml(l.text)}</div>`).join('') : '<div class="empty-state">No lyrics available</div>'}
-      </div>
-    `;
-
+    container.innerHTML = `<div class="lyrics-container" id="lyrics-display">${lyrics.length > 0 ? lyrics.map((l, i) => `<div class="lyric-line" data-time="${l.time}" id="lyric-${i}">${Utils.escapeHtml(l.text)}</div>`).join('') : '<div class="empty-state">No lyrics available</div>'}</div>`;
     if (lyrics.length > 0) {
       this.lyricsInterval = setInterval(() => this.highlightLyric(lyrics), 200);
     }
@@ -733,7 +610,6 @@ const UI = {
     });
   },
 
-  // FULL PLAYER
   openFullPlayer() {
     document.getElementById('full-player').classList.add('open');
     const container = document.getElementById('waveform-container');
@@ -756,21 +632,15 @@ const UI = {
     const container = document.getElementById('waveform-container');
     const canvas = document.getElementById('waveform-canvas');
     if (!container || !canvas) return;
-
-    // Show container
     container.style.display = 'block';
-
     try {
-      // Get audio data from the track blob
       const url = Player.getTrackUrl(track);
       if (!url) return;
-
       const res = await fetch(url);
       const buf = await res.arrayBuffer();
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const audioBuf = await audioCtx.decodeAudioData(buf);
       const peaks = Utils.getAudioPeaks(audioBuf, 300);
-
       const ctx = canvas.getContext('2d');
       const dpr = window.devicePixelRatio || 1;
       const rect = container.getBoundingClientRect();
@@ -779,20 +649,14 @@ const UI = {
       canvas.style.width = rect.width + 'px';
       canvas.style.height = rect.height + 'px';
       ctx.scale(dpr, dpr);
-
       const w = rect.width / peaks.length;
       const h = rect.height;
       const barW = Math.max(w - 1, 1);
-
       this.waveformPeaks = peaks;
       this.waveformBarW = barW;
       this.waveformBarCount = peaks.length;
-
       this.drawWaveform(ctx, peaks, barW, rect.width, h, 0);
-
-      // Clean up temp URL if it was a blob
       if (url !== track.url) URL.revokeObjectURL(url);
-
     } catch(e) {
       console.error('Waveform render failed:', e);
       container.style.display = 'none';
@@ -803,17 +667,13 @@ const UI = {
     ctx.clearRect(0, 0, totalW, h);
     const progressX = progress * totalW;
     const { r, g, b } = this.particleColors;
-
     peaks.forEach((p, i) => {
       const x = i * (totalW / peaks.length);
       const barH = Math.max(p * h * 0.85, 2);
       const y = (h - barH) / 2;
-
-      // Played vs unplayed color
       const isPlayed = x < progressX;
       const alpha = isPlayed ? 0.9 : 0.3;
       const brightness = isPlayed ? 1 : 0.6;
-
       ctx.fillStyle = `rgba(${Math.min(r * brightness, 255)}, ${Math.min(g * brightness, 255)}, ${Math.min(b * brightness, 255)}, ${alpha})`;
       ctx.fillRect(x, y, barW, barH);
     });
@@ -833,44 +693,31 @@ const UI = {
     document.getElementById('np-title').textContent = track.title || 'Unknown';
     document.getElementById('np-artist').textContent = track.artist || '-';
     document.getElementById('np-art').src = track.artwork || 'assets/default-art.png';
-
     document.getElementById('fp-title').textContent = track.title || 'Unknown';
     document.getElementById('fp-artist').textContent = track.artist || '-';
     document.getElementById('fp-art').src = track.artwork || 'assets/default-art.png';
-    document.getElementById('fp-bg-img').src = track.artwork || 'assets/default-art.png';
     document.getElementById('fp-favorite').classList.toggle('active', track.favorite);
-
     document.getElementById('sidebar-title').textContent = track.title || 'Not Playing';
     document.getElementById('sidebar-artist').textContent = track.artist || '-';
     document.getElementById('sidebar-art').src = track.artwork || 'assets/default-art.png';
-
     this.updatePlayerControls();
+    if (this.currentPage === 'tracks' || this.currentPage === 'favorites' || this.currentPage === 'queue') {
+      this.renderCurrentPage();
+    }
   },
 
   onPlaybackState(state) {
     const isPlaying = state.playing;
-    const wasReset = state.reset;
-
-    // Morph mini player icon
     const npIcon = document.querySelector('#np-play svg');
     if (npIcon) {
-      if (isPlaying) {
-        npIcon.innerHTML = '<line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/>';
-      } else {
-        npIcon.innerHTML = '<polygon points="10 8 16 12 10 16 10 8"/>';
-      }
+      if (isPlaying) { npIcon.innerHTML = '<line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/>'; }
+      else { npIcon.innerHTML = '<polygon points="10 8 16 12 10 16 10 8"/>'; }
     }
-
-    // Morph full player icon
     const fpIcon = document.querySelector('#fp-play svg');
     if (fpIcon) {
-      if (isPlaying) {
-        fpIcon.innerHTML = '<line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/>';
-      } else {
-        fpIcon.innerHTML = '<polygon points="10 8 16 12 10 16 10 8"/>';
-      }
+      if (isPlaying) { fpIcon.innerHTML = '<line x1="10" y1="8" x2="10" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/>'; }
+      else { fpIcon.innerHTML = '<polygon points="10 8 16 12 10 16 10 8"/>'; }
     }
-
     const art = document.getElementById('fp-art');
     if (art) art.classList.toggle('playing', isPlaying && SettingsManager.get('ui.animatingThumbnail'));
   },
@@ -934,7 +781,6 @@ const UI = {
     this.renderCurrentPage();
   },
 
-  // PARTICLES - Full Screen Background Audio Visualizer
   particleColors: { r: 212, g: 175, b: 55 },
   particleAccent: '#d4af37',
 
@@ -944,9 +790,8 @@ const UI = {
     this.particlesCtx = canvas.getContext('2d');
     this.resizeParticles();
     window.addEventListener('resize', () => this.resizeParticles());
-
     this.particles = [];
-    this.bars = []; // For bar visualizer mode
+    this.bars = [];
     this.initParticleField();
     this.animateParticles();
   },
@@ -963,13 +808,11 @@ const UI = {
     if (!canvas) return;
     const w = canvas.width, h = canvas.height;
     this.particles = [];
-    const count = Math.floor((w * h) / 8000); // Density based on screen size
+    const count = Math.floor((w * h) / 8000);
     for (let i = 0; i < count; i++) {
       this.particles.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        baseX: Math.random() * w,
-        baseY: Math.random() * h,
+        x: Math.random() * w, y: Math.random() * h,
+        baseX: Math.random() * w, baseY: Math.random() * h,
         vx: 0, vy: 0,
         size: Math.random() * 2.5 + 0.5,
         baseSize: Math.random() * 2.5 + 0.5,
@@ -978,7 +821,6 @@ const UI = {
         speed: Math.random() * 0.5 + 0.2
       });
     }
-    // Initialize frequency bars at bottom
     this.bars = [];
     const barCount = Math.floor(w / 12);
     for (let i = 0; i < barCount; i++) {
@@ -1002,46 +844,30 @@ const UI = {
     const ctx = this.particlesCtx;
     const w = canvas.width, h = canvas.height;
     ctx.clearRect(0, 0, w, h);
-
     const peak = Player.peakSmooth || 0;
     const intensity = SettingsManager.get('ui.particlesIntensity') || 0.6;
     const time = Date.now() * 0.001;
     const { r, g, b } = this.particleColors;
 
-    // Draw floating particles
     this.particles.forEach(p => {
-      // Audio-reactive movement
       const audioForce = peak * intensity * 8;
       p.vx += (Math.random() - 0.5) * 0.1 + Math.sin(time * p.speed + p.phase) * 0.05;
-      p.vy += (Math.random() - 0.5) * 0.1 - audioForce * 0.3; // Float up with beat
-
-      // Damping
-      p.vx *= 0.98;
-      p.vy *= 0.98;
-
-      p.x += p.vx;
-      p.y += p.vy;
-
-      // Wrap around
+      p.vy += (Math.random() - 0.5) * 0.1 - audioForce * 0.3;
+      p.vx *= 0.98; p.vy *= 0.98;
+      p.x += p.vx; p.y += p.vy;
       if (p.x < -10) p.x = w + 10;
       if (p.x > w + 10) p.x = -10;
       if (p.y < -10) p.y = h + 10;
       if (p.y > h + 10) p.y = -10;
-
-      // Size pulses with beat
       const sizePulse = 1 + peak * intensity * 2;
       const currentSize = p.baseSize * sizePulse;
-
-      // Alpha pulses
       const alphaPulse = p.alpha * (0.3 + peak * intensity * 1.5);
-
       ctx.beginPath();
       ctx.arc(p.x, p.y, currentSize, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(alphaPulse, 0.8)})`;
       ctx.fill();
     });
 
-    // Draw connecting lines between nearby particles (constellation effect)
     const connectDist = 80 + peak * 60;
     ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${0.03 + peak * 0.08})`;
     ctx.lineWidth = 0.5;
@@ -1059,7 +885,6 @@ const UI = {
       }
     }
 
-    // Bottom frequency bars (subtle)
     if (peak > 0.1) {
       const barCount = this.bars.length;
       const barWidth = w / barCount;
@@ -1074,11 +899,8 @@ const UI = {
     }
   },
 
-  updateParticles(peak) {
-    // Colors updated via setParticleColors from theme-colors event
-  },
+  updateParticles(peak) {},
 
-  // MINIPLAYER GLOW
   initMiniplayerGlow() {},
 
   updateMiniplayerGlow(peak) {
@@ -1086,20 +908,12 @@ const UI = {
     if (!bar) return;
     const intensity = SettingsManager.get('ui.particlesIntensity') || 0.6;
     const alpha = peak * intensity;
-    bar.style.boxShadow = `0 -4px 20px rgba(212, 175, 55, ${alpha})`;
+    bar.style.boxShadow = `0 -4px 20px rgba(var(--accent-rgb), ${alpha}), 0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.03)`;
   },
 
-  // LANDSCAPE
   checkLandscape() {
     const isLandscape = window.innerWidth > window.innerHeight && window.innerWidth >= 768;
     document.body.classList.toggle('landscape', isLandscape);
-
-    const layout = SettingsManager.get('ui.landscapeLayout');
-    if (layout === 'sidebar' || (layout === 'auto' && isLandscape)) {
-      document.getElementById('sidebar').classList.add('persistent');
-    } else {
-      document.getElementById('sidebar').classList.remove('persistent');
-    }
   },
 
   getGridColumns() {
@@ -1112,7 +926,6 @@ const UI = {
     return 2;
   },
 
-  // SELECTION
   toggleSelectionMode() {
     this.selectionMode = !this.selectionMode;
     this.selectedTracks.clear();
@@ -1141,11 +954,8 @@ const UI = {
     this.clearSelection();
   },
 
-  addSelectedToQueue() {
-    // Implementation
-  },
+  addSelectedToQueue() {},
 
-  // PLAYLIST MODAL
   async showPlaylistModal() {
     const track = Player.currentTrack;
     if (!track) return;
@@ -1229,7 +1039,6 @@ const UI = {
     let pressTimer = null;
     let isLongPress = false;
     const LONG_PRESS_MS = 500;
-
     const startPress = (e) => {
       isLongPress = false;
       pressTimer = setTimeout(() => {
@@ -1238,23 +1047,16 @@ const UI = {
         Utils.vibrate(20);
       }, LONG_PRESS_MS);
     };
-
     const endPress = (e) => {
       clearTimeout(pressTimer);
       btn.classList.remove('holding');
-      if (isLongPress) {
-        Player.resetTrack();
-      } else {
-        Player.togglePlay();
-      }
+      if (isLongPress) { Player.resetTrack(); }
+      else { Player.togglePlay(); }
     };
-
     const cancelPress = () => {
       clearTimeout(pressTimer);
       btn.classList.remove('holding');
     };
-
-    // Use pointer events for unified mouse + touch handling
     btn.addEventListener('pointerdown', startPress);
     btn.addEventListener('pointerup', endPress);
     btn.addEventListener('pointerleave', cancelPress);
@@ -1262,7 +1064,6 @@ const UI = {
     btn.addEventListener('contextmenu', (e) => e.preventDefault());
   },
 
-  // SIDEBAR
   async renderSidebarPlaylists() {
     const playlists = await Data.getPlaylists();
     const container = document.getElementById('user-playlists');
@@ -1275,7 +1076,6 @@ const UI = {
     `).join('');
   },
 
-  // TOAST
   showToast(message) {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
@@ -1289,7 +1089,6 @@ const UI = {
     }, 3000);
   },
 
-  // SCAN
   scanMusic() {
     const input = document.createElement('input');
     input.type = 'file';
@@ -1328,7 +1127,6 @@ const UI = {
     this.navigate(this.currentPage);
   },
 
-  // Folders
   addFolder() {
     document.getElementById('folder-input')?.click();
   },
@@ -1346,7 +1144,6 @@ const UI = {
     this.renderCurrentPage();
   },
 
-  // Track menu
   showTrackMenu(id, event) {
     event.stopPropagation();
   },
@@ -1385,7 +1182,5 @@ const UI = {
     this.navigate('tracks', { sortBy: field, sortDir: 'asc' });
   },
 
-  toggleSortDir() {
-    // Toggle sort direction
-  }
+  toggleSortDir() {}
 };
