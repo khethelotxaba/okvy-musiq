@@ -546,6 +546,7 @@ html, body {
   height: 52px;
   margin-bottom: 20px;
   position: relative;
+  cursor: pointer;
 }
 
 #waveform-canvas {
