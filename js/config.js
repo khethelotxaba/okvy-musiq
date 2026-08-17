@@ -1,5 +1,5 @@
 const CONFIG = {
-  version: '2.2.4',
+  version: '2.2.3',
 
   library: {
     minFileSizeMB: 0.5,

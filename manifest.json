@@ -1,7 +1,7 @@
 {
   "name": "Okvy MusiQ",
   "short_name": "Okvy",
-  "description": "A premium black, gold & white music experience - v2.2.4",
+  "description": "A premium black, gold & white music experience - v2.2.3",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0a0a0a",
