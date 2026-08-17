@@ -25,6 +25,9 @@ const CONFIG = {
     miniplayerGlowMode: 'dynamic',
     vibrationMode: 'haptic',
     gridColumns: 'auto',
+        gridViewStyle: 'grid',  // grid | collage
+    albumSort: 'name',      // name | artist | year | tracks
+    artistSort: 'name',     // name | tracks
     landscapeLayout: 'auto',
     waveformSeekbar: true,
     waveformBars: 80,
