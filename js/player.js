@@ -30,8 +30,8 @@ const Player = {
   peakSmooth: 0,
 
   currentPosition: 0,
-  currentBlobUrl: null,     // <-- Track current blob URL for cleanup
-  currentArtworkUrl: null,  // <-- Track artwork blob URL
+  currentBlobUrl: null,
+  currentArtworkUrl: null,
 
   async init() {
     this.audio = new Audio();
@@ -52,14 +52,12 @@ const Player = {
       }
     });
 
-    // Smart pause
     document.addEventListener('visibilitychange', () => {
       if (SettingsManager.get('playback.smartPause.onAppSwitch') && document.hidden && this.isPlaying) {
         this.pause();
       }
     });
 
-    // Volume zero detection
     this.audio.addEventListener('volumechange', () => {
       if (SettingsManager.get('playback.smartPause.onVolumeZero') && this.audio.volume === 0 && this.isPlaying) {
         this.pause();
@@ -142,14 +140,12 @@ const Player = {
     if (this.eqNodes[index]) this.eqNodes[index].gain.value = value;
   },
 
-  // Create fresh blob URL from stored blob
   getTrackUrl(track) {
     if (!track) return null;
     if (track.blob) {
       return URL.createObjectURL(track.blob);
     }
     if (track.url) {
-      // Legacy support for old tracks that still have url strings
       return track.url;
     }
     return null;
@@ -161,7 +157,6 @@ const Player = {
       return URL.createObjectURL(track.artworkBlob);
     }
     if (track.artwork) {
-      // Legacy or external URL
       return track.artwork;
     }
     return null;
@@ -181,7 +176,6 @@ const Player = {
   async loadTrack(track, autoPlay = true) {
     if (!track) return;
 
-    // Clean up old URLs
     this.revokeCurrentUrls();
     this.saveListenProgress();
 
@@ -189,18 +183,15 @@ const Player = {
     this.currentPosition = 0;
     this.repeatCount = 0;
 
-    // Create fresh blob URL
     const url = this.getTrackUrl(track);
     if (!url) {
       console.error('No audio source for track:', track.title);
-      UI.showToast('Cannot play: file not available');
-      // Skip to next
+      console.warn('Cannot play: file not available');
       setTimeout(() => this.next(), 500);
       return;
     }
     this.currentBlobUrl = url;
 
-    // Create artwork URL
     const artwork = this.getTrackArtwork(track);
     if (artwork && artwork.startsWith('blob:')) {
       this.currentArtworkUrl = artwork;
@@ -212,7 +203,6 @@ const Player = {
     this.audio.src = url;
     this.audio.load();
 
-    // Dynamic theming
     if (SettingsManager.get('ui.dynamicTheming')) {
       const artSrc = artwork || 'assets/default-art.png';
       if (artSrc.startsWith('blob:') || artSrc.startsWith('http') || artSrc.startsWith('data:')) {
@@ -255,9 +245,8 @@ const Player = {
       Utils.vibrate(15);
     } catch(err) {
       console.error('Play failed:', err);
-      // Don't crash - just show toast and move on
       if (err.name !== 'AbortError') {
-        UI.showToast('Playback error: ' + (err.message || 'Unknown'));
+        console.warn('Playback error:', err.message || 'Unknown');
       }
     }
   },
@@ -282,6 +271,16 @@ const Player = {
   async togglePlay() {
     if (this.isPlaying) await this.pause();
     else await this.play();
+  },
+
+  resetTrack() {
+    if (this.audio) {
+      this.audio.currentTime = 0;
+      this.currentPosition = 0;
+      if (this.isPlaying) {
+        this.play();
+      }
+    }
   },
 
   async next() {
@@ -488,9 +487,8 @@ const Player = {
         3: 'Decode error',
         4: 'Format not supported'
       };
-      UI.showToast('Audio error: ' + (msgs[err.code] || 'Unknown'));
+      console.warn('Audio error code:', msgs[err.code] || 'Unknown');
     }
-    // Try next track instead of crashing
     setTimeout(() => this.next(), 1000);
   },
 
@@ -546,22 +544,22 @@ const Player = {
   },
 
   addToQueue(tracks, position = 'end') {
-    if (position === 'end') this.queue.push(...tracks);
-    else if (position === 'next') this.queue.splice(this.queueIndex + 1, 0, ...tracks);
-    else if (position === 'now') {
-      this.queue.splice(this.queueIndex + 1, 0, ...tracks);
-      if (this.isPlaying) this.next();
+    if (position === 'next') {
+      const before = this.queue.slice(0, this.queueIndex + 1);
+      const after = this.queue.slice(this.queueIndex + 1);
+      this.queue = [...before, ...tracks, ...after];
+    } else {
+      this.queue = [...this.queue, ...tracks];
     }
     if (SettingsManager.get('playback.persistentQueue')) this.saveQueue();
-    window.dispatchEvent(new CustomEvent('queue-updated', { detail: this.queue }));
   },
 
   removeFromQueue(index) {
     if (index === this.queueIndex) return;
-    if (index < this.queueIndex) this.queueIndex--;
     this.queue.splice(index, 1);
+    if (index < this.queueIndex) this.queueIndex--;
     if (SettingsManager.get('playback.persistentQueue')) this.saveQueue();
-    window.dispatchEvent(new CustomEvent('queue-updated', { detail: this.queue }));
+    window.dispatchEvent(new CustomEvent('queue-updated'));
   },
 
   moveQueueItem(from, to) {
@@ -571,95 +569,85 @@ const Player = {
     else if (from < this.queueIndex && to >= this.queueIndex) this.queueIndex--;
     else if (from > this.queueIndex && to <= this.queueIndex) this.queueIndex++;
     if (SettingsManager.get('playback.persistentQueue')) this.saveQueue();
-    window.dispatchEvent(new CustomEvent('queue-updated', { detail: this.queue }));
+    window.dispatchEvent(new CustomEvent('queue-updated'));
   },
 
-  clearQueue() {
-    this.queue = [];
-    this.queueIndex = 0;
-    this.revokeCurrentUrls();
-    if (SettingsManager.get('playback.persistentQueue')) Data.saveQueue([], 0, 0);
-    window.dispatchEvent(new CustomEvent('queue-updated', { detail: this.queue }));
+  saveQueue() {
+    try {
+      const data = this.queue.map(t => ({
+        id: t.id,
+        title: t.title,
+        artist: t.artist,
+        album: t.album,
+        duration: t.duration,
+        artwork: t.artwork,
+        path: t.path,
+        hash: t.hash
+      }));
+      localStorage.setItem('okvy_queue', JSON.stringify({ tracks: data, index: this.queueIndex }));
+    } catch(e) {}
   },
 
-  async saveQueue() {
-    await Data.saveQueue(this.queue.map(t => t.id), this.queueIndex, this.currentPosition);
+  loadQueue() {
+    try {
+      const saved = localStorage.getItem('okvy_queue');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        this.queue = parsed.tracks || [];
+        this.queueIndex = parsed.index || 0;
+      }
+    } catch(e) {}
   },
-
-  async loadQueue() {
-    if (!SettingsManager.get('playback.persistentQueue')) return;
-    const saved = await Data.loadQueue();
-    if (!saved || !saved.queue) return;
-    const tracks = await Data.getTracks();
-    this.queue = saved.queue.map(id => tracks.find(t => t.id === id)).filter(Boolean);
-    this.queueIndex = saved.index || 0;
-    this.currentPosition = saved.position || 0;
-    if (this.queue[this.queueIndex]) {
-      this.currentTrack = this.queue[this.queueIndex];
-      // Don't set audio.src here - blob URL would be invalid
-      // Just restore state, user presses play to create fresh URL
-    }
-  },
-
-  listenStartTime: 0,
-  listenTracked: false,
 
   startListenTracking() {
+    if (!this.currentTrack) return;
     this.listenStartTime = Date.now();
-    this.listenTracked = false;
+    this.listenPositionStart = this.audio.currentTime;
   },
 
-  async saveListenProgress(completed = false) {
-    if (!this.currentTrack || this.listenTracked) return;
-    const elapsed = (Date.now() - this.listenStartTime) / 1000;
-    const duration = this.getDuration();
-    const percent = duration > 0 ? (elapsed / duration) * 100 : 0;
+  saveListenProgress(completed = false) {
+    if (!this.currentTrack || !this.listenStartTime) return;
 
-    const minSec = SettingsManager.get('history.minListenSeconds');
-    const minPct = SettingsManager.get('history.minListenPercent');
+    const listenDuration = (Date.now() - this.listenStartTime) / 1000;
+    const trackDuration = this.audio.duration || 0;
+    const minSeconds = SettingsManager.get('history.minListenSeconds');
+    const minPercent = SettingsManager.get('history.minListenPercent');
 
-    if (completed || (elapsed >= minSec && percent >= minPct)) {
-      this.listenTracked = true;
-      await Data.addHistoryEntry(this.currentTrack.id, Math.round(elapsed * 1000), Math.round(this.currentPosition * 1000), completed);
+    const percentListened = trackDuration > 0 ? (listenDuration / trackDuration) * 100 : 0;
+
+    if (completed || (listenDuration >= minSeconds && percentListened >= minPercent)) {
+      this.currentTrack.playCount = (this.currentTrack.playCount || 0) + 1;
+      this.currentTrack.lastPlayed = Date.now();
+      Data.saveTrack(this.currentTrack);
 
       if (SettingsManager.get('history.scrobbleEnabled')) {
         this.scrobbleTrack(this.currentTrack);
       }
-
-      if (SettingsManager.get('smart.mostPlayedAutoUpdate')) {
-        await Data.refreshAutoPlaylists();
-      }
     }
 
-    if (SettingsManager.get('playback.persistentQueue')) {
-      this.saveQueue();
-    }
+    this.listenStartTime = null;
   },
 
   async scrobbleTrack(track) {
-    const session = SettingsManager.get('history.lastFm.sessionKey');
-    if (!session) return;
-    const apiKey = SettingsManager.get('history.lastFm.apiKey');
-    const apiSecret = SettingsManager.get('history.lastFm.apiSecret');
-    if (!apiKey || !apiSecret) return;
+    const creds = SettingsManager.get('history.lastFm');
+    if (!creds.sessionKey) return;
 
     const params = {
       method: 'track.scrobble',
-      api_key: apiKey,
-      sk: session,
-      artist: track.artist || 'Unknown',
-      track: track.title || 'Unknown',
-      timestamp: Math.floor(Date.now() / 1000)
+      api_key: creds.apiKey,
+      sk: creds.sessionKey,
+      artist: track.artist,
+      track: track.title,
+      timestamp: Math.floor(Date.now() / 1000),
+      format: 'json'
     };
-    if (track.album) params.album = track.album;
 
-    const sig = this.lastFmSign(params, apiSecret);
-    params.api_sig = sig;
-    params.format = 'json';
+    params.api_sig = this.lastFmSign(params, creds.apiSecret);
 
     try {
       await fetch('https://ws.audioscrobbler.com/2.0/', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams(params)
       });
     } catch(e) {}
@@ -667,47 +655,49 @@ const Player = {
 
   lastFmSign(params, secret) {
     const sorted = Object.keys(params).sort().map(k => k + params[k]).join('');
-    return CryptoJS ? CryptoJS.MD5(sorted + secret).toString() : '';
+    return Utils.md5(sorted + secret);
   },
 
-  startSleepTimer(minutes) {
+  setupMediaSession() {
+    if ('mediaSession' in navigator) {
+      navigator.mediaSession.setActionHandler('play', () => this.play());
+      navigator.mediaSession.setActionHandler('pause', () => this.pause());
+      navigator.mediaSession.setActionHandler('previoustrack', () => this.prev());
+      navigator.mediaSession.setActionHandler('nexttrack', () => this.next());
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        this.seekSeconds(this.audio.currentTime - (details.seekOffset || 10));
+      });
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        this.seekSeconds(this.audio.currentTime + (details.seekOffset || 10));
+      });
+    }
+  },
+
+  updateMediaSession(track, artwork) {
+    if ('mediaSession' in navigator && track) {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: track.title || 'Unknown',
+        artist: track.artist || '-',
+        album: track.album || '',
+        artwork: artwork ? [{ src: artwork, sizes: '512x512', type: 'image/jpeg' }] : []
+      });
+    }
+  },
+
+  setSleepTimer(mode, value) {
     this.stopSleepTimer();
-    if (SettingsManager.get('playback.sleepTimer.mode') === 'tracks') {
-      this.sleepTracksRemaining = minutes;
+    if (mode === 'tracks') {
+      this.sleepTracksRemaining = value;
     } else {
       this.sleepTimer = setTimeout(() => {
         this.pause();
         this.stopSleepTimer();
-      }, minutes * 60000);
+      }, value * 60000);
     }
   },
 
   stopSleepTimer() {
     if (this.sleepTimer) { clearTimeout(this.sleepTimer); this.sleepTimer = null; }
     this.sleepTracksRemaining = 0;
-  },
-
-  updateMediaSession(track, artworkUrl) {
-    if (!('mediaSession' in navigator)) return;
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: track.title || 'Unknown',
-      artist: track.artist || 'Unknown Artist',
-      album: track.album || 'Unknown Album',
-      artwork: artworkUrl ? [{ src: artworkUrl, sizes: '512x512', type: 'image/jpeg' }] : []
-    });
-
-    navigator.mediaSession.setActionHandler('play', () => this.play());
-    navigator.mediaSession.setActionHandler('pause', () => this.pause());
-    navigator.mediaSession.setActionHandler('previoustrack', () => this.prev());
-    navigator.mediaSession.setActionHandler('nexttrack', () => this.next());
-    navigator.mediaSession.setActionHandler('seekto', (details) => {
-      if (details.seekTime) this.seekSeconds(details.seekTime);
-    });
-  },
-
-  setupMediaSession() {
-    if (!('mediaSession' in navigator)) return;
-    navigator.mediaSession.setActionHandler('play', () => this.play());
-    navigator.mediaSession.setActionHandler('pause', () => this.pause());
   }
 };
