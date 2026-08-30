@@ -4,16 +4,11 @@ const App = {
       await Data.init();
       await Player.init();
       await UI.init();
-
-      // Ensure auto playlists exist
       await Data.ensureAutoPlaylists();
-
-      // Auto scan on launch if enabled
       if (SettingsManager.get('library.autoIndexOnLaunch')) {
         // Would need folder access - skip for now
       }
-
-      console.log('Okvy MusiQ v2.2 initialized');
+      console.log('Okvy MusiQ v2.3.1 initialized');
     } catch(e) {
       console.error('Initialization error:', e);
       document.getElementById('critical-error').classList.remove('hidden');
