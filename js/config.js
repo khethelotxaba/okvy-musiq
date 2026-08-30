@@ -1,5 +1,5 @@
 const CONFIG = {
-  version: '2.3.0',
+  version: '2.3.1',
 
   library: {
     minFileSizeMB: 0.5,
@@ -25,9 +25,9 @@ const CONFIG = {
     miniplayerGlowMode: 'dynamic',
     vibrationMode: 'haptic',
     gridColumns: 'auto',
-        gridViewStyle: 'grid',  // grid | collage
-    albumSort: 'name',      // name | artist | year | tracks
-    artistSort: 'name',     // name | tracks
+    gridViewStyle: 'grid',
+    albumSort: 'name',
+    artistSort: 'name',
     landscapeLayout: 'auto',
     waveformSeekbar: true,
     waveformBars: 80,
