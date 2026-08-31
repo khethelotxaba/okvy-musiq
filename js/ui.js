@@ -989,13 +989,12 @@ const UI = {
     const isSelected = this.selectedTracks.has(track.id);
     return `
       <div class="track-row ${isPlaying ? 'playing' : ''} ${isSelected ? 'selected' : ''}" onclick="${this.isSelectionMode ? `UI.toggleTrackSelection('${track.id}')` : `Player.loadTrack(Data.getTrack('${track.id}'))`}" oncontextmenu="UI.showTrackMenu('${track.id}', event)">
-        ${this.isSelectionMode ? `<div class="track-check ${isSelected ? 'checked' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>` : `<div class="track-num">${isPlaying ? '<div class="playing-bars"><span></span><span></span><span></span></div>' : index}</div>`}
+        ${this.isSelectionMode ? `<div class="track-check ${isSelected ? 'checked' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>` : ''}
         <img class="track-art" src="${this.getArtworkUrl(track)}" alt="">
         <div class="track-info">
           <span class="track-title">${Utils.escapeHtml(track.title)}</span>
           <span class="track-meta">${Utils.escapeHtml(track.artist)}${track.album ? ' &bull; ' + Utils.escapeHtml(track.album) : ''}</span>
         </div>
-        <span class="track-duration">${Utils.formatDuration(track.duration)}</span>
         <div class="track-actions">
           <button class="icon-btn small" onclick="event.stopPropagation(); UI.toggleTrackFavorite('${track.id}')">
             <svg viewBox="0 0 24 24" fill="${track.favorite ? '#ff4444' : 'none'}" stroke="${track.favorite ? '#ff4444' : 'currentColor'}" stroke-width="2"><path d="M12 20.1c-.28 0-.55-.08-.78-.23C7.2 17.1 3.3 13.9 3.3 9.9c0-2.9 2.3-5.2 5.1-5.2 1.7 0 3.2.83 4.1 2.1a5.02 5.02 0 0 1 4.1-2.1c2.8 0 5.1 2.3 5.1 5.2 0 4-3.9 7.2-7.92 10-.23.15-.5.23-.78.23z" stroke-linejoin="round"/></svg>
