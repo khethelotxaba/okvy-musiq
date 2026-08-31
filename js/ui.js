@@ -262,8 +262,8 @@ const UI = {
 
   updatePlayerControls() {
     const isPlaying = Player.isPlaying;
-    const playIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="9 6 19 12 9 18 9 6"/></svg>`;
-    const pauseIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+    const playIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.2 5.9c0-1.4 1.55-2.28 2.76-1.55l9 5.5a1.85 1.85 0 0 1 0 3.2l-9 5.5c-1.21.73-2.76-.15-2.76-1.55z" fill="currentColor" stroke="none"/></svg>`;
+    const pauseIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1.6" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1.6" fill="currentColor" stroke="none"/></svg>`;
 
     document.getElementById('np-play-icon').innerHTML = isPlaying ? pauseIcon : playIcon;
     document.getElementById('fp-play-icon').innerHTML = isPlaying ? pauseIcon : playIcon;
@@ -487,7 +487,7 @@ const UI = {
     container.innerHTML = `
       <div class="search-hero">
         <div class="search-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.6" cy="10.6" r="7.1"/><path d="M20.5 20.5l-4.35-4.35"/></svg>
           <input type="text" id="search-input" placeholder="Search songs, albums, artists..." oninput="UI.handleSearch(this.value)">
         </div>
         <div class="search-filters">
@@ -535,20 +535,20 @@ const UI = {
     let html = '<div class="view-toolbar">';
     html += '<div class="view-toolbar-left">';
     if (this.isSelectionMode) {
-      html += `<button class="icon-btn small" onclick="UI.clearSelection()" title="Clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+      html += `<button class="icon-btn small" onclick="UI.clearSelection()" title="Clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.3 6.7 6.7 17.3M6.7 6.7l10.6 10.6" stroke-linecap="round"/></svg></button>`;
       html += `<span style="font-size:13px;color:var(--text-secondary);font-weight:600;">${this.selectedTracks.size} selected</span>`;
-      html += `<button class="icon-btn small" onclick="UI.addSelectedToQueue()" title="Add to Queue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
-      html += `<button class="icon-btn small" onclick="UI.showPlaylistModal()" title="Add to Playlist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></button>`;
+      html += `<button class="icon-btn small" onclick="UI.addSelectedToQueue()" title="Add to Queue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
+      html += `<button class="icon-btn small" onclick="UI.showPlaylistModal()" title="Add to Playlist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" stroke-linejoin="round"/><path d="M12 8.2v7.6M8.2 12h7.6" stroke-linecap="round"/></svg></button>`;
     } else {
       html += `<select class="sort-select" onchange="UI.sortTracks(this.value)">`;
       html += `<option value="title">Title</option><option value="artist">Artist</option><option value="album">Album</option><option value="duration">Duration</option><option value="playCount">Plays</option><option value="dateAdded">Date Added</option>`;
       html += `</select>`;
-      html += `<button class="icon-btn small" onclick="UI.toggleSortDir()" title="Toggle sort direction"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 15l5 5 5-5"/><path d="M7 9l5-5 5 5"/></svg></button>`;
+      html += `<button class="icon-btn small" onclick="UI.toggleSortDir()" title="Toggle sort direction"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15l5 5 5-5"/><path d="M7 9l5-5 5 5"/></svg></button>`;
     }
     html += '</div>';
     html += '<div class="view-toolbar-right">';
-    html += `<button class="view-toggle-btn ${!isGrid ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'list'); UI.renderCurrentPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></button>`;
-    html += `<button class="view-toggle-btn ${isGrid ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'grid'); UI.renderCurrentPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>`;
+    html += `<button class="view-toggle-btn ${!isGrid ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'list'); UI.renderCurrentPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 6h11M9.5 12h11M9.5 18h11" stroke-linecap="round"/><circle cx="4" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1" fill="currentColor" stroke="none"/></svg></button>`;
+    html += `<button class="view-toggle-btn ${isGrid ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'grid'); UI.renderCurrentPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg></button>`;
     html += '</div></div>';
 
     if (tracks.length === 0) {
@@ -587,8 +587,8 @@ const UI = {
     let html = '<div class="view-toolbar">';
     html += '<div class="view-toolbar-left"><h2 style="font-size:18px;font-weight:800;">Albums</h2></div>';
     html += '<div class="view-toolbar-right">';
-    html += `<button class="view-toggle-btn ${!isCollage ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'grid'); UI.renderCurrentPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg></button>`;
-    html += `<button class="view-toggle-btn ${isCollage ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'collage'); UI.renderCurrentPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>`;
+    html += `<button class="view-toggle-btn ${!isCollage ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'grid'); UI.renderCurrentPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg></button>`;
+    html += `<button class="view-toggle-btn ${isCollage ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'collage'); UI.renderCurrentPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>`;
     html += '</div></div>';
 
     if (albums.size === 0) {
@@ -721,7 +721,7 @@ const UI = {
           <span class="track-duration">${Utils.formatDuration(track.duration)}</span>
           <div class="track-actions">
             <button class="icon-btn small" onclick="Player.removeFromQueue(${i}); event.stopPropagation();">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.3 6.7 6.7 17.3M6.7 6.7l10.6 10.6" stroke-linecap="round"/></svg>
             </button>
           </div>
         </div>
@@ -838,7 +838,7 @@ const UI = {
     html += '<div class="track-list">';
     Object.entries(folders).sort((a,b) => a[0].localeCompare(b[0])).forEach(([folder, folderTracks]) => {
       html += `<div class="folder-card" onclick="UI.navigate('tracks', {folder: '${Utils.escapeHtml(folder)}'})">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.4c0-1.6 1.3-2.9 2.9-2.9h3.4l1.9 2.2h7.9c1.6 0 2.9 1.3 2.9 2.9v6.6c0 1.6-1.3 2.9-2.9 2.9H5.4c-1.6 0-2.9-1.3-2.9-2.9z" stroke-linejoin="round"/></svg>
         <span class="folder-path">${Utils.escapeHtml(folder)}</span>
         <span style="color:var(--text-tertiary);font-size:13px;font-weight:600;">${folderTracks.length} tracks</span>
       </div>`;
@@ -989,7 +989,7 @@ const UI = {
     const isSelected = this.selectedTracks.has(track.id);
     return `
       <div class="track-row ${isPlaying ? 'playing' : ''} ${isSelected ? 'selected' : ''}" onclick="${this.isSelectionMode ? `UI.toggleTrackSelection('${track.id}')` : `Player.loadTrack(Data.getTrack('${track.id}'))`}" oncontextmenu="UI.showTrackMenu('${track.id}', event)">
-        ${this.isSelectionMode ? `<div class="track-check ${isSelected ? 'checked' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>` : `<div class="track-num">${isPlaying ? '<div class="playing-bars"><span></span><span></span><span></span></div>' : index}</div>`}
+        ${this.isSelectionMode ? `<div class="track-check ${isSelected ? 'checked' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>` : `<div class="track-num">${isPlaying ? '<div class="playing-bars"><span></span><span></span><span></span></div>' : index}</div>`}
         <img class="track-art" src="${this.getArtworkUrl(track)}" alt="">
         <div class="track-info">
           <span class="track-title">${Utils.escapeHtml(track.title)}</span>
@@ -998,10 +998,10 @@ const UI = {
         <span class="track-duration">${Utils.formatDuration(track.duration)}</span>
         <div class="track-actions">
           <button class="icon-btn small" onclick="event.stopPropagation(); UI.toggleTrackFavorite('${track.id}')">
-            <svg viewBox="0 0 24 24" fill="${track.favorite ? '#ff4444' : 'none'}" stroke="${track.favorite ? '#ff4444' : 'currentColor'}" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+            <svg viewBox="0 0 24 24" fill="${track.favorite ? '#ff4444' : 'none'}" stroke="${track.favorite ? '#ff4444' : 'currentColor'}" stroke-width="2"><path d="M12 20.1c-.28 0-.55-.08-.78-.23C7.2 17.1 3.3 13.9 3.3 9.9c0-2.9 2.3-5.2 5.1-5.2 1.7 0 3.2.83 4.1 2.1a5.02 5.02 0 0 1 4.1-2.1c2.8 0 5.1 2.3 5.1 5.2 0 4-3.9 7.2-7.92 10-.23.15-.5.23-.78.23z" stroke-linejoin="round"/></svg>
           </button>
           <button class="icon-btn small" onclick="event.stopPropagation(); UI.showTrackMenu('${track.id}', event)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
           </button>
         </div>
       </div>
@@ -1017,7 +1017,7 @@ const UI = {
         <img src="${art}" alt="" loading="lazy">
         <div class="grid-overlay">
           <button class="play-overlay" onclick="event.stopPropagation(); ${item.id ? `Player.loadTrack(Data.getTrack('${item.id}'))` : ''}">
-            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="9 6 19 12 9 18 9 6"/></svg>
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.2 5.9c0-1.4 1.55-2.28 2.76-1.55l9 5.5a1.85 1.85 0 0 1 0 3.2l-9 5.5c-1.21.73-2.76-.15-2.76-1.55z" fill="currentColor" stroke="none"/></svg>
           </button>
         </div>
       </div>
@@ -1032,7 +1032,7 @@ const UI = {
         <img src="${this.getArtistArtwork(artist)}" alt="" loading="lazy">
         <div class="grid-overlay">
           <button class="play-overlay" onclick="event.stopPropagation(); UI.navigate('tracks', {artist: '${Utils.escapeHtml(artist.name)}'})">
-            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="9 6 19 12 9 18 9 6"/></svg>
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.2 5.9c0-1.4 1.55-2.28 2.76-1.55l9 5.5a1.85 1.85 0 0 1 0 3.2l-9 5.5c-1.21.73-2.76-.15-2.76-1.55z" fill="currentColor" stroke="none"/></svg>
           </button>
         </div>
       </div>
@@ -1393,7 +1393,7 @@ const UI = {
     const userPls = playlists.filter(p => p.type === 'user');
     container.innerHTML = userPls.map(p => `
       <a href="#playlist-${p.id}" class="playlist-link" onclick="event.preventDefault(); UI.navigate('playlist-detail', {playlistId: '${p.id}'})">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" stroke-linejoin="round"/><path d="M8.5 9h7M8.5 15h7" stroke-linecap="round"/></svg>
         <span>${Utils.escapeHtml(p.name)}</span>
       </a>
     `).join('');
@@ -1513,7 +1513,7 @@ const UI = {
       const track = tracks.find(t => t.artwork) || tracks[0];
       return `<img src="${this.getArtworkUrl(track)}" alt="">`;
     }
-    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>`;
+    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" stroke-linejoin="round"/><path d="M8.5 9h7M8.5 15h7" stroke-linecap="round"/></svg></div>`;
   },
 
   getMood(energy) {
@@ -1549,7 +1549,7 @@ const UI = {
       const track = tracks.find(t => t.artwork) || tracks[0];
       return `<img src="${this.getArtworkUrl(track)}" alt="">`;
     }
-    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>`;
+    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" stroke-linejoin="round"/><circle cx="9" cy="9" r="1.6"/><path d="M21 15.5 16.3 11 6 21" stroke-linejoin="round"/></svg></div>`;
   },
 
   getArtistArtwork(artist, tracks) {
@@ -1557,7 +1557,7 @@ const UI = {
       const track = tracks.find(t => t.artwork) || tracks[0];
       return `<img src="${this.getArtworkUrl(track)}" alt="">`;
     }
-    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`;
+    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-1.6a4.4 4.4 0 0 0-4.4-4.4H9.4A4.4 4.4 0 0 0 5 19.4V21" stroke-linecap="round"/><circle cx="12" cy="7.3" r="3.8"/></svg></div>`;
   },
 
   getGenreArtwork(genre) {
@@ -1569,7 +1569,7 @@ const UI = {
       const track = tracks.find(t => t.artwork) || tracks[0];
       return `<img src="${this.getArtworkUrl(track)}" alt="">`;
     }
-    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>`;
+    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.4c0-1.6 1.3-2.9 2.9-2.9h3.4l1.9 2.2h7.9c1.6 0 2.9 1.3 2.9 2.9v6.6c0 1.6-1.3 2.9-2.9 2.9H5.4c-1.6 0-2.9-1.3-2.9-2.9z" stroke-linejoin="round"/></svg></div>`;
   },
 
   getPlaylistArtwork(playlist, tracks) {
@@ -1580,7 +1580,7 @@ const UI = {
       const track = tracks.find(t => t.artwork) || tracks[0];
       return `<img src="${this.getArtworkUrl(track)}" alt="">`;
     }
-    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>`;
+    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" stroke-linejoin="round"/><path d="M8.5 9h7M8.5 15h7" stroke-linecap="round"/></svg></div>`;
   },
 
   shufflePlaylist(id) {
