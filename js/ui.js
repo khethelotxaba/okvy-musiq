@@ -262,8 +262,8 @@ const UI = {
 
   updatePlayerControls() {
     const isPlaying = Player.isPlaying;
-    const playIcon = `<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><polygon points=\"9 6 19 12 9 18 9 6\"/></svg>`;
-    const pauseIcon = `<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"6\" y=\"4\" width=\"4\" height=\"16\"/><rect x=\"14\" y=\"4\" width=\"4\" height=\"16\"/></svg>`;
+    const playIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="9 6 19 12 9 18 9 6"/></svg>`;
+    const pauseIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
 
     document.getElementById('np-play-icon').innerHTML = isPlaying ? pauseIcon : playIcon;
     document.getElementById('fp-play-icon').innerHTML = isPlaying ? pauseIcon : playIcon;
@@ -712,7 +712,7 @@ const UI = {
       const isCurrent = i === currentIdx;
       html += `
         <div class="track-row ${isCurrent ? 'playing' : ''}" draggable="true" ondragstart="UI.dragQueueStart(event, ${i})" ondragover="UI.dragQueueOver(event)" ondrop="UI.dragQueueDrop(event, ${i})">
-          <div class="queue-num">${isCurrent ? '<div class=\"playing-bars\"><span></span><span></span><span></span></div>' : (i + 1)}</div>
+          <div class="queue-num">${isCurrent ? '<div class="playing-bars"><span></span><span></span><span></span></div>' : (i + 1)}</div>
           <img class="track-art" src="${this.getArtworkUrl(track)}" alt="">
           <div class="track-info">
             <span class="track-title">${Utils.escapeHtml(track.title)}</span>
