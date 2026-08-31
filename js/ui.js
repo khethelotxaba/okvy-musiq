@@ -1209,7 +1209,33 @@ const UI = {
 
   async playTrackById(id) {
     const track = await Data.getTrack(id);
-    if (track) Player.loadTrack(track);
+    if (!track) return;
+
+    // A track-row click used to load the track directly, leaving the player
+    // queue unchanged (often empty or pointing at an old queue). That made
+    // Previous/Next appear to do nothing. Preserve an existing queue when it
+    // contains this track; otherwise build a library queue around the clicked
+    // track so transport controls always have real context.
+    const existingQueue = Array.isArray(Player.queue) ? Player.queue : [];
+    const existingIndex = existingQueue.findIndex(t => t && t.id === track.id);
+
+    if (existingIndex >= 0) {
+      Player.queueIndex = existingIndex;
+      await Player.loadTrack(track);
+      return;
+    }
+
+    const allTracks = await Data.getTracks();
+    const libraryQueue = Array.isArray(allTracks) ? allTracks.filter(Boolean) : [];
+    const startIndex = libraryQueue.findIndex(t => t && t.id === track.id);
+
+    if (startIndex >= 0 && libraryQueue.length > 1) {
+      Player.setQueue(libraryQueue, startIndex);
+    } else {
+      Player.setQueue([track], 0);
+    }
+
+    await Player.loadTrack(track);
   },
 
   async playTracksByIds(ids, startIndex = 0) {
@@ -1633,57 +1659,97 @@ const UI = {
 
   applyWaveformMode() {
     const container = document.getElementById('fp-progress-container');
-    if (!container) return;
-    const on = SettingsManager.get('ui.waveformSeekbar');
-    container.classList.toggle('waveform-mode', on);
     const fp = document.getElementById('full-player');
-    if (on && fp && fp.classList.contains('open')) this.renderWaveform();
-  },
+    if (!container) return;
 
-  async renderWaveform() {
-    const canvas = document.getElementById('waveform-canvas');
-    const container = document.getElementById('fp-progress-container');
-    if (!canvas || !container || !Player.audio || !Player.audioCtx) return;
+    const on = Boolean(SettingsManager.get('ui.waveformSeekbar'));
+    container.classList.toggle('waveform-mode', on);
 
     this._waveformRunId = (this._waveformRunId || 0) + 1;
-    const runId = this._waveformRunId;
+
+    if (!on) {
+      const canvas = document.getElementById('waveform-canvas');
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.clearRect(0, 0, canvas.clientWidth || canvas.width, canvas.clientHeight || canvas.height);
+      }
+      return;
+    }
+
+    // The full player sheet slides in, so its width can still be zero on the
+    // same frame that the .open class is added. Wait for layout to settle.
+    if (fp && fp.classList.contains('open')) {
+      requestAnimationFrame(() => requestAnimationFrame(() => this.renderWaveform()));
+    }
+  },
+
+  renderWaveform() {
+    const canvas = document.getElementById('waveform-canvas');
+    const container = document.getElementById('fp-progress-container');
+    if (!canvas || !container || !container.classList.contains('waveform-mode')) return;
 
     const ctx = canvas.getContext('2d');
-    const dpr = window.devicePixelRatio || 1;
-    const rect = container.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    ctx.scale(dpr, dpr);
+    if (!ctx) return;
 
-    const bars = SettingsManager.get('ui.waveformBars') || 80;
-    const barWidth = rect.width / bars;
-    const gap = 2;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const rect = container.getBoundingClientRect();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+
+    const bars = Math.max(20, Math.min(300, Number(SettingsManager.get('ui.waveformBars')) || 80));
+    const gap = Math.min(2, Math.max(1, width / bars * 0.22));
+    const step = width / bars;
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#d4af37';
 
     const draw = () => {
-      if (runId !== this._waveformRunId || !container.classList.contains('waveform-mode')) return;
-      requestAnimationFrame(draw);
-      if (!Player.isPlaying) return;
+      if (!container.classList.contains('waveform-mode')) return;
 
-      const data = new Uint8Array(Player.analyser.frequencyBinCount);
-      Player.analyser.getByteFrequencyData(data);
+      const analyser = Player.analyser;
+      const data = analyser ? new Uint8Array(analyser.frequencyBinCount) : null;
+      if (data) analyser.getByteFrequencyData(data);
 
-      ctx.clearRect(0, 0, rect.width, rect.height);
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#d4af37';
+      ctx.clearRect(0, 0, width, height);
 
+      // Always draw something, even while paused. This avoids a completely
+      // blank seekbar when the player is opened before playback starts.
       for (let i = 0; i < bars; i++) {
-        const idx = Math.floor((i / bars) * data.length);
-        const value = data[idx] / 255;
-        const height = value * rect.height * 0.9;
-        const x = i * barWidth + gap / 2;
-        const y = (rect.height - height) / 2;
+        const idx = data ? Math.min(data.length - 1, Math.floor((i / bars) * data.length)) : 0;
+        const value = data && data.length ? data[idx] / 255 : 0.08;
+        const minHeight = Math.max(2, height * 0.10);
+        const barHeight = Math.max(minHeight, value * height * 0.82);
+        const x = i * step + gap / 2;
+        const y = (height - barHeight) / 2;
 
         ctx.fillStyle = accent;
-        ctx.globalAlpha = 0.3 + value * 0.7;
-        ctx.fillRect(x, y, barWidth - gap, height);
+        ctx.globalAlpha = 0.28 + value * 0.72;
+        ctx.fillRect(x, y, Math.max(1, step - gap), barHeight);
       }
+
       ctx.globalAlpha = 1;
+
+      if (Player.isPlaying) {
+        requestAnimationFrame(draw);
+      }
     };
+
     draw();
+
+    // Keep the canvas correctly sized if the player is rotated/resized.
+    if (!this._waveformResizeBound) {
+      this._waveformResizeBound = true;
+      window.addEventListener('resize', () => {
+        if (SettingsManager.get('ui.waveformSeekbar')) {
+          requestAnimationFrame(() => this.renderWaveform());
+        }
+      });
+    }
   },
 
   async renderSidebarPlaylists() {
