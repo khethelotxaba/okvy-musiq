@@ -5,6 +5,33 @@ const Scanner = {
   scanned: 0,
   abortController: null,
 
+  async scanDirectory(dirHandle) {
+    const files = [];
+    const audioExts = ['.mp3','.flac','.wav','.ogg','.m4a','.aac','.wma','.opus'];
+    const m3uExts = ['.m3u','.m3u8'];
+
+    async function walk(handle, path = '') {
+      for await (const entry of handle.values()) {
+        if (entry.kind === 'directory') {
+          await walk(entry, path + entry.name + '/');
+        } else if (entry.kind === 'file') {
+          const ext = '.' + entry.name.split('.').pop().toLowerCase();
+          if (audioExts.includes(ext) || m3uExts.includes(ext)) {
+            const file = await entry.getFile();
+            Object.defineProperty(file, 'webkitRelativePath', {
+              value: path + entry.name,
+              writable: false
+            });
+            files.push(file);
+          }
+        }
+      }
+    }
+
+    await walk(dirHandle);
+    return this.scanFiles(files);
+  },
+
   async scanFiles(fileList) {
     if (this.isScanning) return;
     this.isScanning = true;
@@ -39,7 +66,6 @@ const Scanner = {
         continue;
       }
 
-      // Filters
       const minSize = (SettingsManager.get('library.minFileSizeMB') || 0.5) * 1024 * 1024;
       if (file.size < minSize) { this.scanned++; continue; }
 
@@ -47,7 +73,6 @@ const Scanner = {
       const excludeFolders = SettingsManager.get('library.excludeFolders') || [];
       if (excludeFolders.some(ef => path.includes(ef))) { this.scanned++; continue; }
 
-      // Deduplication
       const hash = await this.computeHash(file);
       const dedupMode = SettingsManager.get('library.deduplicateBy');
       if (dedupMode === 'hash' && existingHashes.has(hash)) { this.scanned++; continue; }
@@ -55,7 +80,6 @@ const Scanner = {
 
       const track = await this.processFile(file, path, hash);
       if (track) {
-        // Duration filter
         const minDur = (SettingsManager.get('library.minDurationSeconds') || 10) * 1000;
         if (track.duration && track.duration < minDur) { this.scanned++; continue; }
 
@@ -73,17 +97,14 @@ const Scanner = {
       }
     }
 
-    // Save tracks (blobs go into IndexedDB)
     for (const track of newTracks) {
       await Data.saveTrack(track);
     }
 
-    // Process M3U files
     for (const m3u of m3uFiles) {
       await this.importM3U(m3u);
     }
 
-    // Rebuild indexes
     await this.rebuildIndexes();
     await Data.ensureAutoPlaylists();
     await Data.refreshAutoPlaylists();
@@ -101,7 +122,7 @@ const Scanner = {
         fileName: file.name,
         size: file.size,
         hash: hash,
-        blob: file,                    // <-- STORE THE ACTUAL FILE BLOB
+        blob: file,
         favorite: false,
         rating: 0,
         playCount: 0,
@@ -109,7 +130,6 @@ const Scanner = {
         dateAdded: Date.now()
       };
 
-      // Get audio duration using a temporary URL
       const tempUrl = URL.createObjectURL(file);
       const audio = new Audio();
       audio.preload = 'metadata';
@@ -128,7 +148,6 @@ const Scanner = {
 
       audio.src = tempUrl;
 
-      // Read tags
       if (window.jsmediatags) {
         jsmediatags.read(file, {
           onSuccess: (tag) => {
@@ -143,19 +162,16 @@ const Scanner = {
             track.comment = t.comment ? (t.comment.text || t.comment) : '';
             track.lyrics = t.lyrics ? (t.lyrics.lyrics || t.lyrics) : '';
 
-            // Featured artists
             const featured = Utils.extractFeaturedArtists(track.title);
             if (featured.length > 0) {
               track.featuredArtists = featured;
               track.cleanTitle = Utils.removeFeaturedFromTitle(track.title);
             }
 
-            // Picture - convert to data URL for persistent storage
             if (t.picture) {
               const pic = t.picture;
               const blob = new Blob([new Uint8Array(pic.data)], { type: pic.format });
-              track.artworkBlob = blob;  // Keep blob for player theming
-              // Also create data URL for reliable img src (persists across reloads)
+              track.artworkBlob = blob;
               const reader = new FileReader();
               reader.onloadend = () => {
                 track.artwork = reader.result;
@@ -163,7 +179,6 @@ const Scanner = {
               reader.readAsDataURL(blob);
             }
 
-            // Mood from comment if enabled
             if (SettingsManager.get('library.moodTagsEnabled') && track.comment) {
               const moodMatch = track.comment.match(/mood:\s*([^,]+)/i);
               if (moodMatch) track.moods.push(moodMatch[1].trim());
@@ -205,15 +220,6 @@ const Scanner = {
     const genres = new Map();
 
     for (const track of tracks) {
-      // Generate artwork URL from blob if needed for indexing
-      let artwork = null;
-      if (track.artworkBlob) {
-        artwork = URL.createObjectURL(track.artworkBlob);
-        // We'll let the UI create URLs on demand, but for index display we need something
-        // Actually, let's just store a data URL or keep the blob reference
-      }
-
-            // Albums
       if (track.album) {
         const allowMultiple = SettingsManager.get('library.allowMultipleAlbums');
         const albumId = allowMultiple
@@ -232,7 +238,6 @@ const Scanner = {
         albums.get(albumId).tracks.push(track.id);
       }
 
-      // Artists
       const allArtists = [...Utils.splitArtists(track.artist || '')];
       if (track.featuredArtists) allArtists.push(...track.featuredArtists);
 
@@ -251,7 +256,6 @@ const Scanner = {
         if (track.album) artists.get(artistId).albums.add(track.album);
       }
 
-      // Genres
       const genresList = Utils.splitGenres(track.genre || '');
       for (const genre of genresList) {
         const genreId = Utils.hashString(genre);
@@ -267,7 +271,6 @@ const Scanner = {
       }
     }
 
-    // Save indexes
     await Data.clear('albums');
     await Data.clear('artists');
     await Data.clear('genres');
