@@ -782,16 +782,6 @@ html, body {
 .track-check svg { width: 14px; height: 14px; opacity: 0; stroke-width: 3; }
 .track-check.checked svg { opacity: 1; color: var(--bg); }
 
-.track-num {
-  width: 28px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--text-tertiary);
-  font-weight: 600;
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-}
-
 .track-art {
   width: 52px;
   height: 52px;
