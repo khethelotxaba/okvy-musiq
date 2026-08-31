@@ -289,10 +289,7 @@ const UI = {
     if (this.currentPage === 'tracks' || this.currentPage === 'favorites' || this.currentPage === 'queue') {
       this.renderCurrentPage();
     }
-    const fp = document.getElementById('full-player');
-    if (fp && fp.classList.contains('open') && SettingsManager.get('ui.waveformSeekbar')) {
-      this.renderWaveform();
-    }
+    this.applyWaveformMode();
   },
 
   onPlaybackState(detail) {
@@ -887,7 +884,7 @@ const UI = {
     html += `<div class="settings-group"><h3>UI</h3>`;
     html += `<div class="setting-row"><span>Dynamic Theming</span><label class="toggle-switch"><input type="checkbox" ${settings.ui.dynamicTheming ? 'checked' : ''} onchange="SettingsManager.set('ui.dynamicTheming', this.checked)"><span class="toggle-slider"></span></label></div>`;
     html += `<div class="setting-row"><span>Particles</span><label class="toggle-switch"><input type="checkbox" ${settings.ui.particlesEnabled ? 'checked' : ''} onchange="SettingsManager.set('ui.particlesEnabled', this.checked)"><span class="toggle-slider"></span></label></div>`;
-    html += `<div class="setting-row"><span>Waveform Seekbar</span><label class="toggle-switch"><input type="checkbox" ${settings.ui.waveformSeekbar ? 'checked' : ''} onchange="SettingsManager.set('ui.waveformSeekbar', this.checked)"><span class="toggle-slider"></span></label></div>`;
+    html += `<div class="setting-row"><span>Waveform Seekbar</span><label class="toggle-switch"><input type="checkbox" ${settings.ui.waveformSeekbar ? 'checked' : ''} onchange="SettingsManager.set('ui.waveformSeekbar', this.checked); UI.applyWaveformMode()"><span class="toggle-slider"></span></label></div>`;
     html += `<div class="setting-row"><span>Grid Columns</span><select onchange="SettingsManager.set('ui.gridColumns', this.value)"><option value="auto" ${settings.ui.gridColumns === 'auto' ? 'selected' : ''}>Auto</option><option value="2" ${settings.ui.gridColumns === '2' ? 'selected' : ''}>2</option><option value="3" ${settings.ui.gridColumns === '3' ? 'selected' : ''}>3</option><option value="4" ${settings.ui.gridColumns === '4' ? 'selected' : ''}>4</option></select></div>`;
     html += `</div>`;
 
@@ -1088,9 +1085,7 @@ const UI = {
 
   openFullPlayer() {
     document.getElementById('full-player').classList.add('open');
-    if (SettingsManager.get('ui.waveformSeekbar')) {
-      setTimeout(() => this.renderWaveform(), 100);
-    }
+    this.applyWaveformMode();
   },
 
   closeFullPlayer() {
@@ -1355,12 +1350,23 @@ const UI = {
     this.navigate('tracks', { sortBy: field, sortDir: newDir });
   },
 
+  applyWaveformMode() {
+    const container = document.getElementById('fp-progress-container');
+    if (!container) return;
+    const on = SettingsManager.get('ui.waveformSeekbar');
+    container.classList.toggle('waveform-mode', on);
+    const fp = document.getElementById('full-player');
+    if (on && fp && fp.classList.contains('open')) this.renderWaveform();
+  },
+
   async renderWaveform() {
     const canvas = document.getElementById('waveform-canvas');
-    const container = document.getElementById('waveform-container');
-    if (!canvas || !Player.audio || !Player.audioCtx) return;
+    const container = document.getElementById('fp-progress-container');
+    if (!canvas || !container || !Player.audio || !Player.audioCtx) return;
 
-    container.style.display = 'block';
+    this._waveformRunId = (this._waveformRunId || 0) + 1;
+    const runId = this._waveformRunId;
+
     const ctx = canvas.getContext('2d');
     const dpr = window.devicePixelRatio || 1;
     const rect = container.getBoundingClientRect();
@@ -1373,6 +1379,7 @@ const UI = {
     const gap = 2;
 
     const draw = () => {
+      if (runId !== this._waveformRunId || !container.classList.contains('waveform-mode')) return;
       requestAnimationFrame(draw);
       if (!Player.isPlaying) return;
 
