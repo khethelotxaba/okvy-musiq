@@ -442,7 +442,7 @@ const UI = {
     if (recent.length > 0) {
       html += `<div class="section-header"><h2>Recently Played</h2></div><div class="h-scroll">`;
       recent.forEach(track => {
-        html += `<div class="h-scroll-item" onclick="Player.loadTrack(Data.getTrack('${track.id}'))">${this.renderAlbumCard(track, 'small')}</div>`;
+        html += `<div class="h-scroll-item" onclick="UI.playTrackById('${track.id}')">${this.renderAlbumCard(track, 'small')}</div>`;
       });
       html += `</div>`;
     }
@@ -450,7 +450,7 @@ const UI = {
     if (mostPlayed.length > 0) {
       html += `<div class="section-header"><h2>Most Played</h2></div><div class="h-scroll">`;
       mostPlayed.forEach(track => {
-        html += `<div class="h-scroll-item" onclick="Player.loadTrack(Data.getTrack('${track.id}'))">${this.renderAlbumCard(track, 'small')}</div>`;
+        html += `<div class="h-scroll-item" onclick="UI.playTrackById('${track.id}')">${this.renderAlbumCard(track, 'small')}</div>`;
       });
       html += `</div>`;
     }
@@ -475,7 +475,7 @@ const UI = {
       html += `<div class="section-header"><h2>Favorites</h2><button class="section-action" onclick="UI.navigate('favorites')">View All</button></div>`;
       html += `<div class="grid-container grid-cols-2">`;
       favorites.slice(0, 6).forEach(track => {
-        html += `<div class="grid-item" onclick="Player.loadTrack(Data.getTrack('${track.id}'))">${this.renderAlbumCard(track)}</div>`;
+        html += `<div class="grid-item" onclick="UI.playTrackById('${track.id}')">${this.renderAlbumCard(track)}</div>`;
       });
       html += `</div>`;
     }
@@ -565,7 +565,7 @@ const UI = {
       else if (cols === '5') colClass = 'grid-cols-5';
       html += `<div class="grid-container ${colClass}">`;
       tracks.forEach(track => {
-        html += `<div class="grid-item" onclick="Player.loadTrack(Data.getTrack('${track.id}'))">${this.renderAlbumCard(track)}</div>`;
+        html += `<div class="grid-item" onclick="UI.playTrackById('${track.id}')">${this.renderAlbumCard(track)}</div>`;
       });
       html += '</div>';
     } else {
@@ -674,7 +674,7 @@ const UI = {
     html += `<div class="album-detail-title">${Utils.escapeHtml(pl.name)}</div>`;
     html += `<div class="album-detail-meta">${tracks.length} tracks</div>`;
     html += `<div class="album-detail-actions">`;
-    html += `<button class="btn-gold" onclick="Player.setQueue([${tracks.map(t => `Data.getTrack('${t.id}')`).join(',')}], 0); Player.play()">Play</button>`;
+    html += `<button class="btn-gold" onclick="UI.playTracksByIds([${tracks.map(t => `'${t.id}'`).join(',')}], 0)">Play</button>`;
     html += `<button class="btn-outline" onclick="UI.shufflePlaylist('${pl.id}')">Shuffle</button>`;
     if (pl.type === 'user') {
       html += `<button class="btn-outline" onclick="UI.exportPlaylistM3U('${pl.id}')">Export</button>`;
@@ -923,7 +923,7 @@ const UI = {
     html += `<div class="album-detail-title">${Utils.escapeHtml(album.name)}</div>`;
     html += `<div class="album-detail-meta">${Utils.escapeHtml(album.artist || 'Unknown Artist')} &bull; ${tracks.length} tracks</div>`;
     html += `<div class="album-detail-actions">`;
-    html += `<button class="btn-gold" onclick="Player.setQueue([${tracks.map(t => `Data.getTrack('${t.id}')`).join(',')}], 0); Player.play()">Play</button>`;
+    html += `<button class="btn-gold" onclick="UI.playTracksByIds([${tracks.map(t => `'${t.id}'`).join(',')}], 0)">Play</button>`;
     html += `<button class="btn-outline" onclick="UI.shuffleAlbum('${album.id}')">Shuffle</button>`;
     html += `</div></div></div>`;
 
@@ -947,7 +947,7 @@ const UI = {
     html += `<div class="album-detail-title">${Utils.escapeHtml(artistName)}</div>`;
     html += `<div class="album-detail-meta">${tracks.length} tracks</div>`;
     html += `<div class="album-detail-actions">`;
-    html += `<button class="btn-gold" onclick="Player.setQueue([${tracks.map(t => `Data.getTrack('${t.id}')`).join(',')}], 0); Player.play()">Play</button>`;
+    html += `<button class="btn-gold" onclick="UI.playTracksByIds([${tracks.map(t => `'${t.id}'`).join(',')}], 0)">Play</button>`;
     html += `<button class="btn-outline" onclick="UI.shuffleArtist('${Utils.escapeHtml(artistName)}')">Shuffle</button>`;
     html += `</div></div></div>`;
 
@@ -971,7 +971,7 @@ const UI = {
     html += `<div class="album-detail-title">${Utils.escapeHtml(genreName)}</div>`;
     html += `<div class="album-detail-meta">${tracks.length} tracks</div>`;
     html += `<div class="album-detail-actions">`;
-    html += `<button class="btn-gold" onclick="Player.setQueue([${tracks.map(t => `Data.getTrack('${t.id}')`).join(',')}], 0); Player.play()">Play</button>`;
+    html += `<button class="btn-gold" onclick="UI.playTracksByIds([${tracks.map(t => `'${t.id}'`).join(',')}], 0)">Play</button>`;
     html += `</div></div></div>`;
 
     if (tracks.length > 0) {
@@ -984,11 +984,23 @@ const UI = {
     container.innerHTML = html;
   },
 
+  async playTrackById(id) {
+    const track = await Data.getTrack(id);
+    if (track) Player.loadTrack(track);
+  },
+
+  async playTracksByIds(ids, startIndex = 0) {
+    const tracks = (await Promise.all(ids.map(id => Data.getTrack(id)))).filter(Boolean);
+    if (tracks.length === 0) return;
+    Player.setQueue(tracks, startIndex);
+    Player.loadTrack(tracks[startIndex]);
+  },
+
   renderTrackRow(track, index) {
     const isPlaying = Player.currentTrack && Player.currentTrack.id === track.id;
     const isSelected = this.selectedTracks.has(track.id);
     return `
-      <div class="track-row ${isPlaying ? 'playing' : ''} ${isSelected ? 'selected' : ''}" onclick="${this.isSelectionMode ? `UI.toggleTrackSelection('${track.id}')` : `Player.loadTrack(Data.getTrack('${track.id}'))`}" oncontextmenu="UI.showTrackMenu('${track.id}', event)">
+      <div class="track-row ${isPlaying ? 'playing' : ''} ${isSelected ? 'selected' : ''}" onclick="${this.isSelectionMode ? `UI.toggleTrackSelection('${track.id}')` : `UI.playTrackById('${track.id}')`}" oncontextmenu="UI.showTrackMenu('${track.id}', event)">
         ${this.isSelectionMode ? `<div class="track-check ${isSelected ? 'checked' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>` : ''}
         <img class="track-art" src="${this.getArtworkUrl(track)}" alt="">
         <div class="track-info">
@@ -1015,7 +1027,7 @@ const UI = {
       <div class="grid-art">
         <img src="${art}" alt="" loading="lazy">
         <div class="grid-overlay">
-          <button class="play-overlay" onclick="event.stopPropagation(); ${item.id ? `Player.loadTrack(Data.getTrack('${item.id}'))` : ''}">
+          <button class="play-overlay" onclick="event.stopPropagation(); ${item.id ? `UI.playTrackById('${item.id}')` : ''}">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.2 5.9c0-1.4 1.55-2.28 2.76-1.55l9 5.5a1.85 1.85 0 0 1 0 3.2l-9 5.5c-1.21.73-2.76-.15-2.76-1.55z" fill="currentColor" stroke="none"/></svg>
           </button>
         </div>
