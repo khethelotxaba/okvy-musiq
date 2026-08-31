@@ -8,6 +8,8 @@ const UI = {
   trackMenuTargetId: null,
   trackMenuActions: null,
   currentSortDir: 'asc',
+  particleAnimationId: null,
+  particleResizeHandler: null,
 
   getArtworkUrl(track) {
     if (!track) return 'assets/default-art.png';
@@ -41,6 +43,7 @@ const UI = {
       this.onTrackChanged(Player.currentTrack);
     }
     this.updatePlayerControls();
+    this.applyThemeMode();
     this.renderSidebarPlaylists();
     this.navigate('home');
   },
@@ -161,11 +164,31 @@ const UI = {
   },
 
   bindParticles() {
+    this.startParticles();
+  },
+
+  startParticles() {
     const canvas = document.getElementById('particles-canvas');
-    if (!canvas || !SettingsManager.get('ui.particlesEnabled')) return;
+    if (!canvas) return;
+    if (this.particleAnimationId) return;
+    if (!SettingsManager.get('ui.particlesEnabled')) {
+      this.stopParticles();
+      return;
+    }
+
     const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    if (!ctx) return;
+
+    const resize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    resize();
+
+    if (!this.particleResizeHandler) {
+      this.particleResizeHandler = resize;
+      window.addEventListener('resize', resize);
+    }
 
     const particles = [];
     const count = 40;
@@ -182,9 +205,13 @@ const UI = {
     }
 
     const animate = () => {
-      requestAnimationFrame(animate);
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (!SettingsManager.get('ui.particlesEnabled')) {
+        this.particleAnimationId = null;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        return;
+      }
 
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       const intensity = SettingsManager.get('ui.particlesIntensity') || 0.6;
       const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#d4af37';
 
@@ -212,15 +239,23 @@ const UI = {
         ctx.fill();
       });
       ctx.globalAlpha = 1;
+      this.particleAnimationId = requestAnimationFrame(animate);
     };
-    animate();
 
-    window.addEventListener('resize', () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    });
+    this.particleAnimationId = requestAnimationFrame(animate);
   },
 
+  stopParticles() {
+    if (this.particleAnimationId) {
+      cancelAnimationFrame(this.particleAnimationId);
+      this.particleAnimationId = null;
+    }
+    const canvas = document.getElementById('particles-canvas');
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  },
   bindKeyboard() {
     document.addEventListener('keydown', (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -309,14 +344,19 @@ const UI = {
   onAudioPeak(detail) {
     const peak = detail.smooth || 0;
     const npBar = document.getElementById('now-playing-bar');
-    if (npBar && SettingsManager.get('ui.miniplayerGlow')) {
-      const intensity = peak * 15;
-      const mode = SettingsManager.get('ui.miniplayerGlowMode');
-      if (mode === 'dynamic') {
-        npBar.style.boxShadow = `0 4px 24px rgba(0,0,0,0.4), 0 0 ${intensity}px rgba(var(--accent-rgb), ${peak * 0.3})`;
-      } else {
-        npBar.style.boxShadow = `0 4px 24px rgba(0,0,0,0.4), 0 0 ${intensity}px rgba(255,255,255, ${peak * 0.15})`;
-      }
+    if (!npBar) return;
+
+    if (!SettingsManager.get('ui.miniplayerGlow')) {
+      npBar.style.boxShadow = '';
+      return;
+    }
+
+    const intensity = peak * 15;
+    const mode = SettingsManager.get('ui.miniplayerGlowMode');
+    if (mode === 'dynamic') {
+      npBar.style.boxShadow = `0 4px 24px rgba(0,0,0,0.4), 0 0 ${intensity}px rgba(var(--accent-rgb), ${peak * 0.3})`;
+    } else {
+      npBar.style.boxShadow = `0 4px 24px rgba(0,0,0,0.4), 0 0 ${intensity}px rgba(255,255,255, ${peak * 0.15})`;
     }
   },
 
@@ -328,18 +368,137 @@ const UI = {
     if (rgb) root.style.setProperty('--accent-rgb', rgb.join(', '));
   },
 
-  onSettingChanged(detail) {
-    if (detail.path.startsWith('audio.eq')) {
-      Player.applyEQPreset();
-    }
-    if (detail.path === 'ui.themeMode') {
-      document.body.classList.toggle('light', detail.value === 'light');
-    }
-    if (detail.path === 'ui.particlesEnabled') {
-      location.reload();
+  async onSettingChanged(detail) {
+    const { path, value } = detail;
+
+    try {
+      switch (path) {
+        case 'audio.equalizerEnabled':
+          Player.updateEqualizerEnabled();
+          break;
+        case 'audio.eqCurrentPreset':
+        case 'audio.eqCustomValues':
+          Player.applyEQPreset();
+          break;
+        case 'audio.skipSilence':
+        case 'audio.skipSilenceThreshold':
+          Player.updateSkipSilence();
+          break;
+        case 'audio.gaplessPlayback':
+          Player.updateGaplessPlayback();
+          break;
+        case 'audio.crossfadeDuration':
+          if (Number(value) === 0) Player.cancelCrossfade?.();
+          break;
+        case 'playback.persistentQueue':
+          Player.updatePersistentQueue();
+          break;
+        case 'playback.smartPause.onCall':
+        case 'playback.smartPause.onNotification':
+        case 'playback.smartPause.onVolumeZero':
+        case 'playback.smartPause.onAppSwitch':
+        case 'playback.smartPause.onHeadphoneDisconnect':
+          Player.updateSmartPause();
+          break;
+        case 'playback.shuffleMode':
+        case 'playback.repeatMode':
+          this.updatePlayerControls();
+          break;
+        case 'ui.themeMode':
+          this.applyThemeMode();
+          break;
+        case 'ui.dynamicTheming':
+          await this.applyDynamicTheme();
+          break;
+        case 'ui.particlesEnabled':
+          if (value) this.startParticles();
+          else this.stopParticles();
+          break;
+        case 'ui.particlesIntensity':
+          // The animation reads this value every frame.
+          break;
+        case 'ui.miniplayerGlow':
+        case 'ui.miniplayerGlowMode':
+          if (!value && path === 'ui.miniplayerGlow') {
+            const bar = document.getElementById('now-playing-bar');
+            if (bar) bar.style.boxShadow = '';
+          }
+          break;
+        case 'ui.gridColumns':
+        case 'ui.gridViewStyle':
+          this.renderCurrentPage();
+          break;
+        case 'ui.waveformSeekbar':
+        case 'ui.waveformBars':
+          this.applyWaveformMode();
+          break;
+        case 'ui.vibrationMode':
+          break;
+        case 'library.extractFeaturedArtists':
+        case 'library.moodTagsEnabled':
+        case 'library.artistSeparators':
+        case 'library.genreSeparators':
+        case 'library.minFileSizeMB':
+        case 'library.minDurationSeconds':
+        case 'library.excludeFolders':
+        case 'library.deduplicateBy':
+        case 'library.allowMultipleAlbums':
+          this.showToast('Saved. The next library scan will use this setting.');
+          break;
+        case 'library.autoIndexOnLaunch':
+          this.showToast(value ? 'Auto Index enabled for supported folder access.' : 'Auto Index disabled.');
+          break;
+        case 'smart.lostMemoriesEnabled':
+        case 'smart.mostPlayedAutoUpdate':
+        case 'smart.mostPlayedMaxTracks':
+        case 'smart.mostPlayedMinPlays':
+          await Data.refreshAutoPlaylists();
+          this.renderSidebarPlaylists();
+          this.renderCurrentPage();
+          break;
+        case 'history.minListenSeconds':
+        case 'history.minListenPercent':
+        case 'history.scrobbleEnabled':
+        case 'lyrics.enabled':
+        case 'lyrics.fontSize':
+        case 'lyrics.alignCenter':
+        case 'lyrics.highlightCurrentLine':
+          this.renderCurrentPage();
+          break;
+      }
+    } catch (error) {
+      console.error(`Failed to apply setting ${path}:`, error);
     }
   },
 
+  applyThemeMode() {
+    const mode = SettingsManager.get('ui.themeMode', 'dark');
+    document.body.classList.toggle('light', mode === 'light');
+  },
+
+  async applyDynamicTheme() {
+    if (!SettingsManager.get('ui.dynamicTheming')) {
+      const root = document.documentElement;
+      root.style.removeProperty('--dynamic-primary');
+      root.style.removeProperty('--dynamic-vibrant');
+      root.style.setProperty('--accent-rgb', '212, 175, 55');
+      return;
+    }
+
+    const track = Player.currentTrack;
+    if (!track) return;
+
+    let artwork = Player.currentArtworkUrl || null;
+    if (!artwork) artwork = this.getArtworkUrl(track);
+    if (!artwork || artwork === 'assets/default-art.png') return;
+
+    try {
+      const colors = await Utils.extractColors(artwork);
+      this.onThemeColors(colors);
+    } catch(e) {
+      console.warn('Could not apply dynamic theme:', e);
+    }
+  },
   onScanProgress(detail) {
     console.log(`Scanning: ${detail.progress}% - ${detail.current}`);
   },
@@ -760,6 +919,13 @@ const UI = {
     let html = `<div class="view-toolbar"><div class="view-toolbar-left"><h2 style="font-size:18px;font-weight:800;">Lyrics</h2></div></div>`;
     html += `<div style="text-align:center;margin-bottom:20px;"><p style="color:var(--text-secondary);font-size:14px;font-weight:600;">${Utils.escapeHtml(track.title)} - ${Utils.escapeHtml(track.artist)}</p></div>`;
 
+    if (!SettingsManager.get('lyrics.enabled')) {
+      html += `<div class="lyrics-container"><p style="color:var(--text-tertiary);font-size:16px;">Lyrics are disabled in Settings.</p></div>`;
+      container.innerHTML = html;
+      if (this.lyricsInterval) { clearInterval(this.lyricsInterval); this.lyricsInterval = null; }
+      return;
+    }
+
     if (!lyrics || lyrics.length === 0) {
       html += `<div class="lyrics-container"><p style="color:var(--text-tertiary);font-size:16px;">No lyrics available</p></div>`;
       html += `<button class="btn-outline btn-full" onclick="UI.renderLyricsEditor(document.getElementById('page-container'))">Add Lyrics</button>`;
@@ -767,9 +933,11 @@ const UI = {
       return;
     }
 
-    html += `<div class="lyrics-container" id="lyrics-container">`;
+    const lyricAlign = SettingsManager.get('lyrics.alignCenter') ? 'center' : 'left';
+    const lyricSize = SettingsManager.get('lyrics.fontSize') || 16;
+    html += `<div class="lyrics-container" id="lyrics-container" style="text-align:${lyricAlign};">`;
     lyrics.forEach((line, i) => {
-      html += `<div class="lyric-line" id="lyric-${i}" data-time="${line.time}">${Utils.escapeHtml(line.text)}</div>`;
+      html += `<div class="lyric-line" id="lyric-${i}" data-time="${line.time}" style="font-size:${lyricSize}px;">${Utils.escapeHtml(line.text)}</div>`;
     });
     html += `</div>`;
     html += `<button class="btn-outline btn-full" style="margin-top:20px;" onclick="UI.renderLyricsEditor(document.getElementById('page-container'))">Edit Lyrics</button>`;
@@ -864,49 +1032,107 @@ const UI = {
   },
 
   renderSettings(container) {
-    const settings = CONFIG;
+    const s = CONFIG;
+    const toggle = (path, label, checked, hint = '') => `
+      <div class="setting-row">
+        <div style="flex:1;min-width:0;"><span>${label}</span>${hint ? `<small style="display:block;color:var(--text-tertiary);font-size:11px;margin-top:3px;line-height:1.4;">${hint}</small>` : ''}</div>
+        <label class="toggle-switch">
+          <input type="checkbox" ${checked ? 'checked' : ''} onchange="SettingsManager.set('${path}', this.checked)">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>`;
+    const number = (path, label, value, min, max, step = 1, hint = '') => `
+      <div class="setting-row">
+        <div style="flex:1;min-width:0;"><span>${label}</span>${hint ? `<small style="display:block;color:var(--text-tertiary);font-size:11px;margin-top:3px;line-height:1.4;">${hint}</small>` : ''}</div>
+        <input type="number" value="${value}" min="${min}" max="${max}" step="${step}" onchange="SettingsManager.set('${path}', this.value)">
+      </div>`;
+    const select = (path, label, value, options, hint = '') => `
+      <div class="setting-row">
+        <div style="flex:1;min-width:0;"><span>${label}</span>${hint ? `<small style="display:block;color:var(--text-tertiary);font-size:11px;margin-top:3px;line-height:1.4;">${hint}</small>` : ''}</div>
+        <select onchange="SettingsManager.set('${path}', this.value)">${options.map(([v, text]) => `<option value="${v}" ${value === v ? 'selected' : ''}>${text}</option>`).join('')}</select>
+      </div>`;
+
     let html = '<div class="view-toolbar"><div class="view-toolbar-left"><h2 style="font-size:18px;font-weight:800;">Settings</h2></div></div>';
     html += '<div class="settings-list">';
 
     html += `<div class="settings-group"><h3>Audio</h3>`;
-    html += `<div class="setting-row"><span>Equalizer</span><label class="toggle-switch"><input type="checkbox" ${settings.audio.equalizerEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span class="toggle-slider"></span></label></div>`;
-    html += `<div class="setting-row"><span>Crossfade (seconds)</span><input type="number" value="${settings.audio.crossfadeDuration}" min="0" max="10" onchange="SettingsManager.set('audio.crossfadeDuration', parseInt(this.value))"></div>`;
-    html += `<div class="setting-row"><span>Skip Silence</span><label class="toggle-switch"><input type="checkbox" ${settings.audio.skipSilence ? 'checked' : ''} onchange="SettingsManager.set('audio.skipSilence', this.checked)"><span class="toggle-slider"></span></label></div>`;
-    html += `<div class="setting-row"><span>Gapless Playback</span><label class="toggle-switch"><input type="checkbox" ${settings.audio.gaplessPlayback ? 'checked' : ''} onchange="SettingsManager.set('audio.gaplessPlayback', this.checked)"><span class="toggle-slider"></span></label></div>`;
+    html += toggle('audio.equalizerEnabled', 'Equalizer', s.audio.equalizerEnabled);
+    html += number('audio.crossfadeDuration', 'Crossfade (seconds)', s.audio.crossfadeDuration, 0, 10, 0.5, 'Applied when moving to the next track.');
+    html += number('audio.playPauseFadeDuration', 'Play / Pause Fade (seconds)', s.audio.playPauseFadeDuration, 0, 5, 0.1);
+    html += toggle('audio.skipSilence', 'Skip Silence', s.audio.skipSilence, 'Skips low-level sections while playing.');
+    html += number('audio.skipSilenceThreshold', 'Silence Threshold (dB)', s.audio.skipSilenceThreshold, -100, 0, 1);
+    html += toggle('audio.gaplessPlayback', 'Gapless / Preload Next', s.audio.gaplessPlayback);
     html += `</div>`;
 
     html += `<div class="settings-group"><h3>Playback</h3>`;
-    html += `<div class="setting-row"><span>Persistent Queue</span><label class="toggle-switch"><input type="checkbox" ${settings.playback.persistentQueue ? 'checked' : ''} onchange="SettingsManager.set('playback.persistentQueue', this.checked)"><span class="toggle-slider"></span></label></div>`;
-    html += `<div class="setting-row"><span>Smart Pause on Call</span><label class="toggle-switch"><input type="checkbox" ${settings.playback.smartPause.onCall ? 'checked' : ''} onchange="SettingsManager.set('playback.smartPause.onCall', this.checked)"><span class="toggle-slider"></span></label></div>`;
-    html += `<div class="setting-row"><span>Smart Pause on Headphone Disconnect</span><label class="toggle-switch"><input type="checkbox" ${settings.playback.smartPause.onHeadphoneDisconnect ? 'checked' : ''} onchange="SettingsManager.set('playback.smartPause.onHeadphoneDisconnect', this.checked)"><span class="toggle-slider"></span></label></div>`;
+    html += toggle('playback.persistentQueue', 'Persistent Queue', s.playback.persistentQueue, 'Keeps the current queue across reloads.');
+    html += toggle('playback.shuffleMode', 'Shuffle', s.playback.shuffleMode);
+    html += select('playback.repeatMode', 'Repeat Mode', s.playback.repeatMode, [['none','Off'],['one','One'],['all','All'],['n','N Times']]);
+    html += number('playback.repeatNTimes', 'Repeat Count', s.playback.repeatNTimes, 1, 20, 1);
+    html += toggle('playback.autoPlayOnInsert', 'Autoplay Inserted Tracks', s.playback.autoPlayOnInsert);
+    html += toggle('playback.smartPause.onAppSwitch', 'Pause When App Is Hidden', s.playback.smartPause.onAppSwitch);
+    html += toggle('playback.smartPause.onVolumeZero', 'Pause When Volume Reaches Zero', s.playback.smartPause.onVolumeZero);
+    html += toggle('playback.smartPause.onHeadphoneDisconnect', 'Pause on Audio Device Disconnect', s.playback.smartPause.onHeadphoneDisconnect, 'Best-effort browser/device detection; platform support varies.');
     html += `</div>`;
 
-    html += `<div class="settings-group"><h3>UI</h3>`;
-    html += `<div class="setting-row"><span>Dynamic Theming</span><label class="toggle-switch"><input type="checkbox" ${settings.ui.dynamicTheming ? 'checked' : ''} onchange="SettingsManager.set('ui.dynamicTheming', this.checked)"><span class="toggle-slider"></span></label></div>`;
-    html += `<div class="setting-row"><span>Particles</span><label class="toggle-switch"><input type="checkbox" ${settings.ui.particlesEnabled ? 'checked' : ''} onchange="SettingsManager.set('ui.particlesEnabled', this.checked)"><span class="toggle-slider"></span></label></div>`;
-    html += `<div class="setting-row"><span>Waveform Seekbar</span><label class="toggle-switch"><input type="checkbox" ${settings.ui.waveformSeekbar ? 'checked' : ''} onchange="SettingsManager.set('ui.waveformSeekbar', this.checked); UI.applyWaveformMode()"><span class="toggle-slider"></span></label></div>`;
-    html += `<div class="setting-row"><span>Grid Columns</span><select onchange="SettingsManager.set('ui.gridColumns', this.value)"><option value="auto" ${settings.ui.gridColumns === 'auto' ? 'selected' : ''}>Auto</option><option value="2" ${settings.ui.gridColumns === '2' ? 'selected' : ''}>2</option><option value="3" ${settings.ui.gridColumns === '3' ? 'selected' : ''}>3</option><option value="4" ${settings.ui.gridColumns === '4' ? 'selected' : ''}>4</option></select></div>`;
+    html += `<div class="settings-group"><h3>Interface</h3>`;
+    html += toggle('ui.dynamicTheming', 'Dynamic Theming', s.ui.dynamicTheming, 'Uses the current artwork to tint the interface.');
+    html += toggle('ui.particlesEnabled', 'Particles', s.ui.particlesEnabled);
+    html += number('ui.particlesIntensity', 'Particle Intensity', s.ui.particlesIntensity, 0, 2, 0.1);
+    html += toggle('ui.miniplayerGlow', 'Mini-player Glow', s.ui.miniplayerGlow);
+    html += select('ui.miniplayerGlowMode', 'Mini-player Glow Mode', s.ui.miniplayerGlowMode, [['dynamic','Dynamic'],['static','Static']]);
+    html += select('ui.gridColumns', 'Grid Columns', s.ui.gridColumns, [['auto','Auto'],['2','2'],['3','3'],['4','4'],['5','5']]);
+    html += select('ui.gridViewStyle', 'Library View', s.ui.gridViewStyle, [['grid','Grid'],['list','List'],['collage','Collage']]);
+    html += toggle('ui.waveformSeekbar', 'Waveform Seekbar', s.ui.waveformSeekbar);
+    html += number('ui.waveformBars', 'Waveform Bars', s.ui.waveformBars, 20, 300, 1);
+    html += select('ui.vibrationMode', 'Vibration', s.ui.vibrationMode, [['haptic','Haptic'],['none','Off']]);
     html += `</div>`;
 
-    html += `<div class="settings-group"><h3>Library</h3>`;
-    html += `<div class="setting-row"><span>Auto Index on Launch</span><label class="toggle-switch"><input type="checkbox" ${settings.library.autoIndexOnLaunch ? 'checked' : ''} onchange="SettingsManager.set('library.autoIndexOnLaunch', this.checked)"><span class="toggle-slider"></span></label></div>`;
-    html += `<div class="setting-row"><span>Extract Featured Artists</span><label class="toggle-switch"><input type="checkbox" ${settings.library.extractFeaturedArtists ? 'checked' : ''} onchange="SettingsManager.set('library.extractFeaturedArtists', this.checked)"><span class="toggle-slider"></span></label></div>`;
+    html += `<div class="settings-group"><h3>Library Scan</h3>`;
+    html += number('library.minFileSizeMB', 'Minimum File Size (MB)', s.library.minFileSizeMB, 0, 1000, 0.1);
+    html += number('library.minDurationSeconds', 'Minimum Duration (seconds)', s.library.minDurationSeconds, 0, 3600, 1);
+    html += select('library.deduplicateBy', 'Deduplicate By', s.library.deduplicateBy, [['hash','Hash'],['path','Path']]);
+    html += toggle('library.extractFeaturedArtists', 'Extract Featured Artists', s.library.extractFeaturedArtists);
+    html += toggle('library.moodTagsEnabled', 'Mood Tags', s.library.moodTagsEnabled);
+    html += toggle('library.allowMultipleAlbums', 'Allow Multiple Albums', s.library.allowMultipleAlbums);
+    html += toggle('library.autoIndexOnLaunch', 'Auto Index on Launch', s.library.autoIndexOnLaunch, 'Works with a previously authorized folder.');
+    html += toggle('folders.showHidden', 'Show Hidden Files', s.folders.showHidden);
+    html += number('folders.scanDepth', 'Scan Depth', s.folders.scanDepth, 0, 20, 1);
+    html += `</div>`;
+
+    html += `<div class="settings-group"><h3>Smart Features</h3>`;
+    html += toggle('smart.mostPlayedAutoUpdate', 'Auto-update Most Played', s.smart.mostPlayedAutoUpdate);
+    html += number('smart.mostPlayedMinPlays', 'Minimum Plays', s.smart.mostPlayedMinPlays, 1, 100, 1);
+    html += number('smart.mostPlayedMaxTracks', 'Most Played Limit', s.smart.mostPlayedMaxTracks, 1, 500, 1);
+    html += toggle('smart.lostMemoriesEnabled', 'Lost Memories', s.smart.lostMemoriesEnabled);
+    html += `</div>`;
+
+    html += `<div class="settings-group"><h3>History</h3>`;
+    html += number('history.minListenSeconds', 'Minimum Listen Time (seconds)', s.history.minListenSeconds, 0, 3600, 1);
+    html += number('history.minListenPercent', 'Minimum Listen Percent', s.history.minListenPercent, 0, 100, 1);
+    html += toggle('history.scrobbleEnabled', 'Scrobbling', s.history.scrobbleEnabled, 'Requires valid Last.fm credentials.');
+    html += `</div>`;
+
+    html += `<div class="settings-group"><h3>Lyrics</h3>`;
+    html += toggle('lyrics.enabled', 'Lyrics', s.lyrics.enabled);
+    html += number('lyrics.fontSize', 'Lyrics Font Size', s.lyrics.fontSize, 10, 40, 1);
+    html += toggle('lyrics.alignCenter', 'Center Lyrics', s.lyrics.alignCenter);
+    html += toggle('lyrics.highlightCurrentLine', 'Highlight Current Line', s.lyrics.highlightCurrentLine);
     html += `</div>`;
 
     html += `<div class="settings-group"><h3>Data</h3>`;
-    html += `<button class="btn-gold btn-full" onclick="SettingsManager.save()">Save Settings</button>`;
+    html += `<button class="btn-gold btn-full" onclick="SettingsManager.save(); UI.showToast('Settings saved.')">Save Settings</button>`;
     html += `<button class="btn-outline btn-full" style="margin-top:8px;" onclick="SettingsManager.reset()">Reset All Settings</button>`;
-    html += `<button class="btn-outline danger btn-full" style="margin-top:8px;" onclick="Data.clearLibrary()">Clear Library</button>`;
+    html += `<button class="btn-outline danger btn-full" style="margin-top:8px;" onclick="UI.clearLibrary()">Clear Library</button>`;
     html += `</div>`;
 
     html += `<div class="settings-group"><h3>About</h3>`;
-    html += `<p style="color:var(--text-secondary);font-size:14px;line-height:1.6;">Okvy MusiQ v${CONFIG.version}<br>Built with love for music.</p>`;
+    html += `<p style="color:var(--text-secondary);font-size:14px;line-height:1.6;">Okvy MusiQ v${CONFIG.version}<br>Settings now apply immediately where the browser exposes the required capability.</p>`;
     html += `</div>`;
 
     html += '</div>';
     container.innerHTML = html;
   },
-
   async renderAlbumDetail(container, params) {
     const albums = await Data.getAll('albums');
     const album = [...albums].find(a => a.id === params.albumId);
@@ -1235,9 +1461,38 @@ const UI = {
     }
     try {
       const dirHandle = await window.showDirectoryPicker();
+      try {
+        await Data.saveFolder({ path: dirHandle.name, name: dirHandle.name, handle: dirHandle, lastScanned: Date.now() });
+      } catch (saveError) {
+        console.warn('Could not remember folder handle:', saveError);
+      }
       await Scanner.scanDirectory(dirHandle);
     } catch(e) {
       console.warn('Scan cancelled or failed:', e.message);
+    }
+  },
+
+  async autoIndexSavedFolders() {
+    if (!SettingsManager.get('library.autoIndexOnLaunch')) return;
+    if (!window.showDirectoryPicker) return;
+
+    const folders = await Data.getFolders();
+    if (!folders.length) return;
+
+    for (const folder of folders) {
+      const handle = folder.handle;
+      if (!handle || typeof handle.queryPermission !== 'function') continue;
+      try {
+        const permission = await handle.queryPermission({ mode: 'read' });
+        if (permission === 'granted') {
+          await Scanner.scanDirectory(handle);
+          try {
+            await Data.saveFolder({ ...folder, lastScanned: Date.now() });
+          } catch(e) {}
+        }
+      } catch(e) {
+        console.warn('Auto index skipped for folder:', folder.name || folder.path, e);
+      }
     }
   },
 
@@ -1253,6 +1508,32 @@ const UI = {
 
   showToast(message) {
     console.log('[Okvy]', message);
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.textContent = message;
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('show'));
+
+    setTimeout(() => {
+      toast.classList.remove('show');
+      setTimeout(() => toast.remove(), 350);
+    }, 2200);
+  },
+
+  async clearLibrary() {
+    try {
+      await Data.clearLibrary();
+      Player.setQueue([], 0);
+      this.showToast('Library cleared.');
+      this.renderSidebarPlaylists();
+      this.renderCurrentPage();
+    } catch (error) {
+      console.error('Could not clear library:', error);
+      this.showToast('Could not clear the library.');
+    }
   },
 
   showTrackMenu(id, event) {

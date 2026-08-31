@@ -10,10 +10,16 @@ const Scanner = {
     const audioExts = ['.mp3','.flac','.wav','.ogg','.m4a','.aac','.wma','.opus'];
     const m3uExts = ['.m3u','.m3u8'];
 
-    async function walk(handle, path = '') {
+    const showHidden = SettingsManager.get('folders.showHidden');
+    const maxDepth = SettingsManager.get('folders.scanDepth');
+
+    async function walk(handle, path = '', depth = 0) {
       for await (const entry of handle.values()) {
+        if (!showHidden && entry.name.startsWith('.')) continue;
+
         if (entry.kind === 'directory') {
-          await walk(entry, path + entry.name + '/');
+          if (maxDepth > 0 && depth >= maxDepth) continue;
+          await walk(entry, path + entry.name + '/', depth + 1);
         } else if (entry.kind === 'file') {
           const ext = '.' + entry.name.split('.').pop().toLowerCase();
           if (audioExts.includes(ext) || m3uExts.includes(ext)) {

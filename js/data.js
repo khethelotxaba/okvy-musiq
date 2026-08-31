@@ -91,6 +91,7 @@ const Data = {
   },
 
   async getPlaylists() { return this.getAll('playlists'); },
+  async savePlaylist(pl) { pl.dateModified = Date.now(); await this.put('playlists', pl); },
   async getPlaylist(id) { return this.get('playlists', id); },
   async updatePlaylist(pl) { pl.dateModified = Date.now(); await this.put('playlists', pl); },
   async deletePlaylist(id) { return this.delete('playlists', id); },
@@ -199,14 +200,22 @@ const Data = {
     for (const pl of playlists) {
       if (!pl.auto) continue;
       if (pl.type === 'most-played') {
-        const mostPlayed = await this.getMostPlayed(SettingsManager.get('smart.mostPlayedMaxTracks') || 50);
+        if (!SettingsManager.get('smart.mostPlayedAutoUpdate')) continue;
+        const minPlays = SettingsManager.get('smart.mostPlayedMinPlays') || 1;
+        const maxTracks = SettingsManager.get('smart.mostPlayedMaxTracks') || 50;
+        const mostPlayed = (await this.getMostPlayed(500)).filter(s => (s.playCount || 0) >= minPlays).slice(0, maxTracks);
         const tracks = await this.getTracks();
-        pl.tracks = mostPlayed.map(s => {
-          const t = tracks.find(tr => tr.id === s.trackId);
+        pl.tracks = mostPlayed.map(stat => {
+          const t = tracks.find(tr => tr.id === stat.trackId);
           return t ? t.id : null;
         }).filter(Boolean);
         await this.updatePlaylist(pl);
       } else if (pl.type === 'lost-memories') {
+        if (!SettingsManager.get('smart.lostMemoriesEnabled')) {
+          pl.tracks = [];
+          await this.updatePlaylist(pl);
+          continue;
+        }
         const memories = await this.getLostMemories();
         pl.tracks = memories.map(t => t.id);
         await this.updatePlaylist(pl);

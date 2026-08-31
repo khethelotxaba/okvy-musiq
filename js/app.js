@@ -1,18 +1,20 @@
 const App = {
   async init() {
     try {
+      await SettingsManager.load();
       await Data.init();
       await Player.init();
       await UI.init();
       await Data.ensureAutoPlaylists();
-      if (SettingsManager.get('library.autoIndexOnLaunch')) {
-        // Would need folder access - skip for now
-      }
+      await UI.autoIndexSavedFolders();
+
       console.log('Okvy MusiQ v2.3.1 initialized');
     } catch(e) {
       console.error('Initialization error:', e);
-      document.getElementById('critical-error').classList.remove('hidden');
-      document.getElementById('error-message').textContent = e.message;
+      const errorEl = document.getElementById('critical-error');
+      const messageEl = document.getElementById('error-message');
+      if (errorEl) errorEl.classList.remove('hidden');
+      if (messageEl) messageEl.textContent = e?.message || 'The app failed to initialize.';
     }
   }
 };

@@ -25,6 +25,9 @@ const Player = {
   fadeInterval: null,
   crossfadeInterval: null,
   skipSilenceInterval: null,
+  preloadAudio: null,
+  preloadUrl: null,
+  deviceSnapshot: null,
 
   peakValue: 0,
   peakSmooth: 0,
@@ -39,6 +42,7 @@ const Player = {
     this.setupAudioEvents();
     this.loadQueue();
     this.setupMediaSession();
+    this.setupAudioDeviceMonitoring();
     this.startPeakLoop();
   },
 
@@ -68,8 +72,9 @@ const Player = {
   initAudioContext() {
     if (this.audioCtx) return;
     const AudioContext = window.AudioContext || window.webkitAudioContext;
-    this.audioCtx = new AudioContext();
+    if (!AudioContext) return;
 
+    this.audioCtx = new AudioContext();
     this.sourceNode = this.audioCtx.createMediaElementSource(this.audio);
     this.gainNode = this.audioCtx.createGain();
     this.crossfadeGain = this.audioCtx.createGain();
@@ -85,12 +90,26 @@ const Player = {
     this.compressor.release.value = 0.25;
 
     this.buildEQ();
+    this.rebuildAudioGraph();
+    this.applyEQPreset();
+  },
+
+  rebuildAudioGraph() {
+    if (!this.audioCtx || !this.sourceNode || !this.compressor || !this.gainNode || !this.analyser) return;
+
+    try { this.sourceNode.disconnect(); } catch(e) {}
+    for (const node of this.eqNodes) {
+      try { node.disconnect(); } catch(e) {}
+    }
+    try { this.compressor.disconnect(); } catch(e) {}
+    try { this.gainNode.disconnect(); } catch(e) {}
+    try { this.analyser.disconnect(); } catch(e) {}
 
     let lastNode = this.sourceNode;
     if (SettingsManager.get('audio.equalizerEnabled') && this.eqNodes.length > 0) {
       lastNode.connect(this.eqNodes[0]);
       for (let i = 0; i < this.eqNodes.length - 1; i++) {
-        this.eqNodes[i].connect(this.eqNodes[i+1]);
+        this.eqNodes[i].connect(this.eqNodes[i + 1]);
       }
       lastNode = this.eqNodes[this.eqNodes.length - 1];
     }
@@ -100,9 +119,88 @@ const Player = {
     this.gainNode.connect(this.analyser);
     this.analyser.connect(this.audioCtx.destination);
 
-    this.crossfadeGain.connect(this.gainNode);
+    // Crossfade sources feed the current gain node while a transition is active.
+    try { this.crossfadeGain?.disconnect(); } catch(e) {}
+    if (this.crossfadeGain) this.crossfadeGain.connect(this.gainNode);
+  },
 
+  updateEqualizerEnabled() {
+    this.rebuildAudioGraph();
     this.applyEQPreset();
+  },
+
+  updateGaplessPlayback() {
+    if (SettingsManager.get('audio.gaplessPlayback')) {
+      this.preloadNext();
+    } else {
+      this.clearPreload();
+    }
+  },
+
+  clearPreload() {
+    if (this.preloadAudio) {
+      try {
+        this.preloadAudio.pause();
+        this.preloadAudio.removeAttribute('src');
+        this.preloadAudio.load();
+      } catch(e) {}
+    }
+    if (this.preloadUrl && this.preloadUrl.startsWith('blob:')) {
+      try { URL.revokeObjectURL(this.preloadUrl); } catch(e) {}
+    }
+    this.preloadAudio = null;
+    this.preloadUrl = null;
+  },
+
+  updateSkipSilence() {
+    this.stopSkipSilence();
+    if (SettingsManager.get('audio.skipSilence') && this.isPlaying) {
+      this.startSkipSilence();
+    }
+  },
+
+  updatePersistentQueue() {
+    if (SettingsManager.get('playback.persistentQueue')) {
+      this.saveQueue();
+    } else {
+      try { localStorage.removeItem('okvy_queue'); } catch(e) {}
+    }
+  },
+
+  updateSmartPause() {
+    // Runtime listeners read the current settings on every event, so no
+    // listener rebuild is required for visibility/volume based smart pause.
+    this.deviceSnapshot = null;
+    this.initAudioDeviceMonitoring();
+  },
+
+  async initAudioDeviceMonitoring() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      this.deviceSnapshot = new Set(devices.filter(d => d.kind === 'audiooutput').map(d => d.deviceId));
+    } catch(e) {}
+  },
+
+  setupAudioDeviceMonitoring() {
+    if (!navigator.mediaDevices?.addEventListener) return;
+    if (this._deviceMonitoringBound) return;
+    this._deviceMonitoringBound = true;
+    navigator.mediaDevices.addEventListener('devicechange', async () => {
+      if (!SettingsManager.get('playback.smartPause.onHeadphoneDisconnect')) {
+        await this.initAudioDeviceMonitoring();
+        return;
+      }
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const outputs = new Set(devices.filter(d => d.kind === 'audiooutput').map(d => d.deviceId));
+        if (this.deviceSnapshot && outputs.size < this.deviceSnapshot.size && this.isPlaying) {
+          await this.pause();
+        }
+        this.deviceSnapshot = outputs;
+      } catch(e) {}
+    });
+    this.initAudioDeviceMonitoring();
   },
 
   buildEQ() {
@@ -177,6 +275,8 @@ const Player = {
     if (!track) return;
 
     this.revokeCurrentUrls();
+    this.clearPreload();
+    this.stopSkipSilence();
     this.saveListenProgress();
 
     this.currentTrack = track;
@@ -408,6 +508,9 @@ const Player = {
   },
 
   async preloadNext() {
+    this.clearPreload();
+    if (!SettingsManager.get('audio.gaplessPlayback')) return;
+
     const nextIdx = this.queueIndex + 1;
     if (nextIdx >= this.queue.length) return;
     const nextTrack = this.queue[nextIdx];
@@ -416,9 +519,11 @@ const Player = {
     if (!url) return;
 
     const preload = new Audio();
+    preload.preload = 'auto';
     preload.src = url;
-    preload.preload = 'metadata';
-    preload.load();
+    this.preloadAudio = preload;
+    this.preloadUrl = url;
+    try { preload.load(); } catch(e) {}
   },
 
   seek(percent) {
@@ -537,21 +642,33 @@ const Player = {
   },
 
   setQueue(tracks, startIndex = 0) {
-    this.queue = tracks;
-    this.queueIndex = startIndex;
+    this.queue = Array.isArray(tracks) ? tracks : [];
+    this.queueIndex = Math.max(0, Math.min(startIndex, Math.max(0, this.queue.length - 1)));
     this.shuffleHistory = [];
     if (SettingsManager.get('playback.persistentQueue')) this.saveQueue();
   },
 
   addToQueue(tracks, position = 'end') {
+    const incoming = Array.isArray(tracks) ? tracks.filter(Boolean) : [];
+    if (incoming.length === 0) return;
+    const wasEmpty = this.queue.length === 0;
+
     if (position === 'next') {
       const before = this.queue.slice(0, this.queueIndex + 1);
       const after = this.queue.slice(this.queueIndex + 1);
-      this.queue = [...before, ...tracks, ...after];
+      this.queue = [...before, ...incoming, ...after];
     } else {
-      this.queue = [...this.queue, ...tracks];
+      this.queue = [...this.queue, ...incoming];
     }
+
     if (SettingsManager.get('playback.persistentQueue')) this.saveQueue();
+    window.dispatchEvent(new CustomEvent('queue-updated'));
+
+    // If the queue was empty, optionally start the first inserted track.
+    if (wasEmpty && SettingsManager.get('playback.autoPlayOnInsert')) {
+      this.queueIndex = 0;
+      this.loadTrack(this.queue[this.queueIndex], true);
+    }
   },
 
   removeFromQueue(index) {
