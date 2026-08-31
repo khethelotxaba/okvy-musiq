@@ -534,21 +534,6 @@ html, body {
   stroke-width: 2;
 }
 
-.waveform-container {
-  width: 100%;
-  max-width: 400px;
-  height: 52px;
-  margin-bottom: 20px;
-  position: relative;
-  cursor: pointer;
-}
-
-#waveform-canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
 .fp-progress-section {
   width: 100%;
   max-width: 400px;
@@ -557,8 +542,27 @@ html, body {
 
 .progress-bar-container {
   width: 100%;
+  height: 20px;
   padding: 8px 0;
   cursor: pointer;
+  position: relative;
+}
+
+#waveform-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  display: none;
+}
+
+.progress-bar-container.waveform-mode #waveform-canvas {
+  display: block;
+}
+
+.progress-bar-container.waveform-mode .progress-track {
+  display: none;
 }
 
 .progress-track {
