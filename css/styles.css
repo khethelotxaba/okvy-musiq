@@ -1914,40 +1914,38 @@ html, body {
   box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.35);
 }
 
-/* Supplied SVG icon pack */
+/* Native inline vector icon system */
 .app-icon {
   display: inline-block;
   width: 22px;
   height: 22px;
   flex: 0 0 auto;
-  object-fit: contain;
   vertical-align: middle;
-  opacity: 1;
-  filter: invert(1);
+  color: currentColor;
+  stroke: currentColor;
+  fill: none;
+  pointer-events: none;
 }
-body.light .app-icon { filter: none; }
 .icon-btn .app-icon { width: 22px; height: 22px; }
 .icon-btn.small .app-icon { width: 18px; height: 18px; }
-.nav-item .app-icon { width: 22px; height: 22px; flex-shrink: 0; }
+.nav-item .app-icon { width: 21px; height: 21px; flex-shrink: 0; }
 .tab-btn .app-icon { width: 22px; height: 22px; }
 .control-btn .app-icon { width: 24px; height: 24px; }
 .control-btn.play-btn .app-icon { width: 28px; height: 28px; }
-.control-btn.play-btn.large .app-icon { width: 32px; height: 32px; }
+.control-btn.play-btn.large .app-icon { width: 30px; height: 30px; }
 .fp-close-btn .app-icon { width: 20px; height: 20px; }
-.fp-actions button .app-icon { width: 22px; height: 22px; }
+.fp-actions button .app-icon { width: 21px; height: 21px; }
 .search-box .app-icon { width: 20px; height: 20px; }
 .view-toggle-btn .app-icon { width: 20px; height: 20px; }
 .track-check .app-icon { width: 14px; height: 14px; }
-.playlist-link .app-icon { width: 18px; height: 18px; opacity: 0.6; }
+.playlist-link .app-icon { width: 18px; height: 18px; opacity: 0.75; }
 .playlist-empty .app-icon { width: 24px; height: 24px; }
-
-
-
-/* Feature menus and audio effects */
 .menu-action-item { display:flex; align-items:center; gap:12px; }
-.menu-action-item .app-icon { width:20px; height:20px; flex:0 0 20px; }
+.menu-action-item .app-icon { width:21px; height:21px; flex:0 0 21px; color:var(--text-secondary); }
+.menu-action-item:hover .app-icon { color:var(--text-primary); }
 .fp-content { position:relative; }
-.fp-options-btn { position:absolute; top:0; right:4px; z-index:3; }
+.fp-options-btn { position:absolute; top:10px; right:10px; z-index:10; width:44px; height:44px; border-radius:50%; background:rgba(255,255,255,0.04); }
+.fp-options-btn:hover { background:var(--bg-surface-hover); }
 .effects-panel { display:flex; flex-direction:column; gap:14px; padding-bottom:32px; }
 .effects-card { background:var(--bg-surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:16px; }
 .effects-card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
@@ -1964,5 +1962,119 @@ body.light .app-icon { filter: none; }
 .effect-control input[type=range] { width:100%; accent-color:var(--accent); }
 @media (max-width:600px) { .eq-sliders { grid-template-columns:repeat(5,1fr); gap:10px 5px; } .eq-sliders input { height:130px; } }
 
-/* SVG icon assets are loaded as real images; the source artwork is dark, so dark mode inverts it to white. */
-.app-icon[aria-hidden="true"] { pointer-events: none; }
+
+/* --- Theme completeness + player control polish --- */
+
+/* Theme every persistent shell, not only page content. */
+body.light .tab-bar {
+  background: rgba(255,255,255,0.96);
+  border-top-color: rgba(0,0,0,0.10);
+  box-shadow: 0 -8px 24px rgba(0,0,0,0.05);
+}
+body.light .sidebar-blur {
+  background: rgba(255,255,255,0.98);
+}
+body.light .sidebar-overlay {
+  background: rgba(0,0,0,0.22);
+}
+body.light .now-playing-bar {
+  background: rgba(255,255,255,0.96);
+  border-color: rgba(0,0,0,0.10);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.14), 0 0 0 1px rgba(0,0,0,0.02);
+}
+body.light .mini-player-sidebar {
+  color: var(--text-primary);
+}
+body.light .fp-sheet {
+  background: #ffffff;
+}
+body.light .fp-backdrop {
+  background: rgba(255,255,255,0.94);
+}
+body.light .modal-backdrop {
+  background: rgba(255,255,255,0.78);
+}
+/* Keep option sheets solid; no theme-gradient bleed. */
+.modal-sheet {
+  background: var(--bg-elevated);
+}
+body.light .modal-sheet {
+  background: #ffffff;
+}
+/* Top bars should visually belong to the same theme. */
+body.light .top-bar {
+  background: var(--bg);
+}
+/* Full-player header/options area should never pick up an unwanted gradient. */
+.fp-options-btn {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+body.light .fp-options-btn {
+  background: rgba(0,0,0,0.045);
+}
+
+/* Standalone player play/pause — no pill/circle background. */
+.control-btn.play-btn,
+.control-btn.play-btn.large {
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  background: transparent !important;
+  color: var(--text-primary);
+  box-shadow: none !important;
+  border-radius: 0;
+}
+.control-btn.play-btn:hover,
+.control-btn.play-btn:active {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.control-btn.play-btn .app-icon,
+.control-btn.play-btn.large .app-icon {
+  width: 32px;
+  height: 32px;
+}
+
+/* Standalone secondary actions: icon + label without the rounded pill. */
+.fp-actions button {
+  flex: 0 0 auto;
+  min-width: 72px;
+  padding: 8px 10px;
+  border-radius: 0;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: var(--text-secondary);
+}
+.fp-actions button:hover,
+.fp-actions button:active {
+  background: transparent !important;
+  border: 0 !important;
+  color: var(--text-primary);
+  transform: none;
+}
+.fp-actions button .app-icon {
+  width: 22px;
+  height: 22px;
+}
+
+/* Repeat: no decorative ring/badge unless N-times is active. */
+#fp-repeat {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+#fp-repeat:not([data-repeat-mode="n"]) .repeat-count-badge,
+#fp-repeat:not([data-repeat-mode="n"]) #fp-repeat-count {
+  display: none !important;
+}
+#fp-repeat[data-repeat-mode="n"] .repeat-count-badge,
+#fp-repeat[data-repeat-mode="n"] #fp-repeat-count {
+  display: inline-flex;
+}
+.repeat-count-badge {
+  right: -5px;
+  bottom: -5px;
+  box-shadow: none;
+}
