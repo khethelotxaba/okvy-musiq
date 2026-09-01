@@ -63,15 +63,22 @@ const UI = {
   },
 
   async init() {
-    this.bindGlobalEvents();
-    this.bindPlayerControls();
-    this.bindFullPlayer();
-    this.bindSidebar();
-    this.bindTabBar();
-    this.bindPlaylistModal();
-    this.bindParticles();
-    this.bindKeyboard();
-    this.bindTouchGestures();
+    // Each binder runs in isolation: if one throws (e.g. a stale element ID
+    // left over from a redesign), it's logged and skipped instead of taking
+    // down the entire app init chain like it did before.
+    const safeBind = (name, fn) => {
+      try { fn.call(this); }
+      catch (err) { console.error(`UI.${name} failed to bind:`, err); }
+    };
+    safeBind('bindGlobalEvents', this.bindGlobalEvents);
+    safeBind('bindPlayerControls', this.bindPlayerControls);
+    safeBind('bindFullPlayer', this.bindFullPlayer);
+    safeBind('bindSidebar', this.bindSidebar);
+    safeBind('bindTabBar', this.bindTabBar);
+    safeBind('bindPlaylistModal', this.bindPlaylistModal);
+    safeBind('bindParticles', this.bindParticles);
+    safeBind('bindKeyboard', this.bindKeyboard);
+    safeBind('bindTouchGestures', this.bindTouchGestures);
     hydrateStaticIcons();
 
     this.applyThemeMode();
@@ -142,8 +149,6 @@ const UI = {
     const fpRepeat = document.getElementById('fp-repeat');
     const fpFavorite = document.getElementById('fp-favorite');
     const fpProgress = document.getElementById('fp-progress-container');
-    const fpAdd = document.getElementById('fp-add');
-    const fpShare = document.getElementById('fp-share');
     const fpOptions = document.getElementById('fp-options');
 
     fpClose.addEventListener('click', () => this.closeFullPlayer());
@@ -153,8 +158,6 @@ const UI = {
     fpShuffle.addEventListener('click', () => this.toggleShuffle());
     fpRepeat.addEventListener('click', () => this.toggleRepeat());
     fpFavorite.addEventListener('click', () => this.toggleFavorite());
-    fpAdd.addEventListener('click', () => this.showPlaylistModal());
-    fpShare.addEventListener('click', () => this.shareTrack());
     fpOptions.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.showPlayerOptions(); });
 
     let isDragging = false;
