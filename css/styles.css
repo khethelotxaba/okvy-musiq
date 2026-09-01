@@ -3511,7 +3511,7 @@ body.light .full-player.fill-album-art .fp-content::before {
   position: relative !important;
   overflow: hidden !important;
   isolation: isolate !important;
-  background: var(--bg) !important;
+  background: transparent !important;
 }
 
 /* The actual top artwork is the visible source layer. */
@@ -3559,7 +3559,7 @@ body.light .full-player.fill-album-art .fp-content::before {
   min-height: 0 !important;
   overflow: hidden !important;
   z-index: 1 !important;
-  opacity: .92 !important;
+  opacity: 1 !important;
   pointer-events: none !important;
   -webkit-mask-image: linear-gradient(to bottom,
     transparent 0%, rgba(0,0,0,.16) 5%, rgba(0,0,0,.52) 12%,
@@ -3646,4 +3646,20 @@ body.light .full-player.fill-album-art .fp-content::before {
 .full-player.fill-album-art .fp-reflection {
   -webkit-mask-image: none !important;
   mask-image: none !important;
+}
+
+/* === Final no-theme-wash artwork test === */
+.full-player.fill-album-art .fp-sheet {
+  background: transparent !important;
+}
+.full-player.fill-album-art .fp-reflection {
+  opacity: 1 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+.full-player.fill-album-art .fp-reflection::before,
+.full-player.fill-album-art .fp-reflection::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
 }
