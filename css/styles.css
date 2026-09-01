@@ -4291,3 +4291,153 @@ body.light .full-player.fill-album-art .fp-sheet {
 .full-player.fill-album-art .fp-content {
   background: transparent !important;
 }
+
+/* === Library geometry system v2 === */
+:root {
+  --library-gutter: 20px;
+  --library-gap: 16px;
+  --library-section-gap: 28px;
+  --library-card-radius: var(--radius-lg);
+  --library-title-size: 14px;
+  --library-subtitle-size: 11px;
+}
+
+/* Keep the library clear of the two fixed playback/navigation surfaces. */
+.page-container {
+  padding-left: var(--library-gutter);
+  padding-right: var(--library-gutter);
+  padding-bottom: 170px;
+}
+.now-playing-bar {
+  bottom: 84px !important;
+}
+
+/* One consistent content column and vertical rhythm. */
+#page-container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-top: 6px;
+}
+#page-container > * + * { margin-top: var(--library-section-gap); }
+#page-container .hero-section,
+#page-container .section-header,
+#page-container .view-toolbar,
+#page-container .collection-toolbar,
+#page-container .track-list,
+#page-container .collection-list,
+#page-container .grid-container,
+#page-container .h-scroll,
+#page-container .search-hero {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Headings and metadata now share a restrained type scale. */
+#page-container .hero-greeting,
+#page-container .view-toolbar h2,
+#page-container .collection-toolbar h2,
+#page-container .section-header h2 {
+  line-height: 1.15;
+}
+#page-container .hero-greeting { font-size: 26px; }
+#page-container .hero-sub { font-size: 14px; margin-bottom: 20px; }
+#page-container .section-header,
+#page-container .view-toolbar { min-height: 40px; }
+#page-container .section-header h2,
+#page-container .view-toolbar h2 { font-size: 18px; }
+#page-container .section-header .section-action { font-size: 12px; }
+#page-container .grid-title { font-size: var(--library-title-size); line-height: 1.25; margin-top: 8px; }
+#page-container .grid-subtitle { font-size: var(--library-subtitle-size); line-height: 1.25; margin-top: 3px; }
+
+/* Stats stay inside their card and adapt cleanly at narrower widths. */
+#page-container .hero-card { padding: 20px; }
+#page-container .hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 20px;
+}
+#page-container .stat-item { min-width: 0; }
+#page-container .stat-value { font-size: clamp(24px, 3vw, 30px); }
+#page-container .stat-label { font-size: 10px; letter-spacing: 1.2px; white-space: nowrap; }
+
+/* Collections: predictable tracks/columns and consistent card geometry. */
+#page-container .grid-container {
+  gap: var(--library-gap);
+  align-items: start;
+}
+#page-container .collection-list { gap: 10px; }
+#page-container .collection-list-item { min-height: 72px; padding: 10px 12px; }
+#page-container .collection-list-art { width: 52px; height: 52px; flex-basis: 52px; }
+#page-container .collection-list-info strong { font-size: 14px; line-height: 1.2; }
+#page-container .collection-list-info span { font-size: 11px; line-height: 1.2; }
+#page-container .collection-collage,
+#page-container .collection-gallery-grid { gap: var(--library-gap); }
+
+/* Straight collage: varied image proportions, but no rotation/diagonal drift. */
+#page-container .collection-collage .collection-card-item,
+#page-container .grid-container.collage .grid-item {
+  margin: 0 !important;
+  transform: none !important;
+  rotate: 0deg !important;
+  translate: none !important;
+  scale: 1 !important;
+  position: relative;
+}
+#page-container .collection-collage .collection-card-item:hover,
+#page-container .grid-container.collage .grid-item:hover {
+  transform: translateY(-3px) !important;
+}
+
+/* Theme-locked library iconography. Embedded SVGs inherit this color. */
+#page-container .app-icon,
+#page-container .view-toggle-btn .app-icon,
+#page-container .collection-view-modes .app-icon,
+#page-container .track-actions .app-icon,
+#page-container .collection-list-chevron .app-icon {
+  color: #111 !important;
+  stroke: #111 !important;
+  fill: none !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+body:not(.light) #page-container .app-icon,
+body:not(.light) #page-container .view-toggle-btn .app-icon,
+body:not(.light) #page-container .collection-view-modes .app-icon,
+body:not(.light) #page-container .track-actions .app-icon,
+body:not(.light) #page-container .collection-list-chevron .app-icon {
+  color: #fff !important;
+  stroke: #fff !important;
+  fill: none !important;
+  filter: none !important;
+}
+
+/* The active library view button keeps its accent background, while the glyph stays theme-white/black. */
+#page-container .view-toggle-btn.active .app-icon {
+  color: currentColor !important;
+  stroke: currentColor !important;
+}
+body:not(.light) #page-container .view-toggle-btn.active { color: #fff !important; }
+body.light #page-container .view-toggle-btn.active { color: #111 !important; }
+
+/* Prevent long names from changing card geometry. */
+#page-container .grid-title,
+#page-container .grid-subtitle,
+#page-container .collection-list-info strong,
+#page-container .collection-list-info span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#page-container .grid-title { white-space: nowrap; }
+#page-container .grid-subtitle { white-space: nowrap; }
+
+/* Mobile retains the same rhythm rather than shrinking each component independently. */
+@media (max-width: 700px) {
+  :root { --library-gutter: 14px; --library-gap: 12px; --library-section-gap: 22px; }
+  .page-container { padding-bottom: 164px; }
+  .now-playing-bar { bottom: 82px !important; left: 8px; right: 8px; }
+  #page-container .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
+  #page-container .hero-card { padding: 18px; }
+}
