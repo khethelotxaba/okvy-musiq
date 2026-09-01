@@ -1128,13 +1128,13 @@ const UI = {
     let html = '<div class="view-toolbar collection-toolbar">';
     html += `<div class="view-toolbar-left"><h2 style="font-size:18px;font-weight:800;">${Utils.escapeHtml(title)}</h2></div>`;
     html += '<div class="view-toolbar-right">';
-    html += `<div class="collection-view-modes">`;
+    html += '<div class="collection-view-modes">';
     html += `<button class="view-toggle-btn ${mode === 'list' ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle','list'); UI.renderCurrentPage()" title="List view" aria-label="List view">${appIcon('tracks')}</button>`;
     html += `<button class="view-toggle-btn ${mode === 'grid' ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle','grid'); UI.renderCurrentPage()" title="Grid view" aria-label="Grid view">${appIcon('grid')}</button>`;
     html += `<button class="view-toggle-btn ${mode === 'collage' ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle','collage'); UI.renderCurrentPage()" title="Collage view" aria-label="Collage view">${appIcon('grid')}</button>`;
     html += '</div>';
     if (mode !== 'list') {
-      html += `<select class="sort-select collection-columns-select" onchange="SettingsManager.set('ui.gridColumns', this.value)" aria-label="Grid columns">`;
+      html += `<select class="sort-select collection-columns-select" onchange="SettingsManager.set('ui.gridColumns', this.value); UI.renderCurrentPage()" aria-label="Grid columns">`;
       html += `<option value="auto" ${cols === 'auto' ? 'selected' : ''}>Auto</option>`;
       ['2','3','4','5'].forEach(c => html += `<option value="${c}" ${cols === c ? 'selected' : ''}>${c} columns</option>`);
       html += '</select>';
@@ -1143,21 +1143,59 @@ const UI = {
     return html;
   },
 
-  collectionCollageStyle(id, index) {
+  collectionVariantStyle(id, index, kind='grid') {
     let h = 2166136261 >>> 0;
     for (const ch of String(id || index)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
     const rand = () => { h += 0x6D2B79F5; let t=h; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; };
-    const rotate = Math.round((rand()*14)-7);
-    const x = Math.round((rand()*14)-7);
-    const y = Math.round((rand()*10)-5);
-    const z = Math.round(rand()*100);
-    return `--collage-rotate:${rotate}deg;--collage-x:${x}px;--collage-y:${y}px;--collage-z:${z}`;
+    if (kind === 'collage') {
+      const rotate = Math.round((rand()*10)-5);
+      const x = Math.round((rand()*10)-5);
+      const y = Math.round((rand()*8)-4);
+      const z = Math.round(rand()*100);
+      const scale = (0.94 + rand()*0.10).toFixed(3);
+      return `--collection-rotate:${rotate}deg;--collection-x:${x}px;--collection-y:${y}px;--collection-z:${z};--collection-scale:${scale}`;
+    }
+    // Namida-like gallery variation: varied aspect ratios/sizes, but still a coherent grid.
+    const ratios = ['1/1','4/5','5/4','3/4','4/3','1/1'];
+    const ratio = ratios[Math.floor(rand()*ratios.length)];
+    const spanChance = rand();
+    const span = spanChance > 0.86 ? 2 : 1;
+    const lift = Math.round(rand()*5);
+    return `--collection-ratio:${ratio};--collection-span:${span};--collection-lift:${lift}px`;
+  },
+
+  openArtist(name) {
+    const clean = String(name || '').trim();
+    if (clean) this.navigate('artist-detail', { artist: clean });
+  },
+
+  openAlbum(id) {
+    const clean = String(id || '').trim();
+    if (clean) this.navigate('album-detail', { albumId: clean });
+  },
+
+  playEncodedIds(encoded, startIndex = 0) {
+    try {
+      const ids = JSON.parse(decodeURIComponent(String(encoded || '')));
+      if (Array.isArray(ids)) this.playTracksByIds(ids, Number(startIndex) || 0);
+    } catch (e) { console.warn('Could not decode track list', e); }
+  },
+
+  shuffleArtistEncoded(encoded) {
+    try {
+      const name = decodeURIComponent(String(encoded || ''));
+      if (name) this.shuffleArtist(name);
+    } catch (e) { console.warn('Could not decode artist name', e); }
+  },
+
+  getRepresentativeTrack(tracks) {
+    return (Array.isArray(tracks) ? tracks : []).find(t => t && (t.artworkBlob || t.artwork)) || (Array.isArray(tracks) ? tracks[0] : null) || null;
   },
 
   renderAlbumListItem(album) {
-    const tracksCount = album.tracks?.length || 0;
-    return `<div class="collection-list-item" onclick="UI.navigate('album-detail',{albumId:'${album.id}'})">
-      <div class="collection-list-art">${this.getAlbumArtwork(album, [])}</div>
+    const tracksCount = album.trackCount ?? album.tracks?.length ?? 0;
+    return `<div class="collection-list-item" data-album-id="${Utils.escapeHtml(String(album.id || ''))}" onclick="UI.openAlbum(this.dataset.albumId)">
+      <div class="collection-list-art">${album._artwork ? `<img src="${album._artwork}" alt="">` : this.getAlbumArtwork(album, [])}</div>
       <div class="collection-list-info"><strong>${Utils.escapeHtml(album.name || 'Unknown Album')}</strong><span>${Utils.escapeHtml(album.artist || 'Unknown Artist')} · ${tracksCount} tracks</span></div>
       <span class="collection-list-chevron">${appIcon('next')}</span>
     </div>`;
@@ -1165,8 +1203,8 @@ const UI = {
 
   renderArtistListItem(artist) {
     const count = artist.tracks?.length || artist.trackCount || 0;
-    return `<div class="collection-list-item" onclick="UI.navigate('artist-detail',{artist:${JSON.stringify(artist.name)}})">
-      <div class="collection-list-art circle">${this.getArtistArtwork(artist, [])}</div>
+    return `<div class="collection-list-item" data-artist-name="${Utils.escapeHtml(artist.name || '')}" onclick="UI.openArtist(this.dataset.artistName)">
+      <div class="collection-list-art circle">${artist._artwork ? `<img src="${artist._artwork}" alt="">` : this.getArtistArtwork(artist, [])}</div>
       <div class="collection-list-info"><strong>${Utils.escapeHtml(artist.name || 'Unknown Artist')}</strong><span>${count} tracks · ${artist.albums?.length || 0} albums</span></div>
       <span class="collection-list-chevron">${appIcon('next')}</span>
     </div>`;
@@ -1174,16 +1212,22 @@ const UI = {
 
   async renderAlbums(container) {
     const albums = await Data.getAll('albums');
+    const allTracks = await Data.getTracks();
     let html = this.collectionViewToolbar('Albums');
     if (albums.length === 0) { html += this.renderEmptyState('No albums yet'); container.innerHTML = html; return; }
-    const list = [...albums].sort((a,b) => String(a.name||'').localeCompare(String(b.name||''), undefined, {numeric:true,sensitivity:'base'}));
+    const list = [...albums].map(a => {
+      const tracks = allTracks.filter(t => t.album === a.name);
+      const rep = this.getRepresentativeTrack(tracks);
+      return {...a, trackCount: tracks.length, _artwork: rep ? this.getArtworkUrl(rep) : 'assets/default-art.png'};
+    }).sort((a,b) => String(a.name||'').localeCompare(String(b.name||''), undefined, {numeric:true,sensitivity:'base'}));
     const mode = this.getCollectionViewStyle();
     if (mode === 'list') {
       html += '<div class="collection-list">' + list.map(a => this.renderAlbumListItem(a)).join('') + '</div>';
     } else {
-      html += `<div class="grid-container ${this.getGridColumnClass()} ${mode === 'collage' ? 'collage collection-collage' : ''}">`;
+      html += `<div class="grid-container ${this.getGridColumnClass()} ${mode === 'collage' ? 'collage collection-collage' : 'collection-gallery-grid'}">`;
       list.forEach((album,i) => {
-        html += `<div class="grid-item collection-card-item" style="${mode === 'collage' ? this.collectionCollageStyle(album.id,i) : ''}" onclick="UI.navigate('album-detail',{albumId:'${album.id}'})">${this.renderAlbumCard(album)}</div>`;
+        const style = this.collectionVariantStyle(album.id,i,mode);
+        html += `<div class="grid-item collection-card-item" data-collection-kind="album" style="${style}" data-album-id="${Utils.escapeHtml(String(album.id || ''))}" onclick="UI.openAlbum(this.dataset.albumId)">${this.renderAlbumCard({...album, artwork: album._artwork, tracks: []})}</div>`;
       });
       html += '</div>';
     }
@@ -1192,16 +1236,23 @@ const UI = {
 
   async renderArtists(container) {
     const artists = await Data.getAll('artists');
+    const allTracks = await Data.getTracks();
     let html = this.collectionViewToolbar('Artists');
     if (artists.length === 0) { html += this.renderEmptyState('No artists yet'); container.innerHTML = html; return; }
-    const list = [...artists].map(a => ({...a, trackCount: a.tracks?.length || a.trackCount || 0})).sort((a,b) => String(a.name||'').localeCompare(String(b.name||''), undefined, {numeric:true,sensitivity:'base'}));
+    const list = [...artists].map(a => {
+      const trackIds = Array.isArray(a.tracks) ? new Set(a.tracks.map(String)) : new Set();
+      const tracks = trackIds.size ? allTracks.filter(t => trackIds.has(String(t.id))) : allTracks.filter(t => [...Utils.splitArtists(t.artist || ''), ...(t.featuredArtists || [])].some(n => String(n).trim().toLowerCase() === String(a.name || '').trim().toLowerCase()));
+      const rep = this.getRepresentativeTrack(tracks);
+      return {...a, trackCount: tracks.length || a.tracks?.length || 0, _artwork: rep ? this.getArtworkUrl(rep) : 'assets/default-art.png'};
+    }).sort((a,b) => String(a.name||'').localeCompare(String(b.name||''), undefined, {numeric:true,sensitivity:'base'}));
     const mode = this.getCollectionViewStyle();
     if (mode === 'list') {
       html += '<div class="collection-list">' + list.map(a => this.renderArtistListItem(a)).join('') + '</div>';
     } else {
-      html += `<div class="grid-container ${this.getGridColumnClass()} ${mode === 'collage' ? 'collage collection-collage' : ''}">`;
+      html += `<div class="grid-container ${this.getGridColumnClass()} ${mode === 'collage' ? 'collage collection-collage' : 'collection-gallery-grid'}">`;
       list.forEach((artist,i) => {
-        html += `<div class="grid-item collection-card-item" style="${mode === 'collage' ? this.collectionCollageStyle(artist.id,i) : ''}" onclick="UI.navigate('artist-detail',{artist:${JSON.stringify(artist.name)}})">${this.renderArtistCard(artist)}</div>`;
+        const style = this.collectionVariantStyle(artist.id,i,mode);
+        html += `<div class="grid-item collection-card-item" data-collection-kind="artist" style="${style}" data-artist-name="${Utils.escapeHtml(artist.name || '')}" onclick="UI.openArtist(this.dataset.artistName)">${this.renderArtistCard({...artist, _artwork: artist._artwork, tracks: []})}</div>`;
       });
       html += '</div>';
     }
@@ -1831,25 +1882,36 @@ const UI = {
   },
 
   async renderArtistDetail(container, params) {
-    const artistName = params.artist;
+    const artistName = String(params?.artist || '').trim();
+    if (!artistName) { this.navigate('artists'); return; }
+    const artistRecords = await Data.getAll('artists');
+    const artistRecord = [...artistRecords].find(a => String(a.name || '').trim().toLowerCase() === artistName.toLowerCase());
     const tracks = await this.getTracksByArtist({ name: artistName });
-    let html = '<div class="album-detail-header">';
-    html += `<div class="album-detail-art circle">${this.getArtistArtwork({ name: artistName }, tracks)}</div>`;
+    const representative = this.getRepresentativeTrack(tracks);
+    const artwork = representative ? this.getArtworkUrl(representative) : (artistRecord?._artwork || 'assets/default-art.png');
+    const albums = [...new Set(tracks.map(t => t.album).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:'base'}));
+
+    let html = '<div class="album-detail-header artist-detail-header">';
+    html += `<div class="album-detail-art circle">${`<img src="${Utils.escapeHtml(artwork)}" alt="">`}</div>`;
     html += `<div class="album-detail-info">`;
     html += `<div class="album-detail-label">Artist</div>`;
     html += `<div class="album-detail-title">${Utils.escapeHtml(artistName)}</div>`;
-    html += `<div class="album-detail-meta">${tracks.length} tracks</div>`;
+    html += `<div class="album-detail-meta">${tracks.length} tracks · ${albums.length} albums</div>`;
     html += `<div class="album-detail-actions">`;
-    html += `<button class="btn-gold" onclick="UI.playTracksByIds([${tracks.map(t => `'${t.id}'`).join(',')}], 0)">Play</button>`;
-    html += `<button class="btn-outline" onclick="UI.shuffleArtist('${Utils.escapeHtml(artistName)}')">Shuffle</button>`;
+    if (tracks.length) {
+      const encodedIds = encodeURIComponent(JSON.stringify(tracks.map(t => t.id)));
+      const encodedArtist = encodeURIComponent(artistName);
+      html += `<button class="btn-gold" data-track-ids="${encodedIds}" onclick="UI.playEncodedIds(this.dataset.trackIds,0)">Play</button>`;
+      html += `<button class="btn-outline" data-artist="${encodedArtist}" onclick="UI.shuffleArtistEncoded(this.dataset.artist)">Shuffle</button>`;
+    }
     html += `</div></div></div>`;
 
     if (tracks.length > 0) {
-      html += '<div class="track-list">';
-      tracks.forEach((track, i) => {
-        html += this.renderTrackRow(track, i + 1);
-      });
+      html += '<div class="section-header"><h2>Tracks</h2></div><div class="track-list">';
+      tracks.forEach((track, i) => { html += this.renderTrackRow(track, i + 1); });
       html += '</div>';
+    } else {
+      html += this.renderEmptyState('No tracks found for this artist');
     }
     container.innerHTML = html;
   },
@@ -1939,7 +2001,7 @@ const UI = {
   },
 
   renderAlbumCard(item, size = 'normal') {
-    const art = item.artwork || (item.tracks && item.tracks[0] ? this.getArtworkUrl(item.tracks[0]) : 'assets/default-art.png');
+    const art = item.artwork || item._artwork || (item.tracks && item.tracks[0] && typeof item.tracks[0] === 'object' ? this.getArtworkUrl(item.tracks[0]) : 'assets/default-art.png');
     const title = item.title || item.name || 'Unknown';
     const subtitle = item.artist || item.subtitle || (item.tracks ? `${item.tracks.length} tracks` : '');
     return `
@@ -1959,9 +2021,9 @@ const UI = {
   renderArtistCard(artist) {
     return `
       <div class="grid-art circle">
-        <img src="${this.getArtistArtwork(artist)}" alt="" loading="lazy">
+        <img src="${artist._artwork || 'assets/default-art.png'}" alt="" loading="lazy">
         <div class="grid-overlay">
-          <button class="play-overlay" onclick="event.stopPropagation(); UI.navigate('tracks', {artist: '${Utils.escapeHtml(artist.name)}'})">
+          <button class="play-overlay" onclick="event.stopPropagation(); UI.openArtist(this.closest('.collection-card-item')?.dataset.artistName || '')">
             ${appIcon('play')}
           </button>
         </div>
