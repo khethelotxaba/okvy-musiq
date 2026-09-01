@@ -55,7 +55,6 @@ const UI = {
   particleResizeHandler: null,
   _waveformCache: new Map(),
   _waveformToken: 0,
-  _albumArtColorCache: new Map(),
 
   getArtworkUrl(track) {
     if (!track) return 'assets/default-art.png';
@@ -420,7 +419,8 @@ const UI = {
     document.getElementById('fp-title').textContent = track.title || 'Unknown';
     document.getElementById('fp-artist').textContent = track.artist || '-';
     document.getElementById('fp-art').src = artwork;
-    this.applyFillAlbumArt(artwork);
+    const fpSheet = document.querySelector('#full-player .fp-sheet');
+    if (fpSheet && artwork) fpSheet.style.setProperty('--fp-art-url', `url(\"${String(artwork).replace(/\"/g, '%22')}\")`);
     document.getElementById('fp-favorite').classList.toggle('active', track.favorite);
     document.getElementById('sidebar-title').textContent = track.title || 'Not Playing';
     document.getElementById('sidebar-artist').textContent = track.artist || '-';
@@ -473,8 +473,6 @@ const UI = {
     root.style.setProperty('--dynamic-vibrant', detail.vibrant);
     const rgb = detail.dominant.match(/\d+/g);
     if (rgb) root.style.setProperty('--accent-rgb', rgb.join(', '));
-    const sheet = document.querySelector('#full-player .fp-sheet');
-    if (sheet && detail.dominant) sheet.style.setProperty('--fp-art-color', detail.dominant);
     if (SettingsManager.get('ui.waveformSeekbar')) requestAnimationFrame(() => this.renderWaveform());
   },
 
@@ -556,9 +554,6 @@ const UI = {
         case 'ui.glassmorphism':
         case 'ui.glassIntensity':
           this.applyThemeMode();
-          break;
-        case 'ui.fillAlbumArt':
-          this.applyFillAlbumArt();
           break;
         case 'library.extractFeaturedArtists':
         case 'library.moodTagsEnabled':
@@ -1294,7 +1289,6 @@ const UI = {
     html += number('ui.particlesIntensity', 'Particle Intensity', s.ui.particlesIntensity, 0, 2, 0.1);
     html += toggle('ui.miniplayerGlow', 'Mini-player Glow', s.ui.miniplayerGlow);
     html += select('ui.miniplayerGlowMode', 'Mini-player Glow Mode', s.ui.miniplayerGlowMode, [['dynamic','Dynamic'],['static','Static']]);
-    html += toggle('ui.fillAlbumArt', 'Fill Album Art', s.ui.fillAlbumArt, 'Use the artwork as a full-width player surface that softly blends into the track information.');
     html += toggle('ui.glassmorphism', 'Glassmorphism', s.ui.glassmorphism, 'Use frosted, translucent surfaces for the bottom navigation and sidebar.');
     html += number('ui.glassIntensity', 'Glass Intensity', s.ui.glassIntensity, 0, 1, 0.05);
     html += select('ui.gridColumns', 'Grid Columns', s.ui.gridColumns, [['auto','Auto'],['2','2'],['3','3'],['4','4'],['5','5']]);
@@ -1551,39 +1545,10 @@ const UI = {
     // Handled by onTrackChanged and onTimeUpdate
   },
 
-  applyFillAlbumArt(artwork = null) {
-    const player = document.getElementById('full-player');
-    const sheet = document.querySelector('#full-player .fp-sheet');
-    if (!player || !sheet) return;
-    const enabled = Boolean(SettingsManager.get('ui.fillAlbumArt'));
-    player.classList.toggle('fill-album-art', enabled);
-    const art = artwork || document.getElementById('fp-art')?.src;
-    if (!art) return;
-    sheet.style.setProperty('--fp-art-url', `url(\"${String(art).replace(/\"/g, '%22')}\")`);
-
-    if (!enabled) return;
-    const cached = this._albumArtColorCache.get(art);
-    if (cached) {
-      sheet.style.setProperty('--fp-art-color', cached);
-      return;
-    }
-    Utils.extractColors(art).then(colors => {
-      const dominant = colors?.dominant;
-      if (!dominant) return;
-      this._albumArtColorCache.set(art, dominant);
-      while (this._albumArtColorCache.size > 20) {
-        const first = this._albumArtColorCache.keys().next().value;
-        this._albumArtColorCache.delete(first);
-      }
-      const currentArt = document.getElementById('fp-art')?.src;
-      if (currentArt === art) sheet.style.setProperty('--fp-art-color', dominant);
-    }).catch(() => {});
-  },
 
   openFullPlayer() {
     document.body.classList.add('full-player-open');
     document.getElementById('full-player').classList.add('open');
-    this.applyFillAlbumArt();
     this.applyWaveformMode();
   },
 
@@ -1988,16 +1953,17 @@ const UI = {
     const preset = SettingsManager.get('audio.eqCurrentPreset','Flat');
     const bands = [60,250,1000,4000,16000];
     const eqEnabled = SettingsManager.get('audio.equalizerEnabled', true);
+    const pitch = Number(SettingsManager.get('audio.pitchSemitones',0));
     const speed = Number(SettingsManager.get('audio.playbackSpeed',1));
     const boost = Number(SettingsManager.get('audio.volumeBoost',1));
     return `<div class="effects-quick-grid">
       <div class="effects-card compact"><div class="effects-card-head"><div><h3>Equalizer</h3><p>5-band EQ from bass to air.</p></div><label class="toggle-switch"><input type="checkbox" ${eqEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span class="toggle-slider"></span></label></div>
-      <div class="effect-action-row"><select onchange="UI.setEqPreset(this.value)">${CONFIG.audio.eqPresets.map(p=>`<option ${p.name===preset?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}<option ${preset==='Custom'?'selected':''}>Custom</option></select><button class="effect-reset-btn" type="button" onclick="UI.resetEqualizer()">Reset</button></div>
+      <div class="effect-action-row"><select onchange="UI.setEqPreset(this.value)">${SettingsManager.get('audio.eqPresets',[]).map(p=>`<option ${p.name===preset?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}<option ${preset==='Custom'?'selected':''}>Custom</option></select><button class="effect-reset-btn" type="button" onclick="UI.resetEqualizer()">Reset</button></div>
       <div class="eq-sliders">${bands.map((f,i)=>`<label><input type="range" min="-12" max="12" step="0.5" value="${values[i]||0}" oninput="UI.setQuickEQ(${i}, this.value)"><span>${f>=1000?(f/1000)+'k':f}</span></label>`).join('')}</div></div>
-      <div class="effects-card compact"><div class="effects-card-head"><div><h3>Pitch & Speed</h3><p>Applied together to the same playback rate.</p></div>${appIcon('pitchSpeed')}</div>
-      <div class="effect-control"><div><strong>Pitch</strong><span id="pitch-value">${Number(SettingsManager.get('audio.pitchSemitones',0)) > 0 ? '+' : ''}${Number(SettingsManager.get('audio.pitchSemitones',0))} st</span></div><input type="range" min="-12" max="12" step="1" value="${Number(SettingsManager.get('audio.pitchSemitones',0))}" oninput="UI.setEffectValue('pitchSemitones', this.value)"></div>
+      <div class="effects-card compact"><div class="effects-card-head"><div><h3>Pitch & Speed</h3><p>Applied together to playback.</p></div>${appIcon('pitchSpeed')}</div>
+      <div class="effect-control"><div><strong>Pitch</strong><span id="pitch-value">${pitch>0?'+':''}${pitch} st</span></div><input type="range" min="-12" max="12" step="1" value="${pitch}" oninput="UI.setEffectValue('pitchSemitones', this.value)"></div>
       <div class="effect-control"><div><strong>Speed</strong><span id="speed-value">${speed.toFixed(2)}×</span></div><input type="range" min="0.5" max="2" step="0.05" value="${speed}" oninput="UI.setEffectValue('playbackSpeed', this.value)"></div>
-      <div class="effect-action-row effect-reset-row"><span>Reset both controls.</span><button class="effect-reset-btn" type="button" onclick="UI.resetPitchSpeed()">Reset</button></div></div>
+      <div class="effect-action-row effect-reset-row"><span>Reset both controls</span><button class="effect-reset-btn" type="button" onclick="UI.resetPitchSpeed()">Reset</button></div></div>
       <div class="effects-card compact"><div class="effect-control"><div><strong>Volume Boost</strong><span id="boost-value">${Math.round(boost*100)}%</span></div><input type="range" min="0.5" max="2.5" step="0.05" value="${boost}" oninput="UI.setEffectValue('volumeBoost', this.value)"></div></div></div>`;
   },
   setQuickEQ(index, value) {
@@ -2007,7 +1973,6 @@ const UI = {
     SettingsManager.set('audio.eqCurrentPreset', 'Custom', {notify:false});
     Player.applyEQPreset();
   },
-
 
   showPlayerOptions() {
     if (!Player.currentTrack) { this.showToast('Nothing is playing.'); return; }
