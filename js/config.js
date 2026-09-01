@@ -35,6 +35,7 @@ const CONFIG = {
     showUpdateIcon: true,
     glassmorphism: true,
     glassIntensity: 0.28,
+    fillAlbumArt: false,
     sidebarCollapsed: false
   },
 
@@ -128,6 +129,7 @@ const SETTINGS_RULES = {
   'ui.particlesIntensity': { type: 'number', min: 0, max: 2 },
   'ui.waveformBars': { type: 'number', min: 20, max: 300 },
   'ui.glassIntensity': { type: 'number', min: 0, max: 1 },
+  'ui.fillAlbumArt': { type: 'boolean' },
   'ui.glassmorphism': { type: 'boolean' },
   'ui.gridColumns': { type: 'enum', values: ['auto', '2', '3', '4', '5'] },
   'ui.gridViewStyle': { type: 'enum', values: ['grid', 'list', 'collage'] },

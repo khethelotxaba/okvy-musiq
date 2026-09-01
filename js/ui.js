@@ -95,7 +95,6 @@ const UI = {
     window.addEventListener('time-update', (e) => this.onTimeUpdate(e.detail));
     window.addEventListener('audio-peak', (e) => this.onAudioPeak(e.detail));
     window.addEventListener('theme-colors', (e) => this.onThemeColors(e.detail));
-    window.addEventListener('output-status', (e) => this.updateOutputStatus(e.detail));
     window.addEventListener('setting-changed', (e) => this.onSettingChanged(e.detail));
     window.addEventListener('scan-progress', (e) => this.onScanProgress(e.detail));
     window.addEventListener('scan-complete', (e) => this.onScanComplete(e.detail));
@@ -120,7 +119,6 @@ const UI = {
     document.querySelectorAll('[data-close-overlay]').forEach(el => el.addEventListener('click', () => this.closePlayerOverlay(el.dataset.closeOverlay)));
     document.getElementById('fp-options')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.showPlayerOptions(); });
     document.getElementById('fp-lyrics-btn')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.openLyricsOverlay(false); });
-    document.getElementById('fp-output-status')?.addEventListener('click', () => this.showToast('Output follows the device audio route.'));
     document.getElementById('fp-audio-effects')?.addEventListener('click', () => this.openAudioEffectsOverlay());
     this.bindLyricsLongPress();
     document.getElementById('player-options-modal').addEventListener('click', (e) => {
@@ -419,6 +417,7 @@ const UI = {
     document.getElementById('fp-title').textContent = track.title || 'Unknown';
     document.getElementById('fp-artist').textContent = track.artist || '-';
     document.getElementById('fp-art').src = artwork;
+    this.applyFillAlbumArt(artwork);
     document.getElementById('fp-favorite').classList.toggle('active', track.favorite);
     document.getElementById('sidebar-title').textContent = track.title || 'Not Playing';
     document.getElementById('sidebar-artist').textContent = track.artist || '-';
@@ -546,6 +545,9 @@ const UI = {
         case 'ui.glassmorphism':
         case 'ui.glassIntensity':
           this.applyThemeMode();
+          break;
+        case 'ui.fillAlbumArt':
+          this.applyFillAlbumArt();
           break;
         case 'library.extractFeaturedArtists':
         case 'library.moodTagsEnabled':
@@ -1171,10 +1173,9 @@ const UI = {
     html += `<div class="effects-card"><div class="effects-card-head"><div><h3>Equalizer</h3><p>5-band EQ from bass to air.</p></div><label class="toggle-switch"><input type="checkbox" ${s.equalizerEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span class="toggle-slider"></span></label></div>`;
     html += `<div class="effect-action-row"><div class="eq-preset-row"><select aria-label="EQ preset" onchange="UI.setEqPreset(this.value)">${presets.map(p=>`<option ${s.eqCurrentPreset===p.name?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}<option ${s.eqCurrentPreset==='Custom'?'selected':''}>Custom</option></select></div><button class="effect-reset-btn" type="button" onclick="UI.resetEqualizer()">Reset</button></div>`;
     html += `<div class="eq-sliders">${freqs.map((f,i)=>`<label><input type="range" min="-12" max="12" step="0.5" value="${values[i] || 0}" oninput="UI.setEqBand(${i}, this.value)"><span>${f >= 1000 ? (f/1000)+'k' : f} Hz</span></label>`).join('')}</div></div>`;
-    html += `<div class="effects-card"><div class="effects-card-head"><div><h3>Pitch & Speed</h3><p>These controls are applied together to the same playback rate.</p></div>${appIcon('pitchSpeed')}</div>`;
-    html += `<div class="effect-control"><div><strong>Pitch</strong><span id="pitch-value">${s.pitchSemitones > 0 ? '+' : ''}${s.pitchSemitones} st</span></div><input type="range" min="-12" max="12" step="1" value="${s.pitchSemitones}" oninput="UI.setEffectValue('pitchSemitones', this.value)"></div>`;
-    html += `<div class="effect-control"><div><strong>Speed</strong><span id="speed-value">${Number(s.playbackSpeed).toFixed(2)}×</span></div><input type="range" min="0.5" max="2" step="0.05" value="${s.playbackSpeed}" oninput="UI.setEffectValue('playbackSpeed', this.value)"></div>`;
-    html += `<div class="effect-action-row effect-reset-row"><span>Reset both controls to neutral.</span><button class="effect-reset-btn" type="button" onclick="UI.resetPitchSpeed()">Reset</button></div></div>`;
+    html += `<div class="effects-card"><div class="effects-card-head"><div><h3>Pitch & Speed</h3><p>One linked playback control — changing it shifts both pitch and speed together.</p></div>${appIcon('pitchSpeed')}</div>`;
+    html += `<div class="effect-control combined-playback-control"><div><strong>Pitch & Speed</strong><span id="pitch-speed-value">${Number(s.playbackSpeed).toFixed(2)}×</span></div><input type="range" min="0.5" max="2" step="0.01" value="${s.playbackSpeed}" oninput="UI.setEffectValue('playbackSpeed', this.value)"></div>`;
+    html += `<div class="effect-action-row effect-reset-row"><span>Reset to normal playback.</span><button class="effect-reset-btn" type="button" onclick="UI.resetPitchSpeed()">Reset</button></div></div>`;
     html += `<div class="effects-card"><div class="effects-card-head"><div><h3>Volume Boost</h3><p>Applies gain after the EQ/compressor stage.</p></div>${appIcon('volumeBoost')}</div><div class="effect-control"><div><strong>Boost</strong><span id="boost-value">${Math.round(s.volumeBoost*100)}%</span></div><input type="range" min="50" max="250" step="5" value="${Math.round(s.volumeBoost*100)}" oninput="UI.setEffectValue('volumeBoost', this.value / 100)"></div></div>`;
     html += `</div>`;
     container.innerHTML = html;
@@ -1215,10 +1216,16 @@ const UI = {
   setEffectValue(kind, value) {
     const n = Number(value);
     if (!Number.isFinite(n)) return;
-    SettingsManager.set(`audio.${kind}`, n);
+    if (kind === 'playbackSpeed') {
+      SettingsManager.set('audio.playbackSpeed', n);
+      // Pitch and speed are intentionally linked now. Native media playback
+      // shifts pitch with playback rate, so keep the legacy pitch setting neutral.
+      if (SettingsManager.get('audio.pitchSemitones', 0) !== 0) SettingsManager.set('audio.pitchSemitones', 0);
+    } else {
+      SettingsManager.set(`audio.${kind}`, n);
+    }
     Player.applyPlaybackEffects();
-    const ids = { pitchSemitones:'pitch-value', playbackSpeed:'speed-value', volumeBoost:'boost-value' };
-    const el = document.getElementById(ids[kind]);
+    const el = document.getElementById(kind === 'playbackSpeed' ? 'pitch-speed-value' : kind === 'volumeBoost' ? 'boost-value' : 'pitch-value');
     if (el) el.textContent = kind === 'pitchSemitones' ? `${n>0?'+':''}${n} st` : kind === 'playbackSpeed' ? `${n.toFixed(2)}×` : `${Math.round(n*100)}%`;
   },
 
@@ -1280,6 +1287,7 @@ const UI = {
     html += number('ui.particlesIntensity', 'Particle Intensity', s.ui.particlesIntensity, 0, 2, 0.1);
     html += toggle('ui.miniplayerGlow', 'Mini-player Glow', s.ui.miniplayerGlow);
     html += select('ui.miniplayerGlowMode', 'Mini-player Glow Mode', s.ui.miniplayerGlowMode, [['dynamic','Dynamic'],['static','Static']]);
+    html += toggle('ui.fillAlbumArt', 'Fill Album Art', s.ui.fillAlbumArt, 'Use the artwork as a full-width player surface that softly blends into the track information.');
     html += toggle('ui.glassmorphism', 'Glassmorphism', s.ui.glassmorphism, 'Use frosted, translucent surfaces for the bottom navigation and sidebar.');
     html += number('ui.glassIntensity', 'Glass Intensity', s.ui.glassIntensity, 0, 1, 0.05);
     html += select('ui.gridColumns', 'Grid Columns', s.ui.gridColumns, [['auto','Auto'],['2','2'],['3','3'],['4','4'],['5','5']]);
@@ -1536,8 +1544,19 @@ const UI = {
     // Handled by onTrackChanged and onTimeUpdate
   },
 
+  applyFillAlbumArt(artwork = null) {
+    const player = document.getElementById('full-player');
+    const sheet = document.querySelector('#full-player .fp-sheet');
+    if (!player || !sheet) return;
+    const enabled = Boolean(SettingsManager.get('ui.fillAlbumArt'));
+    player.classList.toggle('fill-album-art', enabled);
+    const art = artwork || document.getElementById('fp-art')?.src;
+    if (art) sheet.style.setProperty('--fp-art-url', `url(\"${String(art).replace(/\"/g, '%22')}\")`);
+  },
+
   openFullPlayer() {
     document.getElementById('full-player').classList.add('open');
+    this.applyFillAlbumArt();
     this.applyWaveformMode();
   },
 
@@ -1948,10 +1967,9 @@ const UI = {
       <div class="effects-card compact"><div class="effects-card-head"><div><h3>Equalizer</h3><p>5-band EQ from bass to air.</p></div><label class="toggle-switch"><input type="checkbox" ${eqEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span class="toggle-slider"></span></label></div>
       <div class="effect-action-row"><select onchange="UI.setEqPreset(this.value)">${SettingsManager.get('audio.eqPresets',[]).map(p=>`<option ${p.name===preset?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}<option ${preset==='Custom'?'selected':''}>Custom</option></select><button class="effect-reset-btn" type="button" onclick="UI.resetEqualizer()">Reset</button></div>
       <div class="eq-sliders">${bands.map((f,i)=>`<label><input type="range" min="-12" max="12" step="0.5" value="${values[i]||0}" oninput="UI.setQuickEQ(${i}, this.value)"><span>${f>=1000?(f/1000)+'k':f}</span></label>`).join('')}</div></div>
-      <div class="effects-card compact"><div class="effects-card-head"><div><h3>Pitch & Speed</h3><p>Applied together to playback.</p></div>${appIcon('pitchSpeed')}</div>
-      <div class="effect-control"><div><strong>Pitch</strong><span id="pitch-value">${pitch>0?'+':''}${pitch} st</span></div><input type="range" min="-12" max="12" step="1" value="${pitch}" oninput="UI.setEffectValue('pitchSemitones', this.value)"></div>
-      <div class="effect-control"><div><strong>Speed</strong><span id="speed-value">${speed.toFixed(2)}×</span></div><input type="range" min="0.5" max="2" step="0.05" value="${speed}" oninput="UI.setEffectValue('playbackSpeed', this.value)"></div>
-      <div class="effect-action-row effect-reset-row"><span>Reset both controls</span><button class="effect-reset-btn" type="button" onclick="UI.resetPitchSpeed()">Reset</button></div></div>
+      <div class="effects-card compact"><div class="effects-card-head"><div><h3>Pitch & Speed</h3><p>One linked playback control.</p></div>${appIcon('pitchSpeed')}</div>
+      <div class="effect-control combined-playback-control"><div><strong>Pitch & Speed</strong><span id="pitch-speed-value">${speed.toFixed(2)}×</span></div><input type="range" min="0.5" max="2" step="0.01" value="${speed}" oninput="UI.setEffectValue('playbackSpeed', this.value)"></div>
+      <div class="effect-action-row effect-reset-row"><span>Reset to normal playback.</span><button class="effect-reset-btn" type="button" onclick="UI.resetPitchSpeed()">Reset</button></div></div>
       <div class="effects-card compact"><div class="effect-control"><div><strong>Volume Boost</strong><span id="boost-value">${Math.round(boost*100)}%</span></div><input type="range" min="0.5" max="2.5" step="0.05" value="${boost}" oninput="UI.setEffectValue('volumeBoost', this.value)"></div></div></div>`;
   },
   setQuickEQ(index, value) {
@@ -1962,13 +1980,6 @@ const UI = {
     Player.applyEQPreset();
   },
 
-  updateOutputStatus(status = null) {
-    const label = document.getElementById('fp-output-label');
-    const iconName = status?.kind === 'bluetooth' ? 'bluetooth' : status?.kind === 'earphones' ? 'aux' : 'soundProfile';
-    if (label) label.textContent = status?.label || 'Phone speakers';
-    const icon = document.querySelector('#fp-output-status .app-icon');
-    if (icon) icon.outerHTML = appIcon(iconName, 'app-icon');
-  },
 
   showPlayerOptions() {
     if (!Player.currentTrack) { this.showToast('Nothing is playing.'); return; }
@@ -2147,67 +2158,75 @@ const UI = {
     const container = document.getElementById('fp-progress-container');
     if (!canvas || !container || !container.classList.contains('waveform-mode')) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
     const rect = container.getBoundingClientRect();
     const width = Math.max(1, Math.round(rect.width));
     const height = Math.max(1, Math.round(rect.height));
+    if (width < 8 || height < 8) {
+      requestAnimationFrame(() => this.renderWaveform());
+      return;
+    }
 
-    canvas.width = width * dpr;
-    canvas.height = height * dpr;
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
+    const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+    if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+    }
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
-    const bars = Math.max(20, Math.min(300, Number(SettingsManager.get('ui.waveformBars')) || 80));
-    const gap = Math.min(2, Math.max(1, width / bars * 0.22));
+    const bars = Math.max(24, Math.min(120, Number(SettingsManager.get('ui.waveformBars')) || 80));
     const step = width / bars;
+    const gap = Math.max(1, Math.min(2.5, step * 0.25));
     const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#d4af37';
+    const analyser = Player.analyser;
+    const data = analyser ? new Uint8Array(analyser.frequencyBinCount) : null;
+    if (data) analyser.getByteFrequencyData(data);
 
-    const draw = () => {
-      if (!container.classList.contains('waveform-mode')) return;
+    // The analyzer is frequency data, not a sample waveform. Use it as a stable
+    // visual texture and blend in a deterministic baseline so the seekbar never
+    // disappears while paused, loading, or before the audio graph is ready.
+    for (let i = 0; i < bars; i++) {
+      const idx = data?.length ? Math.min(data.length - 1, Math.floor(i / bars * data.length)) : 0;
+      const live = data?.length ? data[idx] / 255 : 0;
+      const baseline = 0.16 + 0.10 * (0.5 + 0.5 * Math.sin(i * 1.73));
+      const value = Math.max(baseline, live);
+      const barHeight = Math.max(3, value * height * 0.9);
+      const x = i * step + gap / 2;
+      const y = (height - barHeight) / 2;
+      ctx.fillStyle = accent;
+      ctx.globalAlpha = 0.32 + value * 0.68;
+      ctx.fillRect(x, y, Math.max(1, step - gap), barHeight);
+    }
+    ctx.globalAlpha = 1;
 
-      const analyser = Player.analyser;
-      const data = analyser ? new Uint8Array(analyser.frequencyBinCount) : null;
-      if (data) analyser.getByteFrequencyData(data);
-
-      ctx.clearRect(0, 0, width, height);
-
-      // Always draw something, even while paused. This avoids a completely
-      // blank seekbar when the player is opened before playback starts.
-      for (let i = 0; i < bars; i++) {
-        const idx = data ? Math.min(data.length - 1, Math.floor((i / bars) * data.length)) : 0;
-        const value = data && data.length ? data[idx] / 255 : 0.08;
-        const minHeight = Math.max(2, height * 0.10);
-        const barHeight = Math.max(minHeight, value * height * 0.82);
-        const x = i * step + gap / 2;
-        const y = (height - barHeight) / 2;
-
-        ctx.fillStyle = accent;
-        ctx.globalAlpha = 0.28 + value * 0.72;
-        ctx.fillRect(x, y, Math.max(1, step - gap), barHeight);
-      }
-
-      ctx.globalAlpha = 1;
-
-      if (Player.isPlaying) {
-        requestAnimationFrame(draw);
-      }
-    };
-
-    draw();
-
-    // Keep the canvas correctly sized if the player is rotated/resized.
     if (!this._waveformResizeBound) {
       this._waveformResizeBound = true;
-      window.addEventListener('resize', () => {
-        if (SettingsManager.get('ui.waveformSeekbar')) {
-          requestAnimationFrame(() => this.renderWaveform());
-        }
-      });
+      const resize = () => {
+        if (SettingsManager.get('ui.waveformSeekbar')) requestAnimationFrame(() => this.renderWaveform());
+      };
+      window.addEventListener('resize', resize);
+      if (window.ResizeObserver) {
+        this._waveformObserver = new ResizeObserver(resize);
+        this._waveformObserver.observe(container);
+      }
+    }
+
+    if (Player.isPlaying && !this._waveformFrame) {
+      const tick = () => {
+        this._waveformFrame = requestAnimationFrame(() => {
+          this._waveformFrame = null;
+          if (Player.isPlaying && container.classList.contains('waveform-mode')) {
+            this.renderWaveform();
+            tick();
+          }
+        });
+      };
+      tick();
     }
   },
 

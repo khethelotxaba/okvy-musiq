@@ -53,7 +53,6 @@ const Player = {
     this.setupMediaSession();
     this.setupAudioDeviceMonitoring();
     this.startPeakLoop();
-    this.updateOutputStatus();
   },
 
   setupAudioEvents() {
@@ -259,7 +258,6 @@ const Player = {
     // listener rebuild is required for visibility/volume based smart pause.
     this.deviceSnapshot = null;
     this.initAudioDeviceMonitoring();
-    this.updateOutputStatus();
   },
 
   async initAudioDeviceMonitoring() {
@@ -268,23 +266,6 @@ const Player = {
       const devices = await navigator.mediaDevices.enumerateDevices();
       this.deviceSnapshot = new Set(devices.filter(d => d.kind === 'audiooutput').map(d => d.deviceId));
     } catch(e) {}
-  },
-
-  async updateOutputStatus() {
-    let status = { kind: 'speaker', label: 'Phone speakers' };
-    try {
-      if (navigator.mediaDevices?.enumerateDevices) {
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const outputs = devices.filter(d => d.kind === 'audiooutput');
-        const labeled = outputs.map(d => (d.label || '').toLowerCase()).filter(Boolean);
-        const bt = labeled.find(l => /bluetooth|airpods|buds|wireless/.test(l));
-        const aux = labeled.find(l => /headphone|headset|earphone|earbud|wired/.test(l));
-        if (bt) status = { kind: 'bluetooth', label: 'Bluetooth device' };
-        else if (aux) status = { kind: 'earphones', label: 'Earphones' };
-      }
-    } catch(e) { console.debug('Output status detection unavailable', e); }
-    window.dispatchEvent(new CustomEvent('output-status', { detail: status }));
-    return status;
   },
 
   setupAudioDeviceMonitoring() {
@@ -300,7 +281,6 @@ const Player = {
         }
         this.deviceSnapshot = outputs;
       } catch(e) {}
-      await this.updateOutputStatus();
     });
     this.initAudioDeviceMonitoring();
   },
