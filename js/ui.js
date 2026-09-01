@@ -467,49 +467,68 @@ const UI = {
     }
   },
 
-  safeAccentColor(primary, fallback) {
+  safeAccentColor(primary, fallback, palette = []) {
     const parse = (value) => {
       if (!value) return null;
-      const m = String(value).match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+      const raw = String(value).trim();
+      const m = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
       if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
-      const h = String(value).trim().replace('#','');
+      const h = raw.replace('#','');
       if (/^[0-9a-f]{6}$/i.test(h)) return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
       return null;
     };
     const toCss = ([r,g,b]) => `rgb(${r}, ${g}, ${b})`;
-    const valid = (rgb) => {
-      if (!rgb) return false;
-      const [r,g,b] = rgb.map(v => v/255);
-      const max = Math.max(r,g,b), min = Math.min(r,g,b);
-      const l = (max + min) / 2;
-      const s = max === min ? 0 : (max-min) / (1-Math.abs(2*l-1));
-      return l >= 0.10 && l <= 0.90 && s >= 0.18;
-    };
-    const clamp = (rgb) => {
-      let [r,g,b] = rgb;
-      const max = Math.max(r,g,b), min = Math.min(r,g,b);
-      let l = (max+min)/510;
-      if (l < 0.10 || l > 0.90) {
-        const target = l < 0.10 ? 0.22 : 0.72;
-        const current = l * 255;
-        const scale = Math.max(0.35, Math.min(2.4, (target*255 - current) / ((r+g+b)/3 - current || 1)));
-        r = current + (r-current)*scale; g = current + (g-current)*scale; b = current + (b-current)*scale;
+    const toHsl = ([r,g,b]) => {
+      r/=255; g/=255; b/=255;
+      const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
+      let h=0, s=0, l=(max+min)/2;
+      if (d) {
+        s = d/(1-Math.abs(2*l-1));
+        switch(max){
+          case r: h=((g-b)/d)%6; break;
+          case g: h=(b-r)/d+2; break;
+          default: h=(r-g)/d+4;
+        }
+        h*=60; if(h<0) h+=360;
       }
-      const avg = (r+g+b)/3;
-      if (Math.max(r,g,b)-Math.min(r,g,b) < 45) {
-        r = Math.min(255, avg + 70); g = Math.max(0, avg - 10); b = Math.max(0, avg - 55);
-      }
-      return [Math.round(Math.max(0,Math.min(255,r))), Math.round(Math.max(0,Math.min(255,g))), Math.round(Math.max(0,Math.min(255,b)))];
+      return {h,s,l};
     };
-    const first = parse(primary), second = parse(fallback);
-    let rgb = valid(first) ? first : (valid(second) ? second : [212,175,55]);
-    if (!valid(rgb)) rgb = clamp(rgb);
-    return { css: toCss(rgb), rgb };
+    const fromHsl = (h,s,l) => {
+      const c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2;
+      let r=0,g=0,b=0;
+      if(h<60){r=c;g=x;} else if(h<120){r=x;g=c;} else if(h<180){g=c;b=x;} else if(h<240){g=x;b=c;} else if(h<300){r=x;b=c;} else {r=c;b=x;}
+      return [Math.round((r+m)*255),Math.round((g+m)*255),Math.round((b+m)*255)];
+    };
+    const score = (rgb) => {
+      if (!rgb) return -1;
+      const {h,s,l}=toHsl(rgb);
+      // Reject near-black, near-white and nearly-gray colors, but don't reject
+      // an otherwise good artwork color merely for being moderately muted.
+      if (l < 0.11 || l > 0.89) return -1;
+      if (s < 0.20) return -1;
+      const distance = Math.min(l, 1-l);
+      return s * 0.72 + distance * 0.28;
+    };
+    const candidates = [primary, fallback, ...palette].map(parse).filter(Boolean);
+    let best = null, bestScore = -1;
+    for (const rgb of candidates) {
+      const sc = score(rgb);
+      if (sc > bestScore) { bestScore = sc; best = rgb; }
+    }
+    if (!best) {
+      // Adapt a stable colored hue rather than defaulting straight to gold.
+      best = fromHsl(210, 0.72, 0.42);
+    } else {
+      const hsl = toHsl(best);
+      const targetL = Math.max(0.26, Math.min(0.72, hsl.l));
+      best = fromHsl(hsl.h, Math.max(0.32, hsl.s), targetL);
+    }
+    return { css: toCss(best), rgb: best };
   },
 
   onThemeColors(detail) {
     const root = document.documentElement;
-    const accent = this.safeAccentColor(detail.dominant, detail.vibrant);
+    const accent = this.safeAccentColor(detail.dominant, detail.vibrant, detail.palette || []);
     root.style.setProperty('--dynamic-primary', accent.css);
     root.style.setProperty('--dynamic-vibrant', accent.css);
     root.style.setProperty('--accent-rgb', accent.rgb.join(', '));
@@ -663,9 +682,9 @@ const UI = {
       const root = document.documentElement;
       root.style.removeProperty('--dynamic-primary');
       root.style.removeProperty('--dynamic-vibrant');
-      root.style.setProperty('--dynamic-primary', 'rgb(212, 175, 55)');
-      root.style.setProperty('--dynamic-vibrant', 'rgb(201, 162, 39)');
-      root.style.setProperty('--accent-rgb', '212, 175, 55');
+      root.style.setProperty('--dynamic-primary', 'rgb(54, 104, 196)');
+      root.style.setProperty('--dynamic-vibrant', 'rgb(54, 104, 196)');
+      root.style.setProperty('--accent-rgb', '54, 104, 196');
       if (SettingsManager.get('ui.waveformSeekbar')) requestAnimationFrame(() => this.renderWaveform());
       return;
     }
@@ -1253,7 +1272,7 @@ const UI = {
           const v=Number(values[i]||0);
           return `<div class="eq-band">
             <div class="eq-band-value" id="eq-value-${i}">${v>0?'+':''}${v} dB</div>
-            <div class="eq-band-slider"><input aria-label="${f} Hz EQ" type="range" min="-12" max="12" step="0.5" value="${v}" oninput="UI.setEqBand(${i}, this.value); UI.updateEqVisual(this, ${i})"><span class="eq-zero-line"></span></div>
+            <div class="eq-band-slider"><span class="eq-visual-rail"><span class="eq-visual-fill"></span></span><span class="eq-visual-knob"></span><input aria-label="${f} Hz EQ" type="range" min="-12" max="12" step="0.5" value="${v}" oninput="UI.setEqBand(${i}, this.value); UI.updateEqVisual(this, ${i})"><span class="eq-zero-line"></span></div>
             <div class="eq-band-label">${f >= 1000 ? `${f/1000}k` : f}<small>Hz</small></div>
           </div>`;
         }).join('')}
@@ -1333,6 +1352,24 @@ const UI = {
     const v = Number(input.value || 0);
     const pct = ((v + 12) / 24) * 100;
     input.style.setProperty('--eq-progress', `${pct}%`);
+    const wrap = input.closest('.eq-band-slider');
+    const fill = wrap?.querySelector('.eq-visual-fill');
+    const knob = wrap?.querySelector('.eq-visual-knob');
+    if (fill) {
+      if (v >= 0) {
+        fill.style.bottom = '50%';
+        fill.style.top = `${100 - pct}%`;
+      } else {
+        fill.style.top = '50%';
+        fill.style.bottom = `${pct}%`;
+      }
+      fill.style.height = `${Math.abs(pct - 50)}%`;
+    }
+    if (knob) {
+      const y = 100 - pct;
+      knob.style.top = `${y}%`;
+      knob.style.transform = 'translate(-50%, -50%)';
+    }
     const id = prefix ? `${prefix}eq-value-${index}` : `eq-value-${index}`;
     const el = document.getElementById(id);
     if (el) el.textContent = `${v>0?'+':''}${v} dB`;
@@ -2103,7 +2140,7 @@ const UI = {
       <section class="effects-section eq-section">
         <div class="effects-section-head"><div><span class="effects-section-eyebrow">Equalizer</span><h3>5-band EQ</h3><p>Fine-tune bass, mids and air.</p></div><label class="toggle-switch"><input type="checkbox" ${eqEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span class="toggle-slider"></span></label></div>
         <div class="effects-toolbar-row"><label class="effects-select-wrap"><span>Preset</span><select onchange="UI.setEqPreset(this.value)">${SettingsManager.get('audio.eqPresets',[]).map(p=>`<option value="${Utils.escapeHtml(p.name)}" ${p.name===preset?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}<option value="Custom" ${preset==='Custom'?'selected':''}>Custom</option></select></label><button class="effect-reset-btn" type="button" onclick="UI.resetEqualizer()">Reset</button></div>
-        <div class="eq-grid">${bands.map((f,i)=>{ const v=Number(values[i]||0); return `<div class="eq-band"><div class="eq-band-value" id="overlay-eq-value-${i}">${v>0?'+':''}${v} dB</div><div class="eq-band-slider"><input aria-label="${f} Hz EQ" type="range" min="-12" max="12" step="0.5" value="${v}" oninput="UI.setQuickEQ(${i}, this.value); UI.updateEqVisual(this, ${i}, 'overlay-')"><span class="eq-zero-line"></span></div><div class="eq-band-label">${f>=1000?`${f/1000}k`:f}<small>Hz</small></div></div>`; }).join('')}</div>
+        <div class="eq-grid">${bands.map((f,i)=>{ const v=Number(values[i]||0); return `<div class="eq-band"><div class="eq-band-value" id="overlay-eq-value-${i}">${v>0?'+':''}${v} dB</div><div class="eq-band-slider"><span class="eq-visual-rail"><span class="eq-visual-fill"></span></span><span class="eq-visual-knob"></span><input aria-label="${f} Hz EQ" type="range" min="-12" max="12" step="0.5" value="${v}" oninput="UI.setQuickEQ(${i}, this.value); UI.updateEqVisual(this, ${i}, 'overlay-')"><span class="eq-zero-line"></span></div><div class="eq-band-label">${f>=1000?`${f/1000}k`:f}<small>Hz</small></div></div>`; }).join('')}</div>
       </section>
       <section class="effects-section"><div class="effects-section-head compact-head"><div><span class="effects-section-eyebrow">Pitch & Speed</span><h3>Pitch & Speed</h3><p>One linked control moves both together.</p></div>${appIcon('pitchSpeed')}</div><div class="combined-effect-control"><div class="combined-value-row"><span>Pitch & Speed</span><strong id="overlay-pitch-speed-combined-value">${combined>0?'+':''}${combined} st · ${speed.toFixed(2)}×</strong></div><input id="overlay-pitch-speed-combined" type="range" min="-12" max="12" step="1" value="${combined}" oninput="UI.setPitchSpeedCombined(this.value, this)"><div class="range-scale"><span>-12 st · 0.50×</span><span>Neutral</span><span>+12 st · 2.00×</span></div></div><div class="effects-action-footer"><span>Reset pitch and speed to neutral.</span><button class="effect-reset-btn" type="button" onclick="UI.resetPitchSpeed()">Reset</button></div></section>
       <section class="effects-section"><div class="effects-section-head compact-head"><div><span class="effects-section-eyebrow">Output</span><h3>Volume Boost</h3><p>Add gain after the processing chain.</p></div>${appIcon('volumeBoost')}</div><div class="combined-effect-control single-control"><div class="combined-value-row"><span>Boost</span><strong id="overlay-boost-value">${Math.round(boost*100)}%</strong></div><input id="overlay-volume-boost-range" type="range" min="0.5" max="2.5" step="0.05" value="${boost}" oninput="UI.setEffectValue('volumeBoost', this.value, this)"><div class="range-scale"><span>50%</span><span>100%</span><span>250%</span></div></div></section>
