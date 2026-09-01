@@ -3698,3 +3698,124 @@ body.light .full-player.fill-album-art .fp-content::before {
 .full-player.fill-album-art .fp-reflection img {
   opacity: 1 !important;
 }
+
+/* === v3.4 — true full lower artwork continuation ===
+   Fill Artwork means exactly two visual planes: crisp top + full blurred
+   flipped bottom. No masks, fades, theme washes, or gaps at the edges. */
+.full-player.fill-album-art .fp-sheet {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  isolation: isolate !important;
+}
+
+/* Keep the crisp artwork strictly in the upper half. */
+.full-player.fill-album-art .fp-art-container {
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: auto !important;
+  width: 100% !important;
+  height: 50% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  z-index: 1 !important;
+  overflow: hidden !important;
+}
+.full-player.fill-album-art .fp-art {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center top !important;
+  opacity: 1 !important;
+  transform: none !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  filter: none !important;
+}
+
+/* The lower half is a complete flipped copy of the artwork. */
+.full-player.fill-album-art .fp-reflection {
+  display: block !important;
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 50% !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 50% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  z-index: 0 !important;
+  opacity: 1 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+.full-player.fill-album-art .fp-reflection img {
+  display: block !important;
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-width: none !important;
+  object-fit: cover !important;
+  object-position: center bottom !important;
+  transform: scaleY(-1) !important;
+  transform-origin: center center !important;
+  opacity: 1 !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  filter: blur(calc(22px + var(--glass-intensity) * 24px)) !important;
+  -webkit-filter: blur(calc(22px + var(--glass-intensity) * 24px)) !important;
+}
+
+/* Nothing behind the metadata: the artwork itself is the background. */
+.full-player.fill-album-art .fp-content,
+.full-player.fill-album-art .fp-meta,
+.full-player.fill-album-art .fp-text,
+.full-player.fill-album-art .fp-title,
+.full-player.fill-album-art .fp-artist,
+.full-player.fill-album-art .fp-progress-section,
+.full-player.fill-album-art .fp-controls,
+.full-player.fill-album-art .fp-bottom-row,
+.full-player.fill-album-art .fp-favorite-btn {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Remove the dark text halo completely. */
+.full-player.fill-album-art .fp-title,
+.full-player.fill-album-art .fp-artist {
+  text-shadow: none !important;
+  filter: none !important;
+}
+
+.full-player.fill-album-art .fp-sheet::before,
+.full-player.fill-album-art .fp-sheet::after,
+.full-player.fill-album-art .fp-content::before,
+.full-player.fill-album-art .fp-content::after,
+.full-player.fill-album-art .fp-meta::before,
+.full-player.fill-album-art .fp-meta::after,
+.full-player.fill-album-art .fp-text::before,
+.full-player.fill-album-art .fp-text::after,
+.full-player.fill-album-art .fp-title::before,
+.full-player.fill-album-art .fp-title::after,
+.full-player.fill-album-art .fp-artist::before,
+.full-player.fill-album-art .fp-artist::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+  background-image: none !important;
+  opacity: 0 !important;
+}
