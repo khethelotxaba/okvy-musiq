@@ -2668,42 +2668,6 @@ body.light.glass-enabled .effects-overlay-card { background: rgba(255,255,255,.2
     transparent 84%);
 }
 
-/* Glass is derived from the raw majority artwork color, not the accent color.
-   The transparent fill lets the underlying art refract while the dominant hue
-   keeps the lower half visually coherent and restrained. */
-.full-player.fill-album-art .fp-sheet::after {
-  content: "";
-  position: absolute;
-  left: -8%;
-  right: -8%;
-  top: 47%;
-  bottom: -6%;
-  z-index: 1;
-  pointer-events: none;
-  background:
-    linear-gradient(to bottom,
-      rgba(var(--album-dominant-rgb), 0.04) 0%,
-      rgba(var(--album-dominant-rgb), 0.18) 12%,
-      rgba(var(--album-dominant-rgb), 0.28) 32%,
-      rgba(var(--album-dominant-rgb), 0.34) 55%,
-      rgba(var(--album-dominant-rgb), 0.40) 100%);
-  backdrop-filter: blur(calc(22px + var(--glass-intensity) * 28px)) saturate(115%);
-  -webkit-backdrop-filter: blur(calc(22px + var(--glass-intensity) * 28px)) saturate(115%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 13%, #000 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, #000 13%, #000 100%);
-}
-
-/* With Glassmorphism disabled, retain the same color language without blur. */
-body:not(.glass-enabled) .full-player.fill-album-art .fp-sheet::after {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  background: linear-gradient(to bottom,
-    rgba(var(--album-dominant-rgb), 0) 0%,
-    rgba(var(--album-dominant-rgb), .18) 12%,
-    rgba(var(--album-dominant-rgb), .34) 35%,
-    rgba(var(--album-dominant-rgb), .58) 68%,
-    var(--bg) 100%);
-}
 
 .full-player.fill-album-art .fp-content {
   position: relative;
@@ -2939,4 +2903,168 @@ body:not(.glass-enabled) .full-player.fill-album-art .fp-sheet::after {
 .full-player .fp-art.playing {
   animation: none !important;
   transform: none !important;
+}
+
+/* === Okvy MusiQ v3.0 — glass lower-half + rebuilt audio effects === */
+.full-player.fill-album-art .fp-sheet {
+  background: var(--bg) !important;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+/* Upper artwork remains in the same position in both themes. */
+.full-player.fill-album-art .fp-sheet::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: min(60dvh, 620px);
+  min-height: 300px;
+  background-image: var(--fp-art-url);
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  opacity: 1;
+  filter: none;
+  transform: none;
+  z-index: 0;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 68%, rgba(0,0,0,.94) 75%, rgba(0,0,0,.58) 84%, rgba(0,0,0,.18) 94%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 68%, rgba(0,0,0,.94) 75%, rgba(0,0,0,.58) 84%, rgba(0,0,0,.18) 94%, transparent 100%);
+}
+
+/* Actual album-art blur in the lower half, inspired by the established Lyrics backdrop treatment. */
+.full-player.fill-album-art .fp-sheet::after {
+  content: "";
+  position: absolute;
+  inset: 44% -48px -48px;
+  background-image: var(--fp-art-url);
+  background-size: cover;
+  background-position: center 42%;
+  background-repeat: no-repeat;
+  filter: blur(34px) saturate(112%);
+  -webkit-filter: blur(34px) saturate(112%);
+  opacity: .82;
+  transform: scale(1.12);
+  transform-origin: center center;
+  z-index: 1;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.20) 8%, #000 24%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, rgba(0,0,0,.20) 8%, #000 24%, #000 100%);
+}
+
+/* Subtle theme-neutral glass veil; geometry is identical in light and dark mode. */
+.full-player.fill-album-art .fp-content::before {
+  content: "";
+  position: absolute;
+  left: -4%; right: -4%; bottom: -4%; top: 48%;
+  background: linear-gradient(to bottom, rgba(0,0,0,0) 0%, rgba(0,0,0,.055) 24%, rgba(0,0,0,.10) 100%);
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+  pointer-events: none;
+  z-index: -1;
+}
+body.light .full-player.fill-album-art .fp-content::before {
+  background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,.055) 24%, rgba(255,255,255,.10) 100%);
+}
+
+/* Keep the content positions unchanged across themes and make the 60% art area structural. */
+.full-player.fill-album-art .fp-art-container { display:none !important; }
+.full-player.fill-album-art .fp-content { position:relative; z-index:2; background:transparent !important; }
+.full-player.fill-album-art .fp-meta,
+.full-player.fill-album-art .fp-progress-section,
+.full-player.fill-album-art .fp-controls,
+.full-player.fill-album-art .fp-bottom-row,
+.full-player.fill-album-art .fp-text,
+.full-player.fill-album-art .fp-title,
+.full-player.fill-album-art .fp-artist,
+.full-player.fill-album-art .fp-favorite-btn {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Audio Effects page: clean, aligned, deliberately simple. */
+.audio-effects-title { margin:0; font-size:20px; font-weight:800; line-height:1.1; }
+.audio-effects-kicker { margin:4px 0 0; color:var(--text-tertiary); font-size:11px; line-height:1.3; }
+.effects-page, .effects-overlay-page { display:flex; flex-direction:column; gap:14px; padding-bottom:28px; }
+.effects-section {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: 18px;
+}
+.effects-section-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:16px; }
+.effects-section-head.compact-head { margin-bottom:18px; }
+.effects-section-head > .app-icon { width:24px; height:24px; opacity:.85; }
+.effects-section-eyebrow { display:block; color:var(--accent); text-transform:uppercase; letter-spacing:.10em; font-size:10px; font-weight:800; margin-bottom:4px; }
+.effects-section h3 { margin:0; font-size:17px; line-height:1.15; font-weight:800; }
+.effects-section p { margin:5px 0 0; color:var(--text-tertiary); font-size:11px; line-height:1.4; }
+.effects-toolbar-row { display:flex; align-items:end; justify-content:space-between; gap:12px; margin-bottom:20px; }
+.effects-select-wrap { display:flex; flex-direction:column; gap:6px; flex:1; min-width:0; }
+.effects-select-wrap > span { color:var(--text-tertiary); font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.08em; }
+.effects-select-wrap select { width:100%; }
+.eq-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px; width:100%; align-items:start; }
+.eq-band { min-width:0; display:grid; grid-template-rows:22px 170px 30px; justify-items:center; align-items:start; gap:6px; }
+.eq-band-value { min-height:22px; color:var(--accent); font-size:10px; font-weight:800; text-align:center; white-space:nowrap; }
+.eq-band-slider { position:relative; width:36px; height:170px; display:flex; align-items:center; justify-content:center; }
+.eq-band-slider input[type="range"] {
+  writing-mode:vertical-lr;
+  direction:rtl;
+  appearance:none;
+  -webkit-appearance:none;
+  width:24px;
+  height:170px;
+  margin:0;
+  padding:0;
+  background:transparent !important;
+  cursor:pointer;
+  accent-color:var(--accent);
+  z-index:2;
+}
+.eq-band-slider input[type="range"]::-webkit-slider-runnable-track { width:6px; height:100%; border-radius:99px; background:rgba(255,255,255,.12); }
+.eq-band-slider input[type="range"]::-moz-range-track { width:6px; height:100%; border-radius:99px; background:rgba(255,255,255,.12); }
+.eq-band-slider input[type="range"]::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:18px; height:18px; border:2px solid var(--bg); border-radius:50%; background:var(--accent); box-shadow:0 2px 12px rgba(var(--accent-rgb),.30); }
+.eq-band-slider input[type="range"]::-moz-range-thumb { width:18px; height:18px; border:2px solid var(--bg); border-radius:50%; background:var(--accent); box-shadow:0 2px 12px rgba(var(--accent-rgb),.30); }
+.eq-zero-line { position:absolute; width:6px; height:1px; left:50%; top:50%; transform:translate(-50%,-.5px); background:rgba(255,255,255,.30); border-radius:99px; pointer-events:none; z-index:3; }
+.eq-band-label { text-align:center; color:var(--text-secondary); font-size:11px; font-weight:800; line-height:1; white-space:nowrap; }
+.eq-band-label small { display:block; margin-top:3px; color:var(--text-tertiary); font-size:8px; font-weight:700; }
+.combined-effect-control { display:flex; flex-direction:column; gap:10px; }
+.combined-value-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.combined-value-row span { color:var(--text-secondary); font-size:12px; font-weight:700; }
+.combined-value-row strong { color:var(--accent); font-size:13px; font-weight:800; }
+.combined-effect-control input[type="range"] {
+  width:100%; height:6px; appearance:none; -webkit-appearance:none; border-radius:99px; outline:none;
+  background: linear-gradient(to right, var(--accent) 0%, var(--accent) var(--range-progress,50%), rgba(255,255,255,.10) var(--range-progress,50%), rgba(255,255,255,.10) 100%);
+}
+.combined-effect-control input[type="range"]::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; width:19px; height:19px; border:2px solid var(--bg); border-radius:50%; background:var(--accent); box-shadow:0 2px 12px rgba(var(--accent-rgb),.34); }
+.combined-effect-control input[type="range"]::-moz-range-thumb { width:19px; height:19px; border:2px solid var(--bg); border-radius:50%; background:var(--accent); box-shadow:0 2px 12px rgba(var(--accent-rgb),.34); }
+.range-scale { display:flex; align-items:center; justify-content:space-between; color:var(--text-tertiary); font-size:9px; font-weight:700; }
+.effects-action-footer { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; padding-top:14px; border-top:1px solid var(--border); color:var(--text-tertiary); font-size:10px; }
+.effects-overlay-page { padding:2px 2px 18px; }
+.effects-overlay-page .effects-section { background:transparent; border:0; border-radius:0; padding:14px 16px 18px; }
+.effects-overlay-page .effects-section + .effects-section { border-top:1px solid var(--border); }
+
+@media (max-width:600px) {
+  .eq-band { grid-template-rows:22px 150px 30px; }
+  .eq-band-slider, .eq-band-slider input[type="range"] { height:150px; }
+  .effects-section { padding:16px; border-radius:20px; }
+  .full-player.fill-album-art .fp-sheet::before { height:60dvh; }
+}
+
+
+/* Disable the lower-half art blur cleanly when Glassmorphism is off. */
+body:not(.glass-enabled) .full-player.fill-album-art .fp-sheet::after {
+  background-image: var(--fp-art-url) !important;
+  background-size: cover !important;
+  background-position: center 42% !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  opacity: 0 !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
 }
