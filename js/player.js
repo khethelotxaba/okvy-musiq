@@ -61,15 +61,6 @@ const Player = {
       }
     });
 
-    // Source of truth for the play/pause icon. The audio element's own
-    // 'play'/'pause' events fire for EVERY reason playback state changes —
-    // our own play()/pause() calls, OS media-key presses, a phone call
-    // interrupting playback, Bluetooth disconnecting, autoplay being
-    // blocked, etc. Driving the UI off these instead of a hand-set flag
-    // means the icon can never drift out of sync with reality.
-    this.audio.addEventListener('play', () => this.syncPlaybackState());
-    this.audio.addEventListener('pause', () => this.syncPlaybackState());
-
     document.addEventListener('visibilitychange', () => {
       if (SettingsManager.get('playback.smartPause.onAppSwitch') && document.hidden && this.isPlaying) {
         this.pause();
@@ -427,16 +418,18 @@ const Player = {
 
     try {
       await this.audio.play();
-      // this.isPlaying / the icon update is handled by the native 'play'
-      // event via syncPlaybackState() — see setupAudioEvents().
+      this.isPlaying = true;
+      this.isPaused = false;
+
+      if (SettingsManager.get('audio.skipSilence')) this.startSkipSilence();
+
+      window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: true } }));
+      Utils.vibrate(15);
     } catch(err) {
       console.error('Play failed:', err);
       if (err.name !== 'AbortError') {
         console.warn('Playback error:', err.message || 'Unknown');
       }
-      // Playback didn't actually start, so make sure the icon reflects that
-      // even though no native 'play' event fired.
-      this.syncPlaybackState();
     }
   },
 
@@ -450,35 +443,15 @@ const Player = {
     }
 
     this.audio.pause();
-    // this.isPlaying / the icon update is handled by the native 'pause'
-    // event via syncPlaybackState() — see setupAudioEvents().
-  },
-
-  /**
-   * Authoritative play/pause state sync, called whenever the underlying
-   * <audio> element actually starts or stops (regardless of what caused
-   * it — our own controls, OS media keys, an interruption, etc.).
-   */
-  syncPlaybackState() {
-    const playing = !this.audio.paused && !this.audio.ended;
-    if (playing === this.isPlaying) return;
-    this.isPlaying = playing;
-    this.isPaused = !playing;
-
-    if (playing) {
-      if (SettingsManager.get('audio.skipSilence')) this.startSkipSilence();
-      Utils.vibrate(15);
-    } else {
-      this.stopSkipSilence();
-      this.saveListenProgress();
-    }
-
-    window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing } }));
+    this.isPlaying = false;
+    this.isPaused = true;
+    this.stopSkipSilence();
+    this.saveListenProgress();
+    window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: false } }));
   },
 
   async togglePlay() {
-    // Ask the audio element itself, not the (possibly stale) isPlaying flag.
-    if (!this.audio.paused) await this.pause();
+    if (this.isPlaying) await this.pause();
     else await this.play();
   },
 
