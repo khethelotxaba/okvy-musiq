@@ -1944,7 +1944,7 @@ html, body {
   box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.35);
 }
 
-/* Folder-backed SVG icon system */
+/* Unified embedded SVG icon system */
 .app-icon {
   display: block;
   width: 22px;
@@ -1961,9 +1961,6 @@ html, body {
   pointer-events: none;
   user-select: none;
 }
-/* Source SVGs are authored with a dark stroke. Invert them only in dark mode. */
-body:not(.light) .app-icon { filter: invert(1); }
-body.light .app-icon { filter: none; }
 
 .icon-btn .app-icon { width: 22px; height: 22px; min-width:22px; min-height:22px; flex-basis:22px; }
 .icon-btn.small .app-icon { width: 18px; height: 18px; min-width:18px; min-height:18px; flex-basis:18px; }
@@ -3900,7 +3897,7 @@ body.light .full-player.fill-album-art .fp-content::before {
 
 .full-player.fill-album-art .app-icon {
   color: var(--fp-icon-color) !important;
-  filter: brightness(0) saturate(100%) drop-shadow(0 0 0 var(--fp-icon-color)) !important;
+  filter: none !important;
 }
 
 .full-player.fill-album-art .fp-progress-bar,
@@ -3920,7 +3917,7 @@ body.light .full-player.fill-album-art .fp-content::before {
 .full-player.fill-album-art .fp-actions button.active .app-icon,
 .full-player.fill-album-art .fp-favorite-btn.active .app-icon {
   color: var(--fp-art-accent) !important;
-  filter: brightness(0) saturate(100%) drop-shadow(0 0 0 var(--fp-art-accent)) !important;
+  filter: none !important;
 }
 
 
@@ -4441,3 +4438,16 @@ body.light #page-container .view-toggle-btn.active { color: #111 !important; }
   #page-container .hero-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
   #page-container .hero-card { padding: 18px; }
 }
+
+
+/* === Global icon theme: embedded SVGs inherit color; never invert them. === */
+.app-icon { filter: none !important; color: currentColor; stroke: currentColor; fill: none; }
+body:not(.light) .app-icon { color: #fff; stroke: currentColor; }
+body.light .app-icon { color: #000; stroke: currentColor; }
+/* Keep artwork-aware full player controls on their own intended colors. */
+.full-player.fill-album-art .app-icon { color: var(--fp-icon-color) !important; }
+.full-player.fill-album-art .control-btn.play-btn .app-icon { color: var(--fp-foreground) !important; }
+.full-player.fill-album-art #fp-shuffle.active .app-icon,
+.full-player.fill-album-art #fp-repeat.active .app-icon,
+.full-player.fill-album-art #fp-favorite.active .app-icon { color: var(--fp-art-accent) !important; }
+.full-player.fill-album-art #fp-play .app-icon { color: var(--fp-foreground) !important; }
