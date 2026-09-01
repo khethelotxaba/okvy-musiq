@@ -1,9 +1,6 @@
 # Okvy MusiQ
 
-A premium music player PWA with a Telegram-inspired glassmorphism UI. Built with vanilla JavaScript, featuring a Black, Gold & White theme.
-
-![Theme](https://img.shields.io/badge/Theme-Black%20%7C%20Gold%20%7C%20White-0a0a0a?style=for-the-badge&labelColor=d4a843)
-![PWA](https://img.shields.io/badge/PWA-Ready-0a0a0a?style=for-the-badge&labelColor=d4a843)
+A premium music player with a Minimalist UI. Built with vanilla JavaScript, featuring a Black, Gold & White theme.
 
 ## Features
 
