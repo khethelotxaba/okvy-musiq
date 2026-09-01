@@ -6,6 +6,7 @@ const Player = {
   eqNodes: [],
   analyser: null,
   compressor: null,
+  boostGain: null,
   crossfadeGain: null,
   nextAudio: null,
   nextSource: null,
@@ -28,6 +29,9 @@ const Player = {
   preloadAudio: null,
   preloadUrl: null,
   deviceSnapshot: null,
+  scheduledPlayTimer: null,
+  scheduleAfterTrackCount: 0,
+  repeatSection: { enabled: false, start: null, end: null },
 
   peakValue: 0,
   peakSmooth: 0,
@@ -48,7 +52,7 @@ const Player = {
 
   setupAudioEvents() {
     this.audio.addEventListener('ended', () => this.onTrackEnded());
-    this.audio.addEventListener('timeupdate', () => this.onTimeUpdate());
+    this.audio.addEventListener('timeupdate', () => { this.onTimeUpdate(); this.checkRepeatSection(); });
     this.audio.addEventListener('error', (e) => this.onError(e));
     this.audio.addEventListener('loadedmetadata', () => {
       if (SettingsManager.get('audio.gaplessPlayback') && this.queueIndex < this.queue.length - 1) {
@@ -88,6 +92,7 @@ const Player = {
     this.compressor.ratio.value = 12;
     this.compressor.attack.value = 0.003;
     this.compressor.release.value = 0.25;
+    this.boostGain = this.audioCtx.createGain();
 
     this.buildEQ();
     this.rebuildAudioGraph();
@@ -103,6 +108,7 @@ const Player = {
     }
     try { this.compressor.disconnect(); } catch(e) {}
     try { this.gainNode.disconnect(); } catch(e) {}
+    try { this.boostGain?.disconnect(); } catch(e) {}
     try { this.analyser.disconnect(); } catch(e) {}
 
     let lastNode = this.sourceNode;
@@ -115,7 +121,13 @@ const Player = {
     }
 
     lastNode.connect(this.compressor);
-    this.compressor.connect(this.gainNode);
+    if (this.boostGain) {
+      this.boostGain.gain.value = SettingsManager.get('audio.volumeBoost', 1);
+      this.compressor.connect(this.boostGain);
+      this.boostGain.connect(this.gainNode);
+    } else {
+      this.compressor.connect(this.gainNode);
+    }
     this.gainNode.connect(this.analyser);
     this.analyser.connect(this.audioCtx.destination);
 
@@ -127,6 +139,59 @@ const Player = {
   updateEqualizerEnabled() {
     this.rebuildAudioGraph();
     this.applyEQPreset();
+  },
+
+  applyPlaybackEffects() {
+    if (!this.audio) return;
+    const speed = Utils.clamp(Number(SettingsManager.get('audio.playbackSpeed', 1)) || 1, 0.5, 2);
+    const pitch = Utils.clamp(Number(SettingsManager.get('audio.pitchSemitones', 0)) || 0, -12, 12);
+    // Native media playback can only shift pitch and tempo together reliably.
+    // We keep speed as the primary rate and apply pitch as a semitone rate offset.
+    this.audio.playbackRate = speed * Math.pow(2, pitch / 12);
+    try { this.audio.preservesPitch = false; } catch (e) {}
+    try { this.audio.mozPreservesPitch = false; } catch (e) {}
+    try { this.audio.webkitPreservesPitch = false; } catch (e) {}
+    if (this.boostGain) this.boostGain.gain.value = SettingsManager.get('audio.volumeBoost', 1);
+  },
+
+  setPitch(value) { SettingsManager.set('audio.pitchSemitones', value); this.applyPlaybackEffects(); },
+  setPlaybackSpeed(value) { SettingsManager.set('audio.playbackSpeed', value); this.applyPlaybackEffects(); },
+  setVolumeBoost(value) { SettingsManager.set('audio.volumeBoost', value); this.applyPlaybackEffects(); },
+
+  setRepeatSectionStart() {
+    if (!this.audio || !Number.isFinite(this.audio.currentTime)) return;
+    this.repeatSection.start = this.audio.currentTime;
+    if (this.repeatSection.end !== null && this.repeatSection.end <= this.repeatSection.start) this.repeatSection.end = null;
+    this.repeatSection.enabled = false;
+    window.dispatchEvent(new CustomEvent('repeat-section-changed', { detail: { ...this.repeatSection } }));
+  },
+
+  setRepeatSectionEnd() {
+    if (!this.audio || this.repeatSection.start === null) return;
+    const end = this.audio.currentTime;
+    if (end <= this.repeatSection.start) return;
+    this.repeatSection.end = end;
+    this.repeatSection.enabled = true;
+    window.dispatchEvent(new CustomEvent('repeat-section-changed', { detail: { ...this.repeatSection } }));
+  },
+
+  clearRepeatSection() {
+    this.repeatSection = { enabled: false, start: null, end: null };
+    window.dispatchEvent(new CustomEvent('repeat-section-changed', { detail: { ...this.repeatSection } }));
+  },
+
+  schedulePlayAfter(seconds) {
+    this.clearScheduledPlay();
+    const delay = Math.max(0, Number(seconds) || 0);
+    if (!delay) return this.play();
+    this.scheduledPlayTimer = setTimeout(() => {
+      this.scheduledPlayTimer = null;
+      this.play();
+    }, delay * 1000);
+  },
+
+  clearScheduledPlay() {
+    if (this.scheduledPlayTimer) { clearTimeout(this.scheduledPlayTimer); this.scheduledPlayTimer = null; }
   },
 
   updateGaplessPlayback() {
@@ -302,6 +367,7 @@ const Player = {
 
     this.audio.src = url;
     this.audio.load();
+    this.applyPlaybackEffects();
 
     if (SettingsManager.get('ui.dynamicTheming')) {
       const artSrc = artwork || 'assets/default-art.png';
@@ -550,12 +616,21 @@ const Player = {
   onTrackEnded() {
     this.saveListenProgress(true);
 
-    if (this.sleepTimer) {
+    if (this.sleepTracksRemaining > 0) {
       this.sleepTracksRemaining--;
       if (this.sleepTracksRemaining <= 0) {
         this.stopSleepTimer();
         this.pause();
         return;
+      }
+    }
+
+    if (this.scheduleAfterTrackCount > 0) {
+      this.scheduleAfterTrackCount--;
+      if (this.scheduleAfterTrackCount === 0 && this.currentTrack) {
+        const track = this.currentTrack;
+        const idx = this.queue.findIndex(t => t.id === track.id);
+        if (idx >= 0) { this.queueIndex = idx; this.loadTrack(track); return; }
       }
     }
 
@@ -798,6 +873,13 @@ const Player = {
         album: track.album || '',
         artwork: artwork ? [{ src: artwork, sizes: '512x512', type: 'image/jpeg' }] : []
       });
+    }
+  },
+
+  checkRepeatSection() {
+    const r = this.repeatSection;
+    if (r.enabled && r.start !== null && r.end !== null && this.audio.currentTime >= r.end) {
+      this.audio.currentTime = r.start;
     }
   },
 

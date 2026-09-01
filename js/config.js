@@ -54,7 +54,10 @@ const CONFIG = {
     skipSilenceThreshold: -40,
     gaplessPlayback: true,
     normalization: false,
-    normalizationTarget: -14
+    normalizationTarget: -14,
+    pitchSemitones: 0,
+    playbackSpeed: 1,
+    volumeBoost: 1
   },
 
   playback: {
@@ -118,6 +121,9 @@ const SETTINGS_RULES = {
   'audio.playPauseFadeDuration': { type: 'number', min: 0, max: 5 },
   'audio.skipSilenceThreshold': { type: 'number', min: -100, max: 0 },
   'audio.normalizationTarget': { type: 'number', min: -30, max: 0 },
+  'audio.pitchSemitones': { type: 'number', min: -12, max: 12 },
+  'audio.playbackSpeed': { type: 'number', min: 0.5, max: 2 },
+  'audio.volumeBoost': { type: 'number', min: 0.5, max: 2.5 },
   'ui.particlesIntensity': { type: 'number', min: 0, max: 2 },
   'ui.waveformBars': { type: 'number', min: 20, max: 300 },
   'ui.glassIntensity': { type: 'number', min: 0, max: 1 },
