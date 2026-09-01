@@ -505,6 +505,10 @@ const UI = {
     document.getElementById('fp-art').src = artwork;
     const reflectionArt = document.getElementById('fp-reflection-art');
     if (reflectionArt) reflectionArt.src = artwork;
+    const fpReflection = document.querySelector('#full-player .fp-reflection');
+    if (fpReflection && artwork) {
+      fpReflection.style.setProperty('--fp-reflection-url', `url(\"${String(artwork).replace(/\"/g, '%22')}\")`);
+    }
     const fpSheet = document.querySelector('#full-player .fp-sheet');
     if (fpSheet && artwork) fpSheet.style.setProperty('--fp-art-url', `url(\"${String(artwork).replace(/\"/g, '%22')}\")`);
     document.getElementById('fp-favorite').classList.toggle('active', track.favorite);
