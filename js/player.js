@@ -35,6 +35,11 @@ const Player = {
 
   peakValue: 0,
   peakSmooth: 0,
+  peakData: null,
+  peakLastFrame: 0,
+  transitionToken: 0,
+  _audioEventsBound: false,
+  _pauseTimer: null,
 
   currentPosition: 0,
   currentBlobUrl: null,
@@ -52,12 +57,28 @@ const Player = {
   },
 
   setupAudioEvents() {
+    if (!this.audio || this._audioEventsBound) return;
+    this._audioEventsBound = true;
+
     this.audio.addEventListener('ended', () => this.onTrackEnded());
-    this.audio.addEventListener('timeupdate', () => { this.onTimeUpdate(); this.checkRepeatSection(); });
+    this.audio.addEventListener('timeupdate', () => {
+      this.onTimeUpdate();
+      this.checkRepeatSection();
+    });
     this.audio.addEventListener('error', (e) => this.onError(e));
     this.audio.addEventListener('loadedmetadata', () => {
-      if (SettingsManager.get('audio.gaplessPlayback') && this.queueIndex < this.queue.length - 1) {
-        this.preloadNext();
+      if (SettingsManager.get('audio.gaplessPlayback')) this.preloadNext();
+    });
+    this.audio.addEventListener('play', () => {
+      this.isPlaying = true;
+      this.isPaused = false;
+      window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: true } }));
+    });
+    this.audio.addEventListener('pause', () => {
+      if (!this.audio.ended) {
+        this.isPlaying = false;
+        this.isPaused = true;
+        window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: false } }));
       }
     });
 
@@ -319,14 +340,24 @@ const Player = {
     if (this.eqNodes[index]) this.eqNodes[index].gain.value = value;
   },
 
+  async resolveTrack(track) {
+    if (!track) return null;
+    if (track.blob || track.url) return track;
+    if (track.id && typeof Data?.getTrack === 'function') {
+      try {
+        const stored = await Data.getTrack(track.id);
+        if (stored) return { ...track, ...stored };
+      } catch (e) {
+        console.warn('Could not restore queued track:', e);
+      }
+    }
+    return track;
+  },
+
   getTrackUrl(track) {
     if (!track) return null;
-    if (track.blob) {
-      return URL.createObjectURL(track.blob);
-    }
-    if (track.url) {
-      return track.url;
-    }
+    if (track.blob) return URL.createObjectURL(track.blob);
+    if (track.url) return track.url;
     return null;
   },
 
@@ -355,32 +386,41 @@ const Player = {
   async loadTrack(track, autoPlay = true) {
     if (!track) return;
 
+    const token = ++this.transitionToken;
+    const resolvedTrack = await this.resolveTrack(track);
+    if (!resolvedTrack || token !== this.transitionToken) return;
+
     this.revokeCurrentUrls();
     this.clearPreload();
     this.stopSkipSilence();
     this.saveListenProgress();
 
-    this.currentTrack = track;
+    this.currentTrack = resolvedTrack;
     this.currentPosition = 0;
     this.repeatCount = 0;
+    this.isPlaying = false;
+    this.isPaused = true;
 
-    const url = this.getTrackUrl(track);
+    const url = this.getTrackUrl(resolvedTrack);
     if (!url) {
-      console.error('No audio source for track:', track.title);
-      console.warn('Cannot play: file not available');
-      setTimeout(() => this.next(), 500);
+      console.error('No audio source for track:', resolvedTrack.title);
+      window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: false, error: true } }));
       return;
     }
     this.currentBlobUrl = url;
 
-    const artwork = this.getTrackArtwork(track);
-    if (artwork && artwork.startsWith('blob:')) {
-      this.currentArtworkUrl = artwork;
-    }
+    const artwork = this.getTrackArtwork(resolvedTrack);
+    if (artwork && artwork.startsWith('blob:')) this.currentArtworkUrl = artwork;
 
     if (!this.audioCtx) this.initAudioContext();
-    if (this.audioCtx.state === 'suspended') await this.audioCtx.resume();
+    if (this.audioCtx?.state === 'suspended') {
+      try { await this.audioCtx.resume(); } catch (e) {}
+    }
 
+    // Keep one HTMLAudioElement for the lifetime of the player. Replacing it
+    // was the source of broken controls and stale event handlers during transitions.
+    this.audio.pause();
+    this.audio.currentTime = 0;
     this.audio.src = url;
     this.audio.load();
     this.applyPlaybackEffects();
@@ -390,64 +430,82 @@ const Player = {
       if (artSrc.startsWith('blob:') || artSrc.startsWith('http') || artSrc.startsWith('data:')) {
         try {
           const colors = await Utils.extractColors(artSrc);
-          window.dispatchEvent(new CustomEvent('theme-colors', { detail: colors }));
+          if (token === this.transitionToken) window.dispatchEvent(new CustomEvent('theme-colors', { detail: colors }));
         } catch(e) {}
       }
     }
 
-    this.updateMediaSession(track, artwork);
+    if (token !== this.transitionToken) return;
+    this.updateMediaSession(resolvedTrack, artwork);
     this.startListenTracking();
+    window.dispatchEvent(new CustomEvent('track-changed', { detail: { ...resolvedTrack, artwork } }));
 
-    if (autoPlay) {
-      await this.play();
-    }
-
-    window.dispatchEvent(new CustomEvent('track-changed', { detail: { ...track, artwork } }));
+    if (autoPlay) await this.play();
   },
 
   async play() {
     if (!this.audio.src) return;
-    if (this.audioCtx?.state === 'suspended') await this.audioCtx.resume();
+    if (this._pauseTimer) {
+      clearTimeout(this._pauseTimer);
+      this._pauseTimer = null;
+    }
+    if (this.audioCtx?.state === 'suspended') {
+      try { await this.audioCtx.resume(); } catch (e) {}
+    }
 
-    const fadeDur = SettingsManager.get('audio.playPauseFadeDuration') || 0;
-    if (fadeDur > 0 && this.gainNode) {
-      this.gainNode.gain.cancelScheduledValues(this.audioCtx.currentTime);
-      this.gainNode.gain.setValueAtTime(0, this.audioCtx.currentTime);
-      this.gainNode.gain.linearRampToValueAtTime(1, this.audioCtx.currentTime + fadeDur);
+    const fadeDur = Math.max(0, Number(SettingsManager.get('audio.playPauseFadeDuration')) || 0);
+    if (fadeDur > 0 && this.gainNode && this.audioCtx) {
+      const now = this.audioCtx.currentTime;
+      this.gainNode.gain.cancelScheduledValues(now);
+      this.gainNode.gain.setValueAtTime(0, now);
+      this.gainNode.gain.linearRampToValueAtTime(1, now + fadeDur);
     }
 
     try {
       await this.audio.play();
       this.isPlaying = true;
       this.isPaused = false;
-
       if (SettingsManager.get('audio.skipSilence')) this.startSkipSilence();
-
       window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: true } }));
       Utils.vibrate(15);
     } catch(err) {
+      this.isPlaying = false;
+      this.isPaused = true;
       console.error('Play failed:', err);
-      if (err.name !== 'AbortError') {
-        console.warn('Playback error:', err.message || 'Unknown');
-      }
+      if (err.name !== 'AbortError') console.warn('Playback error:', err.message || 'Unknown');
     }
   },
 
   async pause() {
-    const fadeDur = SettingsManager.get('audio.playPauseFadeDuration') || 0;
-    if (fadeDur > 0 && this.gainNode && this.audioCtx) {
-      this.gainNode.gain.cancelScheduledValues(this.audioCtx.currentTime);
-      this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, this.audioCtx.currentTime);
-      this.gainNode.gain.linearRampToValueAtTime(0, this.audioCtx.currentTime + fadeDur);
-      await new Promise(r => setTimeout(r, fadeDur * 1000));
+    if (!this.audio || this.audio.paused) {
+      this.isPlaying = false;
+      this.isPaused = true;
+      return;
     }
 
-    this.audio.pause();
+    // Update state immediately so a rapid second tap cannot queue another pause
+    // while the optional fade-out is still running.
     this.isPlaying = false;
     this.isPaused = true;
     this.stopSkipSilence();
-    this.saveListenProgress();
     window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: false } }));
+
+    const fadeDur = Math.max(0, Number(SettingsManager.get('audio.playPauseFadeDuration')) || 0);
+    if (fadeDur > 0 && this.gainNode && this.audioCtx) {
+      const now = this.audioCtx.currentTime;
+      const currentGain = this.gainNode.gain.value;
+      this.gainNode.gain.cancelScheduledValues(now);
+      this.gainNode.gain.setValueAtTime(currentGain, now);
+      this.gainNode.gain.linearRampToValueAtTime(0, now + fadeDur);
+      const token = ++this.transitionToken;
+      this._pauseTimer = setTimeout(() => {
+        this._pauseTimer = null;
+        if (token === this.transitionToken && !this.isPlaying) this.audio.pause();
+      }, fadeDur * 1000);
+    } else {
+      this.audio.pause();
+    }
+    this.saveListenProgress();
   },
 
   async togglePlay() {
@@ -468,26 +526,37 @@ const Player = {
   async next() {
     if (this.queue.length === 0) return;
 
-    const crossfade = SettingsManager.get('audio.crossfadeDuration');
-    if (crossfade > 0 && this.isPlaying) {
+    const nextIndex = this.getNextIndex();
+    if (SettingsManager.get('audio.crossfadeDuration') > 0 && this.isPlaying) {
       await this.crossfadeToNext();
       return;
     }
+    if (nextIndex === this.queueIndex && SettingsManager.get('playback.repeatMode') === 'none') {
+      if (this.audio.duration && this.audio.currentTime < this.audio.duration) return;
+      this.isPlaying = false;
+      this.isPaused = true;
+      window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: false, ended: true } }));
+      return;
+    }
 
-    this.queueIndex = this.getNextIndex();
-    const nextTrack = this.queue[this.queueIndex];
-    if (nextTrack) await this.loadTrack(nextTrack);
+    this.queueIndex = nextIndex;
+    const nextTrack = await this.resolveTrack(this.queue[this.queueIndex]);
+    if (nextTrack) await this.loadTrack(nextTrack, true);
   },
 
   async prev() {
     if (this.queue.length === 0) return;
+
+    // Normal player behaviour: restart the current song when it has already
+    // played past the first few seconds; otherwise go to the previous item.
     if (this.audio.currentTime > 3) {
       this.audio.currentTime = 0;
       return;
     }
+
     this.queueIndex = this.getPrevIndex();
-    const prevTrack = this.queue[this.queueIndex];
-    if (prevTrack) await this.loadTrack(prevTrack);
+    const prevTrack = await this.resolveTrack(this.queue[this.queueIndex]);
+    if (prevTrack) await this.loadTrack(prevTrack, true);
   },
 
   getNextIndex() {
@@ -500,23 +569,21 @@ const Player = {
     this.repeatCount = 0;
 
     if (SettingsManager.get('playback.shuffleMode')) {
-      let idx;
-      do { idx = Math.floor(Math.random() * this.queue.length); }
-      while (idx === this.queueIndex && this.queue.length > 1);
+      if (this.queue.length <= 1) return this.queueIndex;
+      let idx = this.queueIndex;
+      while (idx === this.queueIndex) idx = Math.floor(Math.random() * this.queue.length);
       return idx;
     }
 
     let next = this.queueIndex + 1;
-    if (next >= this.queue.length) {
-      if (mode === 'all') next = 0;
-      else next = this.queue.length - 1;
-    }
+    if (next >= this.queue.length) next = mode === 'all' ? 0 : this.queue.length - 1;
     return next;
   },
 
   getPrevIndex() {
     if (SettingsManager.get('playback.shuffleMode')) {
-      return Math.max(0, this.queueIndex - 1);
+      if (this.queue.length <= 1) return this.queueIndex;
+      return this.queueIndex === 0 ? this.queue.length - 1 : this.queueIndex - 1;
     }
     let prev = this.queueIndex - 1;
     if (prev < 0) prev = SettingsManager.get('playback.repeatMode') === 'all' ? this.queue.length - 1 : 0;
@@ -524,69 +591,44 @@ const Player = {
   },
 
   async crossfadeToNext() {
-    const nextIdx = this.getNextIndex();
-    const nextTrack = this.queue[nextIdx];
+    // Use the same media element for transitions. This avoids creating a
+    // second MediaElementSource and swapping event handlers mid-playback.
+    const nextIndex = this.getNextIndex();
+    if (nextIndex === this.queueIndex && SettingsManager.get('playback.repeatMode') === 'none') {
+      this.onTrackEnded();
+      return;
+    }
+    const nextTrack = await this.resolveTrack(this.queue[nextIndex]);
     if (!nextTrack) return;
 
-    const url = this.getTrackUrl(nextTrack);
-    if (!url) { this.next(); return; }
+    const duration = Math.max(0, Number(SettingsManager.get('audio.crossfadeDuration')) || 0);
+    if (!duration || !this.isPlaying) {
+      this.queueIndex = nextIndex;
+      await this.loadTrack(nextTrack, true);
+      return;
+    }
 
-    const duration = SettingsManager.get('audio.crossfadeDuration');
+    const token = ++this.transitionToken;
+    const fadeSeconds = Math.min(duration, Math.max(0.1, this.audio.currentTime));
+    const startVolume = this.gainNode ? this.gainNode.gain.value : 1;
+    if (this.gainNode && this.audioCtx) {
+      const now = this.audioCtx.currentTime;
+      this.gainNode.gain.cancelScheduledValues(now);
+      this.gainNode.gain.setValueAtTime(startVolume, now);
+      this.gainNode.gain.linearRampToValueAtTime(0, now + fadeSeconds);
+    }
+    await new Promise(r => setTimeout(r, fadeSeconds * 1000));
+    if (token !== this.transitionToken) return;
 
-    this.nextAudio = new Audio(url);
-    this.nextAudio.preload = 'auto';
-
-    await new Promise((resolve, reject) => {
-      this.nextAudio.addEventListener('canplay', resolve, { once: true });
-      this.nextAudio.addEventListener('error', reject, { once: true });
-      setTimeout(reject, 5000);
-    });
-
-    this.nextSource = this.audioCtx.createMediaElementSource(this.nextAudio);
-    this.nextGain = this.audioCtx.createGain();
-    this.nextGain.gain.value = 0;
-    this.nextSource.connect(this.nextGain);
-    this.nextGain.connect(this.crossfadeGain);
-
-    this.nextAudio.play();
-
-    const startTime = this.audioCtx.currentTime;
-    this.gainNode.gain.linearRampToValueAtTime(0, startTime + duration);
-    this.nextGain.gain.linearRampToValueAtTime(1, startTime + duration);
-
-    setTimeout(() => {
-      this.audio.pause();
-      this.revokeCurrentUrls();
-
-      this.audio = this.nextAudio;
-      this.sourceNode = this.nextSource;
-      this.gainNode = this.nextGain;
-      this.gainNode.disconnect();
-
-      let lastNode = this.sourceNode;
-      if (SettingsManager.get('audio.equalizerEnabled') && this.eqNodes.length > 0) {
-        lastNode.connect(this.eqNodes[0]);
-        for (let i = 0; i < this.eqNodes.length - 1; i++) {
-          this.eqNodes[i].connect(this.eqNodes[i+1]);
-        }
-        lastNode = this.eqNodes[this.eqNodes.length - 1];
-      }
-      lastNode.connect(this.compressor);
-      this.compressor.connect(this.gainNode);
-      this.gainNode.connect(this.analyser);
-
-      this.nextAudio = null;
-      this.nextSource = null;
-      this.nextGain = null;
-
-      this.queueIndex = nextIdx;
-      this.currentTrack = nextTrack;
-      this.currentBlobUrl = url;
-      this.setupAudioEvents();
-
-      const artwork = this.getTrackArtwork(nextTrack);
-      window.dispatchEvent(new CustomEvent('track-changed', { detail: { ...nextTrack, artwork } }));
-    }, duration * 1000);
+    this.queueIndex = nextIndex;
+    await this.loadTrack(nextTrack, false);
+    if (this.gainNode && this.audioCtx) {
+      const now = this.audioCtx.currentTime;
+      this.gainNode.gain.cancelScheduledValues(now);
+      this.gainNode.gain.setValueAtTime(0, now);
+      this.gainNode.gain.linearRampToValueAtTime(1, now + fadeSeconds);
+    }
+    await this.play();
   },
 
   async preloadNext() {
@@ -601,7 +643,9 @@ const Player = {
     if (!url) return;
 
     const preload = new Audio();
-    preload.preload = 'auto';
+    // Metadata-only preloading avoids competing with the active track for
+    // bandwidth/decoding resources on lower-powered devices.
+    preload.preload = 'metadata';
     preload.src = url;
     this.preloadAudio = preload;
     this.preloadUrl = url;
@@ -630,6 +674,9 @@ const Player = {
   },
 
   onTrackEnded() {
+    if (!this.currentTrack || !this.audio) return;
+    this.isPlaying = false;
+    this.isPaused = true;
     this.saveListenProgress(true);
 
     if (this.sleepTracksRemaining > 0) {
@@ -644,9 +691,12 @@ const Player = {
     if (this.scheduleAfterTrackCount > 0) {
       this.scheduleAfterTrackCount--;
       if (this.scheduleAfterTrackCount === 0 && this.currentTrack) {
-        const track = this.currentTrack;
-        const idx = this.queue.findIndex(t => t.id === track.id);
-        if (idx >= 0) { this.queueIndex = idx; this.loadTrack(track); return; }
+        const idx = this.queue.findIndex(t => t && t.id === this.currentTrack.id);
+        if (idx >= 0) {
+          this.queueIndex = idx;
+          this.loadTrack(this.queue[idx], true);
+          return;
+        }
       }
     }
 
@@ -657,12 +707,22 @@ const Player = {
       return;
     }
 
-    if (this.queueIndex >= this.queue.length - 1 && mode !== 'all') {
+    if (mode === 'n' && this.repeatCount < (SettingsManager.get('playback.repeatNTimes') || 1) - 1) {
+      this.repeatCount++;
+      this.audio.currentTime = 0;
+      this.play();
+      return;
+    }
+
+    this.repeatCount = 0;
+    if (this.queueIndex >= this.queue.length - 1 && mode !== 'all' && !SettingsManager.get('playback.shuffleMode')) {
       this.isPlaying = false;
+      this.isPaused = true;
       window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: false, ended: true } }));
       return;
     }
 
+    // Always advance through the same transition path as the transport button.
     this.next();
   },
 
@@ -675,17 +735,24 @@ const Player = {
 
   onError(e) {
     console.error('Audio error:', e);
-    const err = this.audio.error;
+    const err = this.audio?.error;
     if (err) {
-      const msgs = {
-        1: 'Aborted',
-        2: 'Network error',
-        3: 'Decode error',
-        4: 'Format not supported'
-      };
+      const msgs = { 1: 'Aborted', 2: 'Network error', 3: 'Decode error', 4: 'Format not supported' };
       console.warn('Audio error code:', msgs[err.code] || 'Unknown');
     }
-    setTimeout(() => this.next(), 1000);
+    // Do not immediately fire next() repeatedly for a transient media error.
+    // A single failed track should not lock the transport controls.
+    if (this._handlingAudioError) return;
+    this._handlingAudioError = true;
+    setTimeout(async () => {
+      this._handlingAudioError = false;
+      if (this.queue.length > 1) await this.next();
+      else {
+        this.isPlaying = false;
+        this.isPaused = true;
+        window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: false, error: true } }));
+      }
+    }, 250);
   },
 
   startSkipSilence() {
@@ -714,16 +781,20 @@ const Player = {
   },
 
   startPeakLoop() {
-    const loop = () => {
+    const loop = (timestamp = 0) => {
       requestAnimationFrame(loop);
       if (!this.analyser || !this.isPlaying) {
         this.peakValue = 0;
         this.peakSmooth = this.peakSmooth * 0.9;
         return;
       }
-      const data = new Uint8Array(this.analyser.frequencyBinCount);
-      this.analyser.getByteFrequencyData(data);
-      const avg = data.reduce((a,b) => a+b, 0) / data.length;
+      if (timestamp - this.peakLastFrame < 33) return;
+      this.peakLastFrame = timestamp;
+      if (!this.peakData || this.peakData.length !== this.analyser.frequencyBinCount) this.peakData = new Uint8Array(this.analyser.frequencyBinCount);
+      this.analyser.getByteFrequencyData(this.peakData);
+      let sum = 0;
+      for (let i = 0; i < this.peakData.length; i++) sum += this.peakData[i];
+      const avg = sum / this.peakData.length;
       this.peakValue = avg / 255;
       this.peakSmooth = this.peakSmooth * 0.8 + this.peakValue * 0.2;
 
