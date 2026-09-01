@@ -474,64 +474,36 @@ const UI = {
       const m = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
       if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
       const h = raw.replace('#','');
-      if (/^[0-9a-f]{6}$/i.test(h)) return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+      if (/^[0-9a-f]{6}$/i.test(h)) return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
       return null;
     };
     const toCss = ([r,g,b]) => `rgb(${r}, ${g}, ${b})`;
-    const toHsl = ([r,g,b]) => {
-      r/=255; g/=255; b/=255;
-      const max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min;
-      let h=0, s=0, l=(max+min)/2;
-      if (d) {
-        s = d/(1-Math.abs(2*l-1));
-        switch(max){
-          case r: h=((g-b)/d)%6; break;
-          case g: h=(b-r)/d+2; break;
-          default: h=(r-g)/d+4;
-        }
-        h*=60; if(h<0) h+=360;
-      }
-      return {h,s,l};
-    };
-    const fromHsl = (h,s,l) => {
-      const c=(1-Math.abs(2*l-1))*s, x=c*(1-Math.abs((h/60)%2-1)), m=l-c/2;
-      let r=0,g=0,b=0;
-      if(h<60){r=c;g=x;} else if(h<120){r=x;g=c;} else if(h<180){g=c;b=x;} else if(h<240){g=x;b=c;} else if(h<300){r=x;b=c;} else {r=c;b=x;}
-      return [Math.round((r+m)*255),Math.round((g+m)*255),Math.round((b+m)*255)];
-    };
-    const score = (rgb) => {
+    const quality = (rgb) => {
       if (!rgb) return -1;
-      const {h,s,l}=toHsl(rgb);
-      // Reject near-black, near-white and nearly-gray colors, but don't reject
-      // an otherwise good artwork color merely for being moderately muted.
-      if (l < 0.11 || l > 0.89) return -1;
-      if (s < 0.20) return -1;
-      const distance = Math.min(l, 1-l);
-      return s * 0.72 + distance * 0.28;
+      const [r,g,b] = rgb.map(v=>v/255);
+      const max=Math.max(r,g,b), min=Math.min(r,g,b);
+      const l=(max+min)/2, s=max===min?0:(max-min)/(1-Math.abs(2*l-1));
+      if (l <= 0.08 || l >= 0.92 || s < 0.16) return -1;
+      return s * 0.7 + Math.min(l,1-l) * 0.3;
     };
-    const candidates = [primary, fallback, ...palette].map(parse).filter(Boolean);
-    let best = null, bestScore = -1;
-    for (const rgb of candidates) {
-      const sc = score(rgb);
-      if (sc > bestScore) { bestScore = sc; best = rgb; }
-    }
+    const candidates=[...palette, primary, fallback].map(parse).filter(Boolean);
+    let best=null, bestScore=-1;
+    for (const rgb of candidates) { const q=quality(rgb); if(q>bestScore){bestScore=q;best=rgb;} }
+    // Strictly use a color sampled from the album art. Never synthesize a fallback.
     if (!best) {
-      // Adapt a stable colored hue rather than defaulting straight to gold.
-      best = fromHsl(210, 0.72, 0.42);
-    } else {
-      const hsl = toHsl(best);
-      const targetL = Math.max(0.26, Math.min(0.72, hsl.l));
-      best = fromHsl(hsl.h, Math.max(0.32, hsl.s), targetL);
+      for (const rgb of candidates) { if (rgb) { best=rgb; break; } }
     }
+    if (!best) return null;
     return { css: toCss(best), rgb: best };
   },
-
   onThemeColors(detail) {
     const root = document.documentElement;
     const accent = this.safeAccentColor(detail.dominant, detail.vibrant, detail.palette || []);
-    root.style.setProperty('--dynamic-primary', accent.css);
-    root.style.setProperty('--dynamic-vibrant', accent.css);
-    root.style.setProperty('--accent-rgb', accent.rgb.join(', '));
+    if (accent) {
+      root.style.setProperty('--dynamic-primary', accent.css);
+      root.style.setProperty('--dynamic-vibrant', accent.css);
+      root.style.setProperty('--accent-rgb', accent.rgb.join(', '));
+    }
     this.setAlbumDominantColor(detail.dominant);
     if (SettingsManager.get('ui.waveformSeekbar')) requestAnimationFrame(() => this.renderWaveform());
   },
