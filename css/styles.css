@@ -3639,17 +3639,10 @@ body.light .full-player.fill-album-art .fp-content::before {
   animation: none !important;
 }
 
-/* === v3.3 — remove the artwork/reflection fade ===
-   Keep the two artwork layers intact, but remove the transparency masks that
-   created the visible fade/seam in the middle of the full player. */
-.full-player.fill-album-art .fp-sheet::before {
-  -webkit-mask-image: none !important;
-  mask-image: none !important;
-}
-.full-player.fill-album-art .fp-art {
-  -webkit-mask-image: none !important;
-  mask-image: none !important;
-}
+/* === No-fade artwork test ===
+   Remove ALL visual fade masks from the synchronized full-player artwork layers.
+   The crisp artwork and mirrored/blurred lower artwork now meet directly. */
+.full-player.fill-album-art .fp-art,
 .full-player.fill-album-art .fp-reflection {
   -webkit-mask-image: none !important;
   mask-image: none !important;
