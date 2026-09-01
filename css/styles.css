@@ -2383,3 +2383,224 @@ body.full-player-open {
 body.full-player-open .full-player {
   overflow: hidden;
 }
+
+/* === 2026 player visual system polish === */
+:root {
+  --glass-alpha: 0.22;
+  --glass-blur: 34px;
+  --glass-saturation: 205%;
+  --control-height: 40px;
+  --control-radius: 14px;
+}
+
+/* Richer glass: less opaque, more of the artwork/theme shows through. */
+body.glass-enabled .fp-sheet {
+  background: rgba(12, 12, 12, calc(0.22 + (1 - var(--glass-intensity)) * 0.12));
+  backdrop-filter: blur(calc(26px + var(--glass-intensity) * 34px)) saturate(calc(170% + var(--glass-intensity) * 70%));
+  -webkit-backdrop-filter: blur(calc(26px + var(--glass-intensity) * 34px)) saturate(calc(170% + var(--glass-intensity) * 70%));
+}
+body.light.glass-enabled .fp-sheet {
+  background: rgba(255,255,255, calc(0.18 + (1 - var(--glass-intensity)) * 0.10));
+}
+
+/* Full-bleed artwork: no hard color stop. The lower half is the same artwork,
+   heavily blurred and translucent, so the image itself becomes the glass tint. */
+.full-player.fill-album-art .fp-sheet {
+  background: transparent !important;
+  isolation: isolate;
+}
+.full-player.fill-album-art .fp-sheet::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: var(--fp-art-url);
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center top;
+  filter: saturate(1.08) contrast(1.02);
+  opacity: .98;
+  transform: translateZ(0) scale(1.015);
+  z-index: 0;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 41%, rgba(0,0,0,.88) 50%, rgba(0,0,0,.45) 61%, transparent 75%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 41%, rgba(0,0,0,.88) 50%, rgba(0,0,0,.45) 61%, transparent 75%);
+}
+.full-player.fill-album-art .fp-sheet::after {
+  content: "";
+  position: absolute;
+  inset: 39% -36px -36px;
+  background-image: var(--fp-art-url);
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center top;
+  filter: blur(calc(24px + var(--glass-intensity) * 34px)) saturate(calc(180% + var(--glass-intensity) * 65%));
+  transform: translateZ(0) scale(1.09);
+  opacity: .72;
+  z-index: 1;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12%, #000 100%);
+}
+.full-player.fill-album-art .fp-content { background: transparent !important; }
+.full-player.fill-album-art .fp-meta,
+.full-player.fill-album-art .fp-progress-section,
+.full-player.fill-album-art .fp-controls,
+.full-player.fill-album-art .fp-bottom-row,
+.full-player.fill-album-art .fp-text,
+.full-player.fill-album-art .fp-favorite-btn {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+.full-player.fill-album-art .fp-meta,
+.full-player.fill-album-art .fp-progress-section,
+.full-player.fill-album-art .fp-controls,
+.full-player.fill-album-art .fp-bottom-row { z-index: 3; }
+
+/* Use natural artwork dimensions in the top half. */
+.full-player.fill-album-art .fp-art-container {
+  height: clamp(300px, 52dvh, 560px);
+  z-index: 2;
+}
+.full-player.fill-album-art .fp-art { display: block; }
+
+/* Consistent modern controls across effects/settings. */
+.setting-row input[type="number"],
+.setting-row select,
+.eq-preset-row select,
+.effect-action-row select,
+.effect-control input[type="range"],
+.eq-sliders input[type="range"] {
+  font-family: inherit;
+}
+.setting-row input[type="number"],
+.setting-row select,
+.eq-preset-row select,
+.effect-action-row select {
+  min-height: var(--control-height);
+  border: 1px solid color-mix(in srgb, var(--border) 85%, transparent);
+  border-radius: var(--control-radius);
+  background: rgba(255,255,255,.055);
+  color: var(--text-primary);
+  padding: 0 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.05), 0 8px 24px rgba(0,0,0,.12);
+}
+body.light .setting-row input[type="number"],
+body.light .setting-row select,
+body.light .eq-preset-row select,
+body.light .effect-action-row select { background: rgba(255,255,255,.38); }
+
+.effects-card {
+  background: rgba(255,255,255,.035);
+  border-color: color-mix(in srgb, var(--border) 88%, transparent);
+  border-radius: 20px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.045), 0 12px 36px rgba(0,0,0,.14);
+}
+body.light .effects-card { background: rgba(255,255,255,.30); }
+.effects-card h3 { letter-spacing: -.15px; }
+.effects-card p { font-size: 11px; }
+
+.effect-action-row {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.effect-reset-btn {
+  appearance:none;
+  min-height:36px;
+  padding:0 13px;
+  border-radius:12px;
+  border:1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  background:rgba(255,255,255,.055);
+  color:var(--text-primary);
+  font:700 12px inherit;
+  cursor:pointer;
+  transition:background .18s ease, border-color .18s ease, transform .18s ease;
+}
+.effect-reset-btn:hover { background:rgba(255,255,255,.10); border-color:rgba(var(--accent-rgb),.35); transform:translateY(-1px); }
+.effect-reset-btn:active { transform:translateY(0); }
+
+/* All range bars share one visual language. */
+.effect-control input[type="range"] {
+  height: 5px;
+  appearance:none;
+  -webkit-appearance:none;
+  border-radius:999px;
+  background:linear-gradient(to right, var(--accent) 0%, var(--accent) 50%, rgba(255,255,255,.10) 50%, rgba(255,255,255,.10) 100%);
+  outline:none;
+}
+.effect-control input[type="range"]::-webkit-slider-thumb {
+  appearance:none; -webkit-appearance:none;
+  width:18px; height:18px; border-radius:50%;
+  border:2px solid var(--bg);
+  background:var(--accent);
+  box-shadow:0 2px 12px rgba(var(--accent-rgb),.34);
+}
+.effect-control input[type="range"]::-moz-range-thumb {
+  width:18px; height:18px; border-radius:50%; border:2px solid var(--bg);
+  background:var(--accent); box-shadow:0 2px 12px rgba(var(--accent-rgb),.34);
+}
+
+/* EQ knobs/range controls use the same track/thumb treatment, simply rotated. */
+.eq-sliders input[type="range"] {
+  appearance:none;
+  -webkit-appearance:none;
+  width:100%;
+  height:5px;
+  accent-color:var(--accent);
+  transform:rotate(-90deg);
+  margin:70px 0;
+  background:rgba(255,255,255,.10);
+  border-radius:999px;
+}
+.eq-sliders input[type="range"]::-webkit-slider-thumb {
+  appearance:none; -webkit-appearance:none;
+  width:18px; height:18px; border-radius:50%;
+  border:2px solid var(--bg); background:var(--accent);
+  box-shadow:0 2px 12px rgba(var(--accent-rgb),.34);
+}
+.eq-sliders input[type="range"]::-moz-range-thumb {
+  width:18px; height:18px; border-radius:50%; border:2px solid var(--bg); background:var(--accent);
+}
+.eq-sliders label { min-width:0; gap:3px; }
+.eq-sliders label > span { font-size:10px; font-weight:700; color:var(--text-tertiary); white-space:nowrap; }
+
+/* Glass toggle, value chips and descriptive text all use the same scale. */
+.setting-row small,
+.effects-card p,
+.effects-overlay-subtitle,
+.lyrics-overlay-meta div:last-child { letter-spacing:0; }
+.setting-row input[type="number"] { width:96px; text-align:center; font-weight:700; }
+
+@media (max-width:600px) {
+  .full-player.fill-album-art .fp-art-container { height:52dvh; min-height:260px; }
+  .effects-card { padding:14px; border-radius:18px; }
+  .eq-sliders { gap:8px; }
+}
+
+/* Glassmorphism toggle also controls the art-derived glass layer. */
+body:not(.glass-enabled) .full-player.fill-album-art .fp-sheet::after {
+  opacity: 0 !important;
+  filter: none !important;
+}
+body:not(.glass-enabled) .full-player.fill-album-art .fp-sheet::before {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 43%, transparent 70%);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 43%, transparent 70%);
+}
+
+/* Overlay controls belong to the same design system as the player. */
+body.glass-enabled .player-overlay-card,
+body.glass-enabled .lyrics-overlay-card,
+body.glass-enabled .effects-overlay-card {
+  background: rgba(16,16,18,.24);
+  border-color: rgba(255,255,255,.12);
+  backdrop-filter: blur(calc(28px + var(--glass-intensity) * 36px)) saturate(calc(180% + var(--glass-intensity) * 70%));
+  -webkit-backdrop-filter: blur(calc(28px + var(--glass-intensity) * 36px)) saturate(calc(180% + var(--glass-intensity) * 70%));
+}
+body.light.glass-enabled .player-overlay-card,
+body.light.glass-enabled .lyrics-overlay-card,
+body.light.glass-enabled .effects-overlay-card { background: rgba(255,255,255,.27); }
+.effects-overlay-header { background:transparent; }
