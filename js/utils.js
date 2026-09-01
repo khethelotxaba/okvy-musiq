@@ -105,7 +105,16 @@ const Utils = {
       .replace(/\s+\bx\b\s+/gi, '||')
       .replace(/\s+\band\b\s+/gi, '||')
       .replace(/\s*[,;/|]+\s*/g, '||');
-    return [...new Set(normalized.split('||').map(v => v.trim()).filter(Boolean))];
+    const seen = new Set();
+    const result = [];
+    for (const raw of normalized.split('||')) {
+      const name = raw.replace(/\s+/g, ' ').trim();
+      const key = name.toLocaleLowerCase();
+      if (!name || seen.has(key)) continue;
+      seen.add(key);
+      result.push(name);
+    }
+    return result;
   },
 
   splitGenres(str) {
@@ -132,7 +141,11 @@ const Utils = {
         if (chunk) matches.push(...this.splitArtists(chunk));
       }
     }
-    return [...new Set(matches)].filter(a => a && !/^the$/i.test(a));
+    const seen = new Set();
+    return matches
+      .map(a => a.replace(/\s+/g, ' ').trim())
+      .filter(a => a && !/^the$/i.test(a))
+      .filter(a => { const key = a.toLocaleLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; });
   },
 
   removeFeaturedFromTitle(title) {

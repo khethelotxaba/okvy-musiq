@@ -545,21 +545,50 @@ const UI = {
       if (/^[0-9a-f]{6}$/i.test(h)) return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
       return null;
     };
-    const toCss = ([r,g,b]) => `rgb(${r}, ${g}, ${b})`;
-    const quality = (rgb) => {
-      if (!rgb) return -1;
-      const [r,g,b] = rgb.map(v=>v/255);
-      const max=Math.max(r,g,b), min=Math.min(r,g,b);
-      const l=(max+min)/2, s=max===min?0:(max-min)/(1-Math.abs(2*l-1));
-      if (l <= 0.08 || l >= 0.92 || s < 0.16) return -1;
-      return s * 0.7 + Math.min(l,1-l) * 0.3;
+    const luminance = ([r,g,b]) => {
+      const toLinear = (v) => {
+        v /= 255;
+        return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+      };
+      return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
     };
-    const candidates=[...palette, primary, fallback].map(parse).filter(Boolean);
-    let best=null, bestScore=-1;
-    for (const rgb of candidates) { const q=quality(rgb); if(q>bestScore){bestScore=q;best=rgb;} }
-    // Strictly use a color sampled from the album art. Never synthesize a fallback.
-    if (!best) {
-      for (const rgb of candidates) { if (rgb) { best=rgb; break; } }
+    const toCss = ([r,g,b]) => `rgb(${r}, ${g}, ${b})`;
+    const saturation = ([r,g,b]) => {
+      const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
+      return mx === mn ? 0 : (mx-mn)/Math.max(1,mx);
+    };
+    const chromaQuality = (rgb) => {
+      if (!rgb) return -1;
+      const l = luminance(rgb), s = saturation(rgb);
+      // Reject colours that are effectively black, white, or grey.
+      if (l <= 0.045 || l >= 0.92 || s < 0.20) return -1;
+      return s * 0.75 + (1 - Math.abs(l - 0.50)) * 0.25;
+    };
+    const contrastRatio = (a,b) => {
+      const la = luminance(a), lb = luminance(b);
+      const hi = Math.max(la,lb), lo = Math.min(la,lb);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+
+    const parsedPalette = [...palette].map(parse).filter(Boolean);
+    const primaryRgb = parse(primary);
+    const fallbackRgb = parse(fallback);
+    const artworkBase = primaryRgb || (parsedPalette.length
+      ? parsedPalette.reduce((sum,c) => sum.map((v,i) => v + c[i]), [0,0,0]).map(v => Math.round(v / parsedPalette.length))
+      : null);
+    const candidates = [...parsedPalette, primaryRgb, fallbackRgb].filter(Boolean);
+
+    let best = null;
+    let bestScore = -Infinity;
+    for (const rgb of candidates) {
+      const q = chromaQuality(rgb);
+      if (q < 0) continue;
+      const contrast = artworkBase ? contrastRatio(rgb, artworkBase) : 1;
+      const lumGap = artworkBase ? Math.abs(luminance(rgb) - luminance(artworkBase)) : 0;
+      // Visibility from the artwork is the priority; saturation keeps the accent
+      // recognisably chromatic instead of becoming a grey/black/white accent.
+      const score = q * 1.25 + contrast * 2.4 + lumGap * 1.15;
+      if (score > bestScore) { bestScore = score; best = rgb; }
     }
     if (!best) return null;
     return { css: toCss(best), rgb: best };
@@ -596,6 +625,7 @@ const UI = {
     const toArray = (values) => values.map(parseRgb).filter(Boolean);
 
     let luma = null;
+    let artworkSample = null;
     const src = artworkSrc || document.getElementById('fp-art')?.currentSrc || document.getElementById('fp-art')?.src;
     if (src && src !== 'assets/default-art.png') {
       try {
@@ -614,18 +644,24 @@ const UI = {
           ctx.drawImage(image, 0, 0, 64, 64);
           const data = ctx.getImageData(0, 0, 64, 64).data;
           let sum = 0, weight = 0;
+          let rSum = 0, gSum = 0, bSum = 0;
           for (let i=0; i<data.length; i+=16) {
             const rgb = [data[i], data[i+1], data[i+2]];
             const a = data[i+3] / 255;
             if (!a) continue;
             // Bias toward the lower artwork atmosphere where the metadata and controls live.
-            const px = ((i/4) % 64);
             const py = Math.floor((i/4) / 64);
             const regionWeight = py >= 28 ? 1.35 : 0.85;
             sum += luminance(rgb) * a * regionWeight;
+            rSum += rgb[0] * a * regionWeight;
+            gSum += rgb[1] * a * regionWeight;
+            bSum += rgb[2] * a * regionWeight;
             weight += a * regionWeight;
           }
-          if (weight) luma = sum / weight;
+          if (weight) {
+            luma = sum / weight;
+            artworkSample = [Math.round(rSum / weight), Math.round(gSum / weight), Math.round(bSum / weight)];
+          }
         }
       } catch (e) {}
     }
@@ -641,21 +677,25 @@ const UI = {
     const foreground = luma >= 0.58 ? [18,18,18] : [245,245,245];
     const muted = luma >= 0.58 ? [52,52,52] : [218,218,218];
 
-    // Pick a real artwork palette color for the accent. Never permit black,
-    // near-black, white, near-white, or low-saturation neutrals.
+    // Pick a real artwork palette colour that stays visible against the artwork.
+    // Do not let a beautiful-but-similar palette entry disappear into its backdrop.
     let accent = null;
     const candidates = [...parsedPalette];
     const dominant = parseRgb(getComputedStyle(root).getPropertyValue('--dynamic-primary').trim());
     if (dominant) candidates.push(dominant);
+    const backdrop = artworkSample || dominant || null;
+    const backdropLum = backdrop ? luminance(backdrop) : luma;
     let bestScore = -Infinity;
     for (const c of candidates) {
       const [r,g,b] = c;
       const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
       const sat = mx === mn ? 0 : (mx-mn)/Math.max(1,mx);
       const L = luminance(c);
-      if (L <= 0.14 || L >= 0.86 || sat < 0.22) continue;
-      const contrastGap = Math.abs(L - luminance(foreground));
-      const score = sat * 2.0 + contrastGap * 1.1 - Math.abs(L - 0.50) * 0.30;
+      if (L <= 0.045 || L >= 0.92 || sat < 0.22) continue;
+      const low = Math.min(L, backdropLum), high = Math.max(L, backdropLum);
+      const contrast = (high + 0.05) / (low + 0.05);
+      const lumGap = Math.abs(L - backdropLum);
+      const score = contrast * 3.0 + lumGap * 2.0 + sat * 1.5;
       if (score > bestScore) { bestScore = score; accent = c; }
     }
 
@@ -934,9 +974,29 @@ const UI = {
 
   async renderHome(container) {
     const tracks = await Data.getTracks();
-    const albums = await Data.getAll('albums');
-    const artists = await Data.getAll('artists');
+    const albumRecords = await Data.getAll('albums');
+    const artistRecords = await Data.getAll('artists');
     const playlists = await Data.getPlaylists();
+    // Count unique logical albums/artists from the actual track library so stale/duplicate index records
+    // can never produce incorrect Home statistics. Multiple albums are only distinct when their album
+    // artist is distinct and the setting explicitly allows it.
+    const normalizeKey = value => String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    const uniqueAlbums = new Set();
+    tracks.forEach(track => {
+      const album = normalizeKey(track.album);
+      if (!album) return;
+      const albumArtist = normalizeKey(track.albumArtist || track.artist || 'Unknown Artist');
+      const allowMultiple = SettingsManager.get('library.allowMultipleAlbums');
+      uniqueAlbums.add(allowMultiple ? `${album}\u0000${albumArtist}` : album);
+    });
+    const uniqueArtists = new Set();
+    tracks.forEach(track => {
+      const names = [...Utils.splitArtists(track.artist || ''), ...(Array.isArray(track.featuredArtists) ? track.featuredArtists : [])];
+      names.forEach(name => {
+        const key = normalizeKey(name);
+        if (key) uniqueArtists.add(key);
+      });
+    });
     const favorites = tracks.filter(t => t.favorite);
     const recent = [...tracks].sort((a,b) => (b.lastPlayed||0) - (a.lastPlayed||0)).slice(0, 10);
     const mostPlayed = [...tracks].sort((a,b) => (b.playCount||0) - (a.playCount||0)).slice(0, 10);
@@ -951,8 +1011,8 @@ const UI = {
         <div class="hero-card">
           <div class="hero-stats">
             <div class="stat-item"><div class="stat-value">${tracks.length}</div><div class="stat-label">Songs</div></div>
-            <div class="stat-item"><div class="stat-value">${albums.size}</div><div class="stat-label">Albums</div></div>
-            <div class="stat-item"><div class="stat-value">${artists.size}</div><div class="stat-label">Artists</div></div>
+            <div class="stat-item"><div class="stat-value">${uniqueAlbums.size}</div><div class="stat-label">Albums</div></div>
+            <div class="stat-item"><div class="stat-value">${uniqueArtists.size}</div><div class="stat-label">Artists</div></div>
             <div class="stat-item"><div class="stat-value">${favorites.length}</div><div class="stat-label">Favorites</div></div>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;">
@@ -1147,19 +1207,15 @@ const UI = {
     let h = 2166136261 >>> 0;
     for (const ch of String(id || index)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
     const rand = () => { h += 0x6D2B79F5; let t=h; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; };
-    if (kind === 'collage') {
-      const rotate = Math.round((rand()*10)-5);
-      const x = Math.round((rand()*10)-5);
-      const y = Math.round((rand()*8)-4);
-      const z = Math.round(rand()*100);
-      const scale = (0.94 + rand()*0.10).toFixed(3);
-      return `--collection-rotate:${rotate}deg;--collection-x:${x}px;--collection-y:${y}px;--collection-z:${z};--collection-scale:${scale}`;
-    }
-    // Namida-like gallery variation: varied aspect ratios/sizes, but still a coherent grid.
     const ratios = ['1/1','4/5','5/4','3/4','4/3','1/1'];
     const ratio = ratios[Math.floor(rand()*ratios.length)];
-    const spanChance = rand();
-    const span = spanChance > 0.86 ? 2 : 1;
+    const span = rand() > 0.86 ? 2 : 1;
+    if (kind === 'collage') {
+      // Clean collage: varied photo proportions and stacking order, but no
+      // diagonal rotation or drifting offsets.
+      const z = Math.round(rand()*100);
+      return `--collection-ratio:${ratio};--collection-span:${span};--collection-z:${z}`;
+    }
     const lift = Math.round(rand()*5);
     return `--collection-ratio:${ratio};--collection-span:${span};--collection-lift:${lift}px`;
   },

@@ -222,68 +222,59 @@ const Scanner = {
     const albums = new Map();
     const artists = new Map();
     const genres = new Map();
+    const clean = value => String(value || '').trim().replace(/\s+/g, ' ');
+    const key = value => clean(value).toLocaleLowerCase();
+    const allowMultiple = SettingsManager.get('library.allowMultipleAlbums');
 
     for (const track of tracks) {
       if (track.album) {
-        const allowMultiple = SettingsManager.get('library.allowMultipleAlbums');
-        const albumId = allowMultiple
-          ? Utils.hashString(track.album + (track.albumArtist || track.artist || ''))
-          : Utils.hashString(track.album);
+        const albumName = clean(track.album);
+        const albumArtist = clean(track.albumArtist || track.artist || 'Unknown Artist');
+        const albumKey = allowMultiple ? `${key(albumName)}\u0000${key(albumArtist)}` : key(albumName);
+        const albumId = Utils.hashString(albumKey);
         if (!albums.has(albumId)) {
-          albums.set(albumId, {
-            id: albumId,
-            name: track.album,
-            artist: track.albumArtist || track.artist || 'Unknown',
-            year: track.year,
-            tracks: [],
-            dateAdded: Date.now()
-          });
+          albums.set(albumId, { id: albumId, name: albumName, artist: albumArtist, year: track.year, tracks: [], dateAdded: track.dateAdded || Date.now() });
         }
-        albums.get(albumId).tracks.push(track.id);
+        const albumRecord = albums.get(albumId);
+        if (!albumRecord.tracks.includes(track.id)) albumRecord.tracks.push(track.id);
       }
 
-      const allArtists = [...Utils.splitArtists(track.artist || '')];
-      if (track.featuredArtists) allArtists.push(...track.featuredArtists);
-
-      for (const artist of [...new Set(allArtists)]) {
-        const artistId = Utils.hashString(artist);
+      const allArtists = [...Utils.splitArtists(track.artist || ''), ...(Array.isArray(track.featuredArtists) ? track.featuredArtists : [])];
+      const artistSeen = new Set();
+      for (const rawArtist of allArtists) {
+        const artistName = clean(rawArtist);
+        const artistKey = key(artistName);
+        if (!artistName || artistSeen.has(artistKey)) continue;
+        artistSeen.add(artistKey);
+        const artistId = Utils.hashString(artistKey);
         if (!artists.has(artistId)) {
-          artists.set(artistId, {
-            id: artistId,
-            name: artist,
-            tracks: [],
-            albums: new Set(),
-            dateAdded: Date.now()
-          });
+          artists.set(artistId, { id: artistId, name: artistName, tracks: [], albums: new Set(), dateAdded: track.dateAdded || Date.now() });
         }
-        artists.get(artistId).tracks.push(track.id);
-        if (track.album) artists.get(artistId).albums.add(track.album);
+        const artistRecord = artists.get(artistId);
+        if (!artistRecord.tracks.includes(track.id)) artistRecord.tracks.push(track.id);
+        if (track.album) {
+          const albumName = clean(track.album);
+          const albumArtist = clean(track.albumArtist || track.artist || 'Unknown Artist');
+          const albumKey = allowMultiple ? `${key(albumName)}\u0000${key(albumArtist)}` : key(albumName);
+          artistRecord.albums.add(albumKey);
+        }
       }
 
-      const genresList = Utils.splitGenres(track.genre || '');
-      for (const genre of genresList) {
-        const genreId = Utils.hashString(genre);
-        if (!genres.has(genreId)) {
-          genres.set(genreId, {
-            id: genreId,
-            name: genre,
-            tracks: [],
-            dateAdded: Date.now()
-          });
-        }
-        genres.get(genreId).tracks.push(track.id);
+      for (const rawGenre of Utils.splitGenres(track.genre || '')) {
+        const genreName = clean(rawGenre);
+        if (!genreName) continue;
+        const genreId = Utils.hashString(key(genreName));
+        if (!genres.has(genreId)) genres.set(genreId, { id: genreId, name: genreName, tracks: [], dateAdded: track.dateAdded || Date.now() });
+        const genre = genres.get(genreId);
+        if (!genre.tracks.includes(track.id)) genre.tracks.push(track.id);
       }
     }
 
     await Data.clear('albums');
     await Data.clear('artists');
     await Data.clear('genres');
-
     for (const album of albums.values()) await Data.put('albums', album);
-    for (const [id, artist] of artists) {
-      artist.albums = [...artist.albums];
-      await Data.put('artists', artist);
-    }
+    for (const artist of artists.values()) { artist.albums = [...artist.albums]; await Data.put('artists', artist); }
     for (const genre of genres.values()) await Data.put('genres', genre);
   },
 
