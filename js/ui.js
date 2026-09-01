@@ -168,6 +168,90 @@ const UI = {
     fpFavorite.addEventListener('click', () => this.toggleFavorite());
     fpOptions.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.showPlayerOptions(); });
 
+    // Album-art gestures: tap -> album, hold -> artist, swipe left/right -> next/previous.
+    // Keep this interaction on the artwork layer only so player controls/options remain untouched.
+    const fpArtSurface = document.getElementById('fp-art-container');
+    if (fpArtSurface) {
+      let gestureStartX = 0;
+      let gestureStartY = 0;
+      let gestureStartTime = 0;
+      let gestureTimer = null;
+      let gestureLongPressed = false;
+      let gestureMoved = false;
+
+      const clearGestureTimer = () => {
+        if (gestureTimer) {
+          clearTimeout(gestureTimer);
+          gestureTimer = null;
+        }
+      };
+
+      fpArtSurface.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        gestureStartX = e.clientX;
+        gestureStartY = e.clientY;
+        gestureStartTime = Date.now();
+        gestureLongPressed = false;
+        gestureMoved = false;
+        clearGestureTimer();
+        gestureTimer = setTimeout(() => {
+          if (!gestureMoved && Player.currentTrack) {
+            gestureLongPressed = true;
+            if (navigator.vibrate) navigator.vibrate(18);
+            const artist = Player.currentTrack.artist || '';
+            this.closeFullPlayer();
+            if (artist) this.navigate('artist-detail', { artist });
+          }
+        }, 650);
+        try { fpArtSurface.setPointerCapture(e.pointerId); } catch (_) {}
+      });
+
+      fpArtSurface.addEventListener('pointermove', (e) => {
+        const dx = e.clientX - gestureStartX;
+        const dy = e.clientY - gestureStartY;
+        if (Math.abs(dx) > 12 || Math.abs(dy) > 12) {
+          gestureMoved = true;
+          clearGestureTimer();
+        }
+      });
+
+      fpArtSurface.addEventListener('pointerup', (e) => {
+        clearGestureTimer();
+        const dx = e.clientX - gestureStartX;
+        const dy = e.clientY - gestureStartY;
+        const elapsed = Date.now() - gestureStartTime;
+        const horizontalSwipe = Math.abs(dx) >= 70 && Math.abs(dx) > Math.abs(dy) * 1.25;
+
+        if (gestureLongPressed) {
+          e.preventDefault();
+          return;
+        }
+
+        if (horizontalSwipe && Player.currentTrack) {
+          e.preventDefault();
+          if (navigator.vibrate) navigator.vibrate(10);
+          if (dx < 0) {
+            Player.next();
+          } else {
+            Player.prev();
+          }
+          return;
+        }
+
+        if (!gestureMoved && elapsed < 650 && Player.currentTrack) {
+          e.preventDefault();
+          if (navigator.vibrate) navigator.vibrate(8);
+          const trackId = Player.currentTrack.id;
+          this.closeFullPlayer();
+          this.goToAlbum(trackId);
+        }
+      });
+
+      fpArtSurface.addEventListener('pointercancel', clearGestureTimer);
+      fpArtSurface.addEventListener('lostpointercapture', clearGestureTimer);
+      fpArtSurface.addEventListener('contextmenu', (e) => e.preventDefault());
+    }
+
     let isDragging = false;
     fpProgress.addEventListener('click', (e) => {
       const rect = fpProgress.getBoundingClientRect();

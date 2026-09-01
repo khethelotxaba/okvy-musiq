@@ -1,4 +1,4 @@
-const CACHE_NAME = 'OKVY-MUSIQ-V3-0';
+const CACHE_NAME = 'OKVY-MUSIQ-V3-3';
 const ASSETS = [
   '/',
   '/index.html',
