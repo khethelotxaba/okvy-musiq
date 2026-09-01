@@ -2685,3 +2685,168 @@ body.light.glass-enabled .full-player .fp-sheet {
 /* Overlay cards can remain glassy; the actual music player cannot. */
 .full-player.fill-album-art .fp-sheet::before,
 .full-player.fill-album-art .fp-sheet::after { display: block; }
+
+
+/* === Player artwork mode: mutually exclusive, never animated === */
+.full-player .fp-art,
+.full-player .fp-art.playing {
+  animation: none !important;
+  transform: none !important;
+  transition: none !important;
+}
+.full-player .fp-art-container {
+  height: auto;
+  min-height: 0;
+}
+.full-player:not(.fill-album-art) .fp-sheet::before,
+.full-player:not(.fill-album-art) .fp-sheet::after {
+  display: none !important;
+}
+.full-player:not(.fill-album-art) .fp-art-container {
+  display: flex !important;
+}
+.full-player:not(.fill-album-art) .fp-art {
+  width: min(60dvh, 88vw, 520px);
+  max-width: 100%;
+  flex: 0 0 auto;
+}
+
+/* Fill mode: no square cover at all. One continuous artwork layer fades into --bg. */
+.full-player.fill-album-art .fp-art-container {
+  display: none !important;
+}
+.full-player.fill-album-art .fp-sheet {
+  background: var(--bg) !important;
+  overflow: hidden;
+}
+.full-player.fill-album-art .fp-sheet::before {
+  display: block !important;
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: min(72dvh, 760px);
+  background-image: var(--fp-art-url);
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  opacity: 1;
+  filter: none;
+  transform: none;
+  z-index: 0;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to bottom,
+    #000 0%,
+    #000 55%,
+    rgba(0,0,0,.96) 63%,
+    rgba(0,0,0,.72) 71%,
+    rgba(0,0,0,.38) 79%,
+    rgba(0,0,0,.12) 86%,
+    transparent 94%);
+  mask-image: linear-gradient(to bottom,
+    #000 0%,
+    #000 55%,
+    rgba(0,0,0,.96) 63%,
+    rgba(0,0,0,.72) 71%,
+    rgba(0,0,0,.38) 79%,
+    rgba(0,0,0,.12) 86%,
+    transparent 94%);
+}
+.full-player.fill-album-art .fp-sheet::after {
+  display: block !important;
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 62%, var(--bg) 94%);
+  z-index: 1;
+  pointer-events: none;
+}
+.full-player.fill-album-art .fp-content {
+  background: transparent !important;
+}
+
+/* EQ: stable five-band vertical controls that do not collapse/rotate into the card. */
+.eq-sliders {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+  align-items: start !important;
+  width: 100%;
+  padding: 10px 2px 2px;
+}
+.eq-sliders label {
+  min-width: 0;
+  height: 178px;
+  display: grid !important;
+  grid-template-rows: 150px auto;
+  justify-items: center;
+  align-items: start;
+  gap: 8px !important;
+  overflow: visible;
+}
+.eq-slider-wrap {
+  width: 28px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+.eq-sliders input[type="range"] {
+  width: 150px !important;
+  height: 24px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: rotate(-90deg);
+  transform-origin: center center;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent !important;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.eq-sliders input[type="range"]::-webkit-slider-runnable-track {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.12);
+}
+.eq-sliders input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin-top: -6.5px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  background: var(--accent);
+  box-shadow: 0 2px 12px rgba(var(--accent-rgb),.30);
+}
+.eq-sliders input[type="range"]::-moz-range-track {
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.12);
+}
+.eq-sliders input[type="range"]::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+  background: var(--accent);
+  box-shadow: 0 2px 12px rgba(var(--accent-rgb),.30);
+}
+.eq-sliders label > span:last-child {
+  font-size: 10px !important;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  line-height: 1;
+}
+.effects-card.compact .eq-sliders {
+  gap: 8px !important;
+  padding-top: 8px;
+}
+.effects-card.compact .eq-sliders label {
+  height: 154px;
+  grid-template-rows: 128px auto;
+}
+.effects-card.compact .eq-slider-wrap { height: 128px; }
+.effects-card.compact .eq-sliders input[type="range"] { width: 128px !important; }

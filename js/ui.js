@@ -435,7 +435,7 @@ const UI = {
 
   onPlaybackState(detail) {
     this.updatePlayerControls();
-    document.getElementById('fp-art').classList.toggle('playing', detail.playing);
+    document.getElementById('fp-art').classList.remove('playing');
   },
 
   onTimeUpdate(detail) {
@@ -546,6 +546,9 @@ const UI = {
         case 'ui.waveformSeekbar':
           this.applyWaveformMode();
           break;
+        case 'ui.fillAlbumArt':
+          this.applyFillAlbumArtMode();
+          break;
         case 'ui.waveformBars':
           this._waveformCache.clear();
           this.applyWaveformMode();
@@ -599,6 +602,7 @@ const UI = {
     document.body.classList.toggle('light', isLight);
     document.body.classList.toggle('glass-enabled', SettingsManager.get('ui.glassmorphism', true));
     document.body.style.setProperty('--glass-intensity', String(SettingsManager.get('ui.glassIntensity', 0.28)));
+    this.applyFillAlbumArtMode();
     document.body.dataset.theme = mode;
     document.documentElement.style.colorScheme = mode;
 
@@ -1179,7 +1183,7 @@ const UI = {
     html += `<div class="effects-panel">`;
     html += `<div class="effects-card"><div class="effects-card-head"><div><h3>Equalizer</h3><p>5-band EQ from bass to air.</p></div><label class="toggle-switch"><input type="checkbox" ${s.equalizerEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span class="toggle-slider"></span></label></div>`;
     html += `<div class="effect-action-row"><div class="eq-preset-row"><select aria-label="EQ preset" onchange="UI.setEqPreset(this.value)">${presets.map(p=>`<option ${s.eqCurrentPreset===p.name?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}<option ${s.eqCurrentPreset==='Custom'?'selected':''}>Custom</option></select></div><button class="effect-reset-btn" type="button" onclick="UI.resetEqualizer()">Reset</button></div>`;
-    html += `<div class="eq-sliders">${freqs.map((f,i)=>`<label><input type="range" min="-12" max="12" step="0.5" value="${values[i] || 0}" oninput="UI.setEqBand(${i}, this.value)"><span>${f >= 1000 ? (f/1000)+'k' : f} Hz</span></label>`).join('')}</div></div>`;
+    html += `<div class="eq-sliders">${freqs.map((f,i)=>`<label><span class="eq-slider-wrap"><input type="range" min="-12" max="12" step="0.5" value="${values[i] || 0}" oninput="UI.setEqBand(${i}, this.value)"></span><span>${f >= 1000 ? (f/1000)+'k' : f} Hz</span></label>`).join('')}</div></div>`;
     html += `<div class="effects-card"><div class="effects-card-head"><div><h3>Pitch & Speed</h3><p>These controls are applied together to the same playback rate.</p></div>${appIcon('pitchSpeed')}</div>`;
     html += `<div class="effect-control"><div><strong>Pitch</strong><span id="pitch-value">${s.pitchSemitones > 0 ? '+' : ''}${s.pitchSemitones} st</span></div><input type="range" min="-12" max="12" step="1" value="${s.pitchSemitones}" oninput="UI.setEffectValue('pitchSemitones', this.value)"></div>`;
     html += `<div class="effect-control"><div><strong>Speed</strong><span id="speed-value">${Number(s.playbackSpeed).toFixed(2)}×</span></div><input type="range" min="0.5" max="2" step="0.05" value="${s.playbackSpeed}" oninput="UI.setEffectValue('playbackSpeed', this.value)"></div>`;
@@ -1291,6 +1295,7 @@ const UI = {
     html += select('ui.miniplayerGlowMode', 'Mini-player Glow Mode', s.ui.miniplayerGlowMode, [['dynamic','Dynamic'],['static','Static']]);
     html += toggle('ui.glassmorphism', 'Glassmorphism', s.ui.glassmorphism, 'Use frosted, translucent surfaces for the bottom navigation and sidebar.');
     html += number('ui.glassIntensity', 'Glass Intensity', s.ui.glassIntensity, 0, 1, 0.05);
+    html += toggle('ui.fillAlbumArt', 'Fill Album Art', s.ui.fillAlbumArt, 'Uses the artwork as a large full-player background that fades into the solid background. When off, only the square album cover is shown.');
     html += select('ui.gridColumns', 'Grid Columns', s.ui.gridColumns, [['auto','Auto'],['2','2'],['3','3'],['4','4'],['5','5']]);
     html += select('ui.gridViewStyle', 'Library View', s.ui.gridViewStyle, [['grid','Grid'],['list','List'],['collage','Collage']]);
     html += toggle('ui.waveformSeekbar', 'Waveform Seekbar', s.ui.waveformSeekbar);
@@ -1549,6 +1554,7 @@ const UI = {
   openFullPlayer() {
     document.body.classList.add('full-player-open');
     document.getElementById('full-player').classList.add('open');
+    this.applyFillAlbumArtMode();
     this.applyWaveformMode();
   },
 
@@ -1959,7 +1965,7 @@ const UI = {
     return `<div class="effects-quick-grid">
       <div class="effects-card compact"><div class="effects-card-head"><div><h3>Equalizer</h3><p>5-band EQ from bass to air.</p></div><label class="toggle-switch"><input type="checkbox" ${eqEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span class="toggle-slider"></span></label></div>
       <div class="effect-action-row"><select onchange="UI.setEqPreset(this.value)">${SettingsManager.get('audio.eqPresets',[]).map(p=>`<option ${p.name===preset?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}<option ${preset==='Custom'?'selected':''}>Custom</option></select><button class="effect-reset-btn" type="button" onclick="UI.resetEqualizer()">Reset</button></div>
-      <div class="eq-sliders">${bands.map((f,i)=>`<label><input type="range" min="-12" max="12" step="0.5" value="${values[i]||0}" oninput="UI.setQuickEQ(${i}, this.value)"><span>${f>=1000?(f/1000)+'k':f}</span></label>`).join('')}</div></div>
+      <div class="eq-sliders">${bands.map((f,i)=>`<label><span class="eq-slider-wrap"><input type="range" min="-12" max="12" step="0.5" value="${values[i]||0}" oninput="UI.setQuickEQ(${i}, this.value)"></span><span>${f>=1000?(f/1000)+'k':f}</span></label>`).join('')}</div></div>
       <div class="effects-card compact"><div class="effects-card-head"><div><h3>Pitch & Speed</h3><p>Applied together to playback.</p></div>${appIcon('pitchSpeed')}</div>
       <div class="effect-control"><div><strong>Pitch</strong><span id="pitch-value">${pitch>0?'+':''}${pitch} st</span></div><input type="range" min="-12" max="12" step="1" value="${pitch}" oninput="UI.setEffectValue('pitchSemitones', this.value)"></div>
       <div class="effect-control"><div><strong>Speed</strong><span id="speed-value">${speed.toFixed(2)}×</span></div><input type="range" min="0.5" max="2" step="0.05" value="${speed}" oninput="UI.setEffectValue('playbackSpeed', this.value)"></div>
@@ -2118,6 +2124,12 @@ const UI = {
     const newDir = this.currentSortDir === 'asc' ? 'desc' : 'asc';
     this.currentSortDir = newDir;
     this.navigate('tracks', { sortBy: field, sortDir: newDir });
+  },
+
+  applyFillAlbumArtMode() {
+    const fp = document.getElementById('full-player');
+    if (!fp) return;
+    fp.classList.toggle('fill-album-art', Boolean(SettingsManager.get('ui.fillAlbumArt', false)));
   },
 
   applyWaveformMode() {
