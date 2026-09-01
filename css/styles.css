@@ -3907,3 +3907,29 @@ body.light .full-player.fill-album-art .fp-content::before {
   color: var(--fp-art-accent) !important;
   filter: brightness(0) saturate(100%) drop-shadow(0 0 0 var(--fp-art-accent)) !important;
 }
+
+
+/* === Embedded adaptive SVG icons ===
+   Icons are inline SVGs now; no external Icons/ folder is fetched. */
+.app-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  color: currentColor;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: middle;
+}
+.full-player.fill-album-art .app-icon {
+  color: var(--fp-icon-color) !important;
+  filter: none !important;
+}
+.full-player.fill-album-art .control-btn.play-btn .app-icon,
+.full-player.fill-album-art .fp-actions button.active .app-icon,
+.full-player.fill-album-art .fp-favorite-btn.active .app-icon {
+  color: var(--fp-art-accent) !important;
+  filter: none !important;
+}
