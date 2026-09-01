@@ -41,14 +41,14 @@ const CONFIG = {
   audio: {
     equalizerEnabled: true,
     eqPresets: [
-      { name: 'Flat', values: [0,0,0,0,0,0,0,0,0,0] },
-      { name: 'Bass Boost', values: [6,4,2,0,0,0,0,0,0,0] },
-      { name: 'Vocal', values: [0,0,0,2,4,4,2,0,0,0] },
-      { name: 'Treble', values: [0,0,0,0,0,0,2,4,6,6] },
-      { name: 'Electronic', values: [4,3,1,0,0,2,4,5,3,2] }
+      { name: 'Flat', values: [0,0,0,0,0] },
+      { name: 'Bass Boost', values: [6,4,2,0,0] },
+      { name: 'Vocal', values: [0,0,3,4,2] },
+      { name: 'Treble', values: [0,0,0,4,6] },
+      { name: 'Electronic', values: [4,1,0,5,2] }
     ],
     eqCurrentPreset: 'Flat',
-    eqCustomValues: [0,0,0,0,0,0,0,0,0,0],
+    eqCustomValues: [0,0,0,0,0],
     crossfadeDuration: 3,
     playPauseFadeDuration: 0.3,
     skipSilence: false,
@@ -250,8 +250,23 @@ const SettingsManager = {
       if (normalized !== undefined) this.set(path, normalized, { notify: false });
     }
 
-    if (!Array.isArray(this.get('audio.eqCustomValues'))) {
+    const eqValues = this.get('audio.eqCustomValues');
+    if (!Array.isArray(eqValues)) {
       this.set('audio.eqCustomValues', [...DEFAULT_CONFIG.audio.eqCustomValues], { notify: false });
+    } else if (eqValues.length !== 5) {
+      // Migrate the old 10-band EQ to the new 5-band layout by keeping
+      // representative low/mid/high bands instead of simply truncating.
+      const migrated = [eqValues[1], eqValues[3], eqValues[5], eqValues[7], eqValues[9]].map(v => Number.isFinite(Number(v)) ? Number(v) : 0);
+      this.set('audio.eqCustomValues', migrated, { notify: false });
+    }
+
+    const presets = this.get('audio.eqPresets');
+    if (Array.isArray(presets)) {
+      const normalizedPresets = presets.map(p => {
+        if (!p || !Array.isArray(p.values) || p.values.length === 5) return p;
+        return { ...p, values: [p.values[1], p.values[3], p.values[5], p.values[7], p.values[9]].map(v => Number.isFinite(Number(v)) ? Number(v) : 0) };
+      });
+      this.set('audio.eqPresets', normalizedPresets, { notify: false });
     }
     if (!Array.isArray(this.get('smart.lostMemoriesYearsBack'))) {
       this.set('smart.lostMemoriesYearsBack', [...DEFAULT_CONFIG.smart.lostMemoriesYearsBack], { notify: false });

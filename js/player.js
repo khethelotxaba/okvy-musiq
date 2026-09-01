@@ -307,7 +307,7 @@ const Player = {
 
   buildEQ() {
     this.eqNodes = [];
-    const freqs = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    const freqs = [60, 250, 1000, 4000, 16000];
     freqs.forEach(f => {
       const filter = this.audioCtx.createBiquadFilter();
       filter.type = 'peaking';

@@ -2182,3 +2182,75 @@ body.light .lyric-preview-line.active { color:#111; }
   .sidebar { left:8px; top:8px; bottom:8px; }
   .lyrics-overlay-card,.effects-overlay-card { width:calc(100vw - 16px); max-height:88vh; border-radius:24px; }
 }
+
+/* Audio-effects controls: compact, touch-friendly 5-band layout. */
+.effect-action-row { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; }
+.eq-preset-row { flex:1; margin:0; }
+.eq-preset-row select { margin:0; }
+.effect-reset-btn {
+  flex:0 0 auto;
+  border:1px solid var(--border);
+  background:var(--bg-surface);
+  color:var(--text-secondary);
+  border-radius:10px;
+  padding:8px 12px;
+  font:700 12px inherit;
+  cursor:pointer;
+}
+.effect-reset-btn:hover { color:var(--text-primary); border-color:var(--text-tertiary); }
+.effect-reset-row { margin-top:16px; margin-bottom:0; }
+.effect-reset-row > span { color:var(--text-tertiary); font-size:11px; font-weight:600; }
+
+/* The player action rail is three anchored actions: lyrics / output / effects. */
+.fp-bottom-row {
+  width:100%;
+  max-width:400px;
+  display:grid;
+  grid-template-columns:1fr auto 1fr;
+  align-items:center;
+  gap:12px;
+  margin-top:2px;
+}
+.fp-lyrics-standalone { justify-self:start; }
+.fp-output-status { justify-self:center; margin-left:0 !important; max-width:none; }
+.fp-audio-effects {
+  justify-self:end;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:36px;
+  height:36px;
+  padding:0;
+  border:0;
+  border-radius:0;
+  background:transparent;
+  color:var(--text-secondary);
+  cursor:pointer;
+}
+.fp-audio-effects:hover { color:var(--text-primary); }
+.fp-audio-effects .app-icon { width:20px; height:20px; }
+
+/* Player options is a standalone icon, not a circular button. */
+#fp-options.fp-options-btn,
+.fp-options-btn {
+  width:32px;
+  height:32px;
+  padding:0;
+  border:0 !important;
+  border-radius:0 !important;
+  background:transparent !important;
+  box-shadow:none !important;
+  color:var(--text-secondary);
+}
+#fp-options.fp-options-btn:hover { color:var(--text-primary); }
+#fp-options.fp-options-btn .app-icon { width:21px; height:21px; }
+
+/* The full player no longer labels the close control "Now Playing". */
+.fp-close-btn { width:32px; height:32px; padding:0; margin-bottom:8px; }
+.fp-close-btn .app-icon { width:20px; height:20px; }
+
+@media (max-width:600px) {
+  .fp-bottom-row { max-width:100%; }
+  .fp-output-status { padding-left:8px; padding-right:8px; }
+  .fp-output-status span:last-child { max-width:120px; }
+}
