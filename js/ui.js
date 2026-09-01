@@ -119,7 +119,7 @@ const UI = {
     document.querySelectorAll('[data-close-overlay]').forEach(el => el.addEventListener('click', () => this.closePlayerOverlay(el.dataset.closeOverlay)));
     document.getElementById('fp-options')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.showPlayerOptions(); });
     document.getElementById('fp-lyrics-btn')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.openLyricsOverlay(false); });
-    document.getElementById('fp-audio-effects')?.addEventListener('click', () => this.openAudioEffectsOverlay());
+    document.getElementById('fp-audio-effects')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.openAudioEffectsOverlay(); });
     this.bindLyricsLongPress();
     document.getElementById('player-options-modal').addEventListener('click', (e) => {
       if (e.target === document.getElementById('player-options-modal')) this.hidePlayerOptions();
@@ -1960,7 +1960,6 @@ const UI = {
     const preset = SettingsManager.get('audio.eqCurrentPreset','Flat');
     const bands = [60,250,1000,4000,16000];
     const eqEnabled = SettingsManager.get('audio.equalizerEnabled', true);
-    const pitch = Number(SettingsManager.get('audio.pitchSemitones',0));
     const speed = Number(SettingsManager.get('audio.playbackSpeed',1));
     const boost = Number(SettingsManager.get('audio.volumeBoost',1));
     return `<div class="effects-quick-grid">
