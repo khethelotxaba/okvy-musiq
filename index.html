@@ -152,7 +152,7 @@
                         <span class="app-icon" data-icon="previous-mini" aria-hidden="true"></span>
                     </button>
                     <button id="np-play" class="control-btn play-btn" aria-label="Play/Pause">
-                        <span class="app-icon" data-icon="play-mini" aria-hidden="true"></span>
+                        <span id="np-play-icon" class="app-icon" data-icon="play-mini" aria-hidden="true"></span>
                     </button>
                     <button id="np-next" class="control-btn" aria-label="Next">
                         <span class="app-icon" data-icon="next-mini" aria-hidden="true"></span>
@@ -213,29 +213,25 @@
                             <span class="app-icon" data-icon="previous-floating" aria-hidden="true"></span>
                         </button>
                         <button id="fp-play" class="control-btn play-btn large" aria-label="Play/Pause">
-                            <span class="app-icon" data-icon="play" aria-hidden="true"></span>
+                            <span id="fp-play-icon" class="app-icon" data-icon="play" aria-hidden="true"></span>
                         </button>
                         <button id="fp-next" class="control-btn" aria-label="Next">
                             <span class="app-icon" data-icon="next-floating" aria-hidden="true"></span>
                         </button>
                         <button id="fp-repeat" class="control-btn secondary" aria-label="Repeat off" title="Repeat off">
-                            <span class="app-icon" data-icon="none" aria-hidden="true"></span>
+                            <span id="fp-repeat-icon" class="app-icon" data-icon="none" aria-hidden="true"></span>
                             <span id="fp-repeat-count" class="repeat-count-badge" hidden></span>
                         </button>
                     </div>
 
-                    <div class="fp-actions">
-                        <button id="fp-lyrics-btn" onclick="UI.navigate('lyrics')">
+                    <div class="fp-bottom-row">
+                        <button id="fp-lyrics-btn" class="fp-lyrics-standalone" aria-label="Lyrics">
                             <span class="app-icon" data-icon="lyrics" aria-hidden="true"></span>
-                            Lyrics
+                            <span>Lyrics</span>
                         </button>
-                        <button id="fp-add">
-                            <span class="app-icon" data-icon="add-playlist" aria-hidden="true"></span>
-                            Playlist
-                        </button>
-                        <button id="fp-share">
-                            <span class="app-icon" data-icon="share" aria-hidden="true"></span>
-                            Share
+                        <button id="fp-output-status" class="fp-output-status" type="button" aria-label="Audio output">
+                            <span class="app-icon" data-icon="soundProfile" aria-hidden="true"></span>
+                            <span id="fp-output-label">Phone speakers</span>
                         </button>
                     </div>
                 </div>
@@ -282,6 +278,36 @@
                     <button id="close-player-options" class="icon-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.3 6.7 6.7 17.3M6.7 6.7l10.6 10.6"/></svg></button>
                 </div>
                 <div id="player-options-list" class="modal-list"></div>
+            </div>
+        </div>
+
+
+        <div id="lyrics-overlay" class="player-overlay" aria-hidden="true">
+            <div class="player-overlay-backdrop" data-close-overlay="lyrics"></div>
+            <div class="lyrics-overlay-card" id="lyrics-overlay-card">
+                <div class="lyrics-preview-head">
+                    <button class="icon-btn overlay-close" aria-label="Close lyrics" data-close-overlay="lyrics">✕</button>
+                    <div class="lyrics-overlay-meta">
+                        <div id="lyrics-overlay-title">Lyrics</div>
+                        <div id="lyrics-overlay-artist">-</div>
+                    </div>
+                    <span class="lyrics-hold-hint">Hold to expand</span>
+                </div>
+                <div class="lyrics-preview-lines" id="lyrics-preview-lines"></div>
+            </div>
+        </div>
+
+        <div id="audio-effects-overlay" class="player-overlay" aria-hidden="true">
+            <div class="player-overlay-backdrop" data-close-overlay="audio-effects"></div>
+            <div class="effects-overlay-card">
+                <div class="effects-overlay-header">
+                    <div>
+                        <div class="effects-overlay-title">Audio Effects</div>
+                        <div class="effects-overlay-subtitle">EQ, pitch, speed and boost</div>
+                    </div>
+                    <button class="icon-btn overlay-close" aria-label="Close audio effects" data-close-overlay="audio-effects">✕</button>
+                </div>
+                <div id="audio-effects-overlay-content"></div>
             </div>
         </div>
 

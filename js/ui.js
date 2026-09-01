@@ -81,6 +81,7 @@ const UI = {
     window.addEventListener('time-update', (e) => this.onTimeUpdate(e.detail));
     window.addEventListener('audio-peak', (e) => this.onAudioPeak(e.detail));
     window.addEventListener('theme-colors', (e) => this.onThemeColors(e.detail));
+    window.addEventListener('output-status', (e) => this.updateOutputStatus(e.detail));
     window.addEventListener('setting-changed', (e) => this.onSettingChanged(e.detail));
     window.addEventListener('scan-progress', (e) => this.onScanProgress(e.detail));
     window.addEventListener('scan-complete', (e) => this.onScanComplete(e.detail));
@@ -102,6 +103,11 @@ const UI = {
     document.getElementById('create-playlist-btn').addEventListener('click', () => this.createPlaylist());
     document.getElementById('close-track-menu').addEventListener('click', () => this.hideTrackMenu());
     document.getElementById('close-player-options').addEventListener('click', () => this.hidePlayerOptions());
+    document.querySelectorAll('[data-close-overlay]').forEach(el => el.addEventListener('click', () => this.closePlayerOverlay(el.dataset.closeOverlay)));
+    document.getElementById('fp-options')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.showPlayerOptions(); });
+    document.getElementById('fp-lyrics-btn')?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.openLyricsOverlay(false); });
+    document.getElementById('fp-output-status')?.addEventListener('click', () => this.showToast('Output follows the device audio route.'));
+    this.bindLyricsLongPress();
     document.getElementById('player-options-modal').addEventListener('click', (e) => {
       if (e.target === document.getElementById('player-options-modal')) this.hidePlayerOptions();
     });
@@ -526,6 +532,9 @@ const UI = {
           this.applyWaveformMode();
           break;
         case 'ui.vibrationMode':
+        case 'ui.glassmorphism':
+        case 'ui.glassIntensity':
+          this.applyThemeMode();
           break;
         case 'library.extractFeaturedArtists':
         case 'library.moodTagsEnabled':
@@ -556,6 +565,7 @@ const UI = {
         case 'lyrics.fontSize':
         case 'lyrics.alignCenter':
         case 'lyrics.highlightCurrentLine':
+          if (document.getElementById('lyrics-overlay')?.classList.contains('open')) this.openLyricsOverlay(document.getElementById('lyrics-overlay')?.classList.contains('expanded'));
           this.renderCurrentPage();
           break;
       }
@@ -568,6 +578,8 @@ const UI = {
     const mode = SettingsManager.get('ui.themeMode', 'dark');
     const isLight = mode === 'light';
     document.body.classList.toggle('light', isLight);
+    document.body.classList.toggle('glass-enabled', SettingsManager.get('ui.glassmorphism', true));
+    document.body.style.setProperty('--glass-intensity', String(SettingsManager.get('ui.glassIntensity', 0.28)));
     document.body.dataset.theme = mode;
     document.documentElement.style.colorScheme = mode;
 
@@ -1240,6 +1252,8 @@ const UI = {
     html += number('ui.particlesIntensity', 'Particle Intensity', s.ui.particlesIntensity, 0, 2, 0.1);
     html += toggle('ui.miniplayerGlow', 'Mini-player Glow', s.ui.miniplayerGlow);
     html += select('ui.miniplayerGlowMode', 'Mini-player Glow Mode', s.ui.miniplayerGlowMode, [['dynamic','Dynamic'],['static','Static']]);
+    html += toggle('ui.glassmorphism', 'Glassmorphism', s.ui.glassmorphism, 'Use frosted, translucent surfaces for the bottom navigation and sidebar.');
+    html += number('ui.glassIntensity', 'Glass Intensity', s.ui.glassIntensity, 0, 1, 0.05);
     html += select('ui.gridColumns', 'Grid Columns', s.ui.gridColumns, [['auto','Auto'],['2','2'],['3','3'],['4','4'],['5','5']]);
     html += select('ui.gridViewStyle', 'Library View', s.ui.gridViewStyle, [['grid','Grid'],['list','List'],['collage','Collage']]);
     html += toggle('ui.waveformSeekbar', 'Waveform Seekbar', s.ui.waveformSeekbar);
@@ -1501,6 +1515,9 @@ const UI = {
 
   closeFullPlayer() {
     document.getElementById('full-player').classList.remove('open');
+    this.hidePlayerOptions();
+    this.closePlayerOverlay('lyrics');
+    this.closePlayerOverlay('audio-effects');
     if (this.lyricsInterval) {
       clearInterval(this.lyricsInterval);
       this.lyricsInterval = null;
@@ -1815,19 +1832,124 @@ const UI = {
     this.showToast('Track removed from library.');
   },
 
+  closePlayerOverlay(kind) {
+    const id = kind === 'lyrics' ? 'lyrics-overlay' : 'audio-effects-overlay';
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('open', 'expanded');
+    el.setAttribute('aria-hidden', 'true');
+    if (kind === 'lyrics' && this.lyricsOverlayInterval) {
+      clearInterval(this.lyricsOverlayInterval);
+      this.lyricsOverlayInterval = null;
+    }
+  },
+
+  bindLyricsLongPress() {
+    const card = document.getElementById('lyrics-overlay-card');
+    if (!card) return;
+    let timer = null;
+    let active = false;
+    const start = (e) => {
+      if (e.target.closest('.overlay-close')) return;
+      active = true;
+      timer = setTimeout(() => {
+        if (!active) return;
+        card.classList.add('expanded');
+        const overlay = document.getElementById('lyrics-overlay');
+        overlay?.classList.add('expanded');
+      }, 520);
+    };
+    const cancel = () => { active = false; if (timer) { clearTimeout(timer); timer = null; } };
+    card.addEventListener('pointerdown', start);
+    ['pointerup','pointercancel','pointerleave'].forEach(type => card.addEventListener(type, cancel));
+  },
+
+  async openLyricsOverlay(expand = false) {
+    const track = Player.currentTrack;
+    if (!track) { this.showToast('Nothing is playing.'); return; }
+    const overlay = document.getElementById('lyrics-overlay');
+    const linesEl = document.getElementById('lyrics-preview-lines');
+    if (!overlay || !linesEl) return;
+    const art = this.getArtworkUrl(track);
+    overlay.style.setProperty('--lyrics-art', `url("${String(art).replace(/"/g, '\\"')}")`);
+    document.getElementById('lyrics-overlay-title').textContent = track.title || 'Lyrics';
+    document.getElementById('lyrics-overlay-artist').textContent = track.artist || '-';
+    const lyrics = track.lyrics ? track.lyrics : track.lyricsLrc ? Utils.lrcParse(track.lyricsLrc) : track.lyricsTtml ? Utils.ttmlParse(track.lyricsTtml) : null;
+    if (!SettingsManager.get('lyrics.enabled')) {
+      linesEl.innerHTML = `<div class="lyrics-empty">Lyrics are disabled in Settings.</div>`;
+    } else if (!lyrics?.length) {
+      linesEl.innerHTML = `<div class="lyrics-empty">No lyrics available.</div><button class="btn-outline" onclick="UI.closePlayerOverlay('lyrics'); UI.renderLyricsEditor(document.getElementById('page-container'))">Add Lyrics</button>`;
+    } else {
+      const size = SettingsManager.get('lyrics.fontSize', 16);
+      linesEl.innerHTML = lyrics.map((line,i) => `<div class="lyric-preview-line" id="overlay-lyric-${i}" data-time="${line.time}" style="font-size:${size}px">${Utils.escapeHtml(line.text)}</div>`).join('');
+      this.lyricsOverlayInterval = setInterval(() => this.highlightOverlayLyric(lyrics), 180);
+      this.highlightOverlayLyric(lyrics);
+    }
+    overlay.classList.add('open');
+    if (expand) { overlay.classList.add('expanded'); document.getElementById('lyrics-overlay-card')?.classList.add('expanded'); }
+    overlay.setAttribute('aria-hidden','false');
+  },
+
+  highlightOverlayLyric(lyrics) {
+    const current = Player.getCurrentTime();
+    let active = -1;
+    for (let i=0;i<lyrics.length;i++) if (lyrics[i].time <= current) active=i;
+    document.querySelectorAll('.lyric-preview-line').forEach((el,i)=>el.classList.toggle('active',i===active));
+    const line = active >= 0 ? document.getElementById(`overlay-lyric-${active}`) : null;
+    if (line && document.getElementById('lyrics-overlay-card')?.classList.contains('expanded')) line.scrollIntoView({behavior:'smooth',block:'center'});
+  },
+
+  async openAudioEffectsOverlay() {
+    const overlay = document.getElementById('audio-effects-overlay');
+    const content = document.getElementById('audio-effects-overlay-content');
+    if (!overlay || !content) return;
+    content.innerHTML = this.buildAudioEffectsControls();
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden','false');
+  },
+
+  buildAudioEffectsControls() {
+    const values = SettingsManager.get('audio.eqCustomValues', Array(10).fill(0));
+    const preset = SettingsManager.get('audio.eqCurrentPreset','Flat');
+    const bands = [31,62,125,250,500,1e3,2e3,4e3,8e3,16e3];
+    return `<div class="effects-quick-grid">\
+      <div class="effects-card compact"><div class="effects-card-head"><div><h3>Equalizer</h3><p>Quickly shape the sound.</p></div></div>\
+      <select onchange="SettingsManager.set('audio.eqCurrentPreset', this.value)">${SettingsManager.get('audio.eqPresets',[]).map(p=>`<option ${p.name===preset?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}</select>\
+      <div class="eq-sliders">${bands.map((f,i)=>`<label><input type="range" min="-12" max="12" step="1" value="${values[i]||0}" oninput="UI.setQuickEQ(${i}, this.value)"><span>${f>=1000?(f/1000)+'k':f}</span></label>`).join('')}</div></div>\
+      <div class="effects-card compact"><div class="effect-control"><div><strong>Pitch</strong><span id="pitch-value">0 st</span></div><input type="range" min="-12" max="12" step="1" value="${SettingsManager.get('audio.pitchSemitones',0)}" oninput="SettingsManager.set('audio.pitchSemitones', this.value)"></div>\
+      <div class="effect-control"><div><strong>Speed</strong><span id="speed-value">1.00×</span></div><input type="range" min="0.5" max="2" step="0.05" value="${SettingsManager.get('audio.playbackSpeed',1)}" oninput="SettingsManager.set('audio.playbackSpeed', this.value)"></div>\
+      <div class="effect-control"><div><strong>Volume Boost</strong><span id="boost-value">100%</span></div><input type="range" min="0.5" max="2.5" step="0.05" value="${SettingsManager.get('audio.volumeBoost',1)}" oninput="SettingsManager.set('audio.volumeBoost', this.value)"></div></div></div>`;
+  },
+
+  setQuickEQ(index, value) {
+    const vals = [...SettingsManager.get('audio.eqCustomValues', Array(10).fill(0))];
+    vals[index] = Number(value)||0;
+    SettingsManager.set('audio.eqCustomValues', vals);
+    SettingsManager.set('audio.eqCurrentPreset', 'Custom', {notify:false});
+    Player.applyEQPreset();
+  },
+
+  updateOutputStatus(status = null) {
+    const label = document.getElementById('fp-output-label');
+    const iconName = status?.kind === 'bluetooth' ? 'bluetooth' : status?.kind === 'earphones' ? 'aux' : 'soundProfile';
+    if (label) label.textContent = status?.label || 'Phone speakers';
+    const icon = document.querySelector('#fp-output-status .app-icon');
+    if (icon) icon.outerHTML = appIcon(iconName, 'app-icon');
+  },
+
   showPlayerOptions() {
     if (!Player.currentTrack) { this.showToast('Nothing is playing.'); return; }
     const activeSleep = Player.sleepTimer || Player.sleepTracksRemaining > 0;
     const items = [
-      { icon: 'equalizer', label: 'Equalizer', action: () => { this.hidePlayerOptions(); this.navigate('audio-effects'); } },
-      { icon: 'pitchSpeed', label: 'Pitch & Speed', action: () => { this.hidePlayerOptions(); this.navigate('audio-effects'); } },
-      { icon: 'volumeBoost', label: 'Volume Boost', action: () => { this.hidePlayerOptions(); this.navigate('audio-effects'); } },
+      { icon: 'shuffle', label: SettingsManager.get('playback.shuffleMode') ? 'Turn Shuffle Off' : 'Turn Shuffle On', action: () => { this.toggleShuffle(); this.showPlayerOptions(); } },
+      { icon: 'repeat', label: 'Repeat Mode', action: () => { this.toggleRepeat(); this.showPlayerOptions(); } },
+      { icon: 'equalizer', label: 'Audio Effects', action: () => { this.hidePlayerOptions(); this.openAudioEffectsOverlay(); } },
       { icon: 'repeatSection', label: Player.repeatSection.enabled ? 'Stop Repeat Section' : 'Set Repeat Section', action: () => this.toggleRepeatSection() },
       { icon: 'playAfterSeconds', label: 'Play After X Seconds', action: () => this.schedulePlayAfterPrompt() },
       { icon: 'playAfterTracks', label: 'Play After X Tracks', action: () => this.scheduleAfterTracksPrompt() },
       { icon: activeSleep ? 'pauseSleep' : 'sleepTimer', label: activeSleep ? 'Manage Sleep Timer' : 'Sleep Timer', action: () => this.showSleepTimerPrompt() },
-      { icon: 'lyrics', label: 'Lyrics', action: () => { this.hidePlayerOptions(); this.navigate('lyrics'); } },
-      { icon: 'queue', label: 'Queue', action: () => { this.hidePlayerOptions(); this.navigate('queue'); } },
+      { icon: 'lyrics', label: 'Lyrics', action: () => { this.hidePlayerOptions(); this.openLyricsOverlay(false); } },
+      { icon: 'queue', label: 'Queue', action: () => { this.hidePlayerOptions(); this.closeFullPlayer(); this.navigate('queue'); } },
       { icon: 'share', label: 'Share Track', action: () => { this.hidePlayerOptions(); this.shareTrack(); } },
     ];
     const container = document.getElementById('player-options-list');

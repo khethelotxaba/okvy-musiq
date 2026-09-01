@@ -33,7 +33,8 @@ const CONFIG = {
     waveformBars: 80,
     animatingThumbnail: true,
     showUpdateIcon: true,
-    glassIntensity: 0.15,
+    glassmorphism: true,
+    glassIntensity: 0.28,
     sidebarCollapsed: false
   },
 
@@ -127,6 +128,7 @@ const SETTINGS_RULES = {
   'ui.particlesIntensity': { type: 'number', min: 0, max: 2 },
   'ui.waveformBars': { type: 'number', min: 20, max: 300 },
   'ui.glassIntensity': { type: 'number', min: 0, max: 1 },
+  'ui.glassmorphism': { type: 'boolean' },
   'ui.gridColumns': { type: 'enum', values: ['auto', '2', '3', '4', '5'] },
   'ui.gridViewStyle': { type: 'enum', values: ['grid', 'list', 'collage'] },
   'ui.themeMode': { type: 'enum', values: ['dark', 'light'] },
@@ -189,6 +191,7 @@ const SettingsManager = {
 
   coerce(value, rule) {
     if (!rule) return value;
+    if (rule.type === 'boolean') return value === true || value === 'true' || value === 1 || value === '1';
     if (rule.type === 'number') {
       const n = Number(value);
       if (!Number.isFinite(n)) return undefined;
