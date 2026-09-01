@@ -8,7 +8,7 @@ const App = {
       await Data.ensureAutoPlaylists();
       await UI.autoIndexSavedFolders();
 
-      console.log('Okvy MusiQ v2.3.1 initialized');
+      console.log('Okvy MusiQ v3.0 initialized');
     } catch(e) {
       console.error('Initialization error:', e);
       const errorEl = document.getElementById('critical-error');

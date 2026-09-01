@@ -412,6 +412,7 @@ const UI = {
 
   onTrackChanged(track) {
     const artwork = this.getArtworkUrl(track);
+    this.updateAlbumDominantColor(artwork);
     document.getElementById('now-playing-bar').classList.remove('hidden');
     document.getElementById('np-title').textContent = track.title || 'Unknown';
     document.getElementById('np-artist').textContent = track.artist || '-';
@@ -467,13 +468,73 @@ const UI = {
     }
   },
 
+  safeAccentColor(primary, fallback) {
+    const parse = (value) => {
+      if (!value) return null;
+      const m = String(value).match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+      if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
+      const h = String(value).trim().replace('#','');
+      if (/^[0-9a-f]{6}$/i.test(h)) return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+      return null;
+    };
+    const toCss = ([r,g,b]) => `rgb(${r}, ${g}, ${b})`;
+    const valid = (rgb) => {
+      if (!rgb) return false;
+      const [r,g,b] = rgb.map(v => v/255);
+      const max = Math.max(r,g,b), min = Math.min(r,g,b);
+      const l = (max + min) / 2;
+      const s = max === min ? 0 : (max-min) / (1-Math.abs(2*l-1));
+      return l >= 0.10 && l <= 0.90 && s >= 0.18;
+    };
+    const clamp = (rgb) => {
+      let [r,g,b] = rgb;
+      const max = Math.max(r,g,b), min = Math.min(r,g,b);
+      let l = (max+min)/510;
+      if (l < 0.10 || l > 0.90) {
+        const target = l < 0.10 ? 0.22 : 0.72;
+        const current = l * 255;
+        const scale = Math.max(0.35, Math.min(2.4, (target*255 - current) / ((r+g+b)/3 - current || 1)));
+        r = current + (r-current)*scale; g = current + (g-current)*scale; b = current + (b-current)*scale;
+      }
+      const avg = (r+g+b)/3;
+      if (Math.max(r,g,b)-Math.min(r,g,b) < 45) {
+        r = Math.min(255, avg + 70); g = Math.max(0, avg - 10); b = Math.max(0, avg - 55);
+      }
+      return [Math.round(Math.max(0,Math.min(255,r))), Math.round(Math.max(0,Math.min(255,g))), Math.round(Math.max(0,Math.min(255,b)))];
+    };
+    const first = parse(primary), second = parse(fallback);
+    let rgb = valid(first) ? first : (valid(second) ? second : [212,175,55]);
+    if (!valid(rgb)) rgb = clamp(rgb);
+    return { css: toCss(rgb), rgb };
+  },
+
   onThemeColors(detail) {
     const root = document.documentElement;
-    root.style.setProperty('--dynamic-primary', detail.dominant);
-    root.style.setProperty('--dynamic-vibrant', detail.vibrant);
-    const rgb = detail.dominant.match(/\d+/g);
-    if (rgb) root.style.setProperty('--accent-rgb', rgb.join(', '));
+    const accent = this.safeAccentColor(detail.dominant, detail.vibrant);
+    root.style.setProperty('--dynamic-primary', accent.css);
+    root.style.setProperty('--dynamic-vibrant', accent.css);
+    root.style.setProperty('--accent-rgb', accent.rgb.join(', '));
+    this.setAlbumDominantColor(detail.dominant);
     if (SettingsManager.get('ui.waveformSeekbar')) requestAnimationFrame(() => this.renderWaveform());
+  },
+
+  setAlbumDominantColor(color) {
+    const root = document.documentElement;
+    const m = String(color || '').match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/i);
+    if (!m) return;
+    const rgb = [Number(m[1]), Number(m[2]), Number(m[3])].map(v => Math.max(0, Math.min(255, v)));
+    root.style.setProperty('--album-dominant-rgb', rgb.join(', '));
+    root.style.setProperty('--album-dominant-color', `rgb(${rgb.join(', ')})`);
+  },
+
+  async updateAlbumDominantColor(artwork) {
+    if (!artwork || artwork === 'assets/default-art.png') return;
+    try {
+      const colors = await Utils.extractColors(artwork);
+      this.setAlbumDominantColor(colors.dominant);
+    } catch (e) {
+      console.warn('Could not extract album dominant color:', e);
+    }
   },
 
   async onSettingChanged(detail) {
@@ -620,6 +681,8 @@ const UI = {
       const root = document.documentElement;
       root.style.removeProperty('--dynamic-primary');
       root.style.removeProperty('--dynamic-vibrant');
+      root.style.setProperty('--dynamic-primary', 'rgb(212, 175, 55)');
+      root.style.setProperty('--dynamic-vibrant', 'rgb(201, 162, 39)');
       root.style.setProperty('--accent-rgb', '212, 175, 55');
       if (SettingsManager.get('ui.waveformSeekbar')) requestAnimationFrame(() => this.renderWaveform());
       return;
@@ -1183,14 +1246,15 @@ const UI = {
     html += `<div class="effects-panel">`;
     html += `<div class="effects-card"><div class="effects-card-head"><div><h3>Equalizer</h3><p>5-band EQ from bass to air.</p></div><label class="toggle-switch"><input type="checkbox" ${s.equalizerEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span class="toggle-slider"></span></label></div>`;
     html += `<div class="effect-action-row"><div class="eq-preset-row"><select aria-label="EQ preset" onchange="UI.setEqPreset(this.value)">${presets.map(p=>`<option ${s.eqCurrentPreset===p.name?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}<option ${s.eqCurrentPreset==='Custom'?'selected':''}>Custom</option></select></div><button class="effect-reset-btn" type="button" onclick="UI.resetEqualizer()">Reset</button></div>`;
-    html += `<div class="eq-sliders">${freqs.map((f,i)=>`<label><span class="eq-slider-wrap"><input type="range" min="-12" max="12" step="0.5" value="${values[i] || 0}" oninput="UI.setEqBand(${i}, this.value)"></span><span>${f >= 1000 ? (f/1000)+'k' : f} Hz</span></label>`).join('')}</div></div>`;
+    html += `<div class="eq-sliders">${freqs.map((f,i)=>{ const v=Number(values[i] || 0); const pct=((v+12)/24)*100; return `<label><span class="eq-slider-wrap"><input type="range" min="-12" max="12" step="0.5" value="${v}" style="--eq-progress:${pct}%" oninput="UI.setEqBand(${i}, this.value)"></span><span>${f >= 1000 ? (f/1000)+'k' : f} Hz</span></label>`; }).join('')}</div></div>`;
     html += `<div class="effects-card"><div class="effects-card-head"><div><h3>Pitch & Speed</h3><p>These controls are applied together to the same playback rate.</p></div>${appIcon('pitchSpeed')}</div>`;
-    html += `<div class="effect-control"><div><strong>Pitch</strong><span id="pitch-value">${s.pitchSemitones > 0 ? '+' : ''}${s.pitchSemitones} st</span></div><input type="range" min="-12" max="12" step="1" value="${s.pitchSemitones}" oninput="UI.setEffectValue('pitchSemitones', this.value)"></div>`;
-    html += `<div class="effect-control"><div><strong>Speed</strong><span id="speed-value">${Number(s.playbackSpeed).toFixed(2)}×</span></div><input type="range" min="0.5" max="2" step="0.05" value="${s.playbackSpeed}" oninput="UI.setEffectValue('playbackSpeed', this.value)"></div>`;
+    html += `<div class="effect-control"><div><strong>Pitch</strong><span id="pitch-value">${s.pitchSemitones > 0 ? '+' : ''}${s.pitchSemitones} st</span></div><input type="range" min="-12" max="12" step="1" value="${s.pitchSemitones}" oninput="UI.setEffectValue('pitchSemitones', this.value, this)"></div>`;
+    html += `<div class="effect-control"><div><strong>Speed</strong><span id="speed-value">${Number(s.playbackSpeed).toFixed(2)}×</span></div><input type="range" min="0.5" max="2" step="0.05" value="${s.playbackSpeed}" oninput="UI.setEffectValue('playbackSpeed', this.value, this)"></div>`;
     html += `<div class="effect-action-row effect-reset-row"><span>Reset both controls to neutral.</span><button class="effect-reset-btn" type="button" onclick="UI.resetPitchSpeed()">Reset</button></div></div>`;
-    html += `<div class="effects-card"><div class="effects-card-head"><div><h3>Volume Boost</h3><p>Applies gain after the EQ/compressor stage.</p></div>${appIcon('volumeBoost')}</div><div class="effect-control"><div><strong>Boost</strong><span id="boost-value">${Math.round(s.volumeBoost*100)}%</span></div><input type="range" min="50" max="250" step="5" value="${Math.round(s.volumeBoost*100)}" oninput="UI.setEffectValue('volumeBoost', this.value / 100)"></div></div>`;
+    html += `<div class="effects-card"><div class="effects-card-head"><div><h3>Volume Boost</h3><p>Applies gain after the EQ/compressor stage.</p></div>${appIcon('volumeBoost')}</div><div class="effect-control"><div><strong>Boost</strong><span id="boost-value">${Math.round(s.volumeBoost*100)}%</span></div><input type="range" min="50" max="250" step="5" value="${Math.round(s.volumeBoost*100)}" oninput="UI.setEffectValue('volumeBoost', this.value / 100, this)"></div></div>`;
     html += `</div>`;
     container.innerHTML = html;
+    container.querySelectorAll('.effect-control input[type="range"]').forEach(input => this.updateRangeProgress(input));
   },
 
   resetEqualizer() {
@@ -1225,7 +1289,7 @@ const UI = {
     Player.setEQBand(index, Number(value));
   },
 
-  setEffectValue(kind, value) {
+  setEffectValue(kind, value, sourceEl = null) {
     const n = Number(value);
     if (!Number.isFinite(n)) return;
     SettingsManager.set(`audio.${kind}`, n);
@@ -1233,6 +1297,17 @@ const UI = {
     const ids = { pitchSemitones:'pitch-value', playbackSpeed:'speed-value', volumeBoost:'boost-value' };
     const el = document.getElementById(ids[kind]);
     if (el) el.textContent = kind === 'pitchSemitones' ? `${n>0?'+':''}${n} st` : kind === 'playbackSpeed' ? `${n.toFixed(2)}×` : `${Math.round(n*100)}%`;
+    if (sourceEl) this.updateRangeProgress(sourceEl);
+  },
+
+  updateRangeProgress(input) {
+    if (!input) return;
+    const min = Number(input.min ?? 0);
+    const max = Number(input.max ?? 100);
+    const value = Number(input.value ?? min);
+    const pct = max === min ? 0 : Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+    input.style.setProperty('--range-progress', `${pct}%`);
+    input.style.setProperty('--eq-progress', `${pct}%`);
   },
 
   renderSettings(container) {
@@ -1950,6 +2025,7 @@ const UI = {
     const content = document.getElementById('audio-effects-overlay-content');
     if (!overlay || !content) return;
     content.innerHTML = this.buildAudioEffectsControls();
+    content.querySelectorAll('input[type="range"]').forEach(input => this.updateRangeProgress(input));
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden','false');
   },
@@ -1965,10 +2041,10 @@ const UI = {
     return `<div class="effects-quick-grid">
       <div class="effects-card compact"><div class="effects-card-head"><div><h3>Equalizer</h3><p>5-band EQ from bass to air.</p></div><label class="toggle-switch"><input type="checkbox" ${eqEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span class="toggle-slider"></span></label></div>
       <div class="effect-action-row"><select onchange="UI.setEqPreset(this.value)">${SettingsManager.get('audio.eqPresets',[]).map(p=>`<option ${p.name===preset?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}<option ${preset==='Custom'?'selected':''}>Custom</option></select><button class="effect-reset-btn" type="button" onclick="UI.resetEqualizer()">Reset</button></div>
-      <div class="eq-sliders">${bands.map((f,i)=>`<label><span class="eq-slider-wrap"><input type="range" min="-12" max="12" step="0.5" value="${values[i]||0}" oninput="UI.setQuickEQ(${i}, this.value)"></span><span>${f>=1000?(f/1000)+'k':f}</span></label>`).join('')}</div></div>
+      <div class="eq-sliders">${bands.map((f,i)=>{ const v=Number(values[i]||0); const pct=((v+12)/24)*100; return `<label><span class="eq-slider-wrap"><input type="range" min="-12" max="12" step="0.5" value="${v}" style="--eq-progress:${pct}%" oninput="UI.setQuickEQ(${i}, this.value)"></span><span>${f>=1000?(f/1000)+'k':f}</span></label>`; }).join('')}</div></div>
       <div class="effects-card compact"><div class="effects-card-head"><div><h3>Pitch & Speed</h3><p>Applied together to playback.</p></div>${appIcon('pitchSpeed')}</div>
-      <div class="effect-control"><div><strong>Pitch</strong><span id="pitch-value">${pitch>0?'+':''}${pitch} st</span></div><input type="range" min="-12" max="12" step="1" value="${pitch}" oninput="UI.setEffectValue('pitchSemitones', this.value)"></div>
-      <div class="effect-control"><div><strong>Speed</strong><span id="speed-value">${speed.toFixed(2)}×</span></div><input type="range" min="0.5" max="2" step="0.05" value="${speed}" oninput="UI.setEffectValue('playbackSpeed', this.value)"></div>
+      <div class="effect-control"><div><strong>Pitch</strong><span id="pitch-value">${pitch>0?'+':''}${pitch} st</span></div><input type="range" min="-12" max="12" step="1" value="${pitch}" oninput="UI.setEffectValue('pitchSemitones', this.value, this)"></div>
+      <div class="effect-control"><div><strong>Speed</strong><span id="speed-value">${speed.toFixed(2)}×</span></div><input type="range" min="0.5" max="2" step="0.05" value="${speed}" oninput="UI.setEffectValue('playbackSpeed', this.value, this)"></div>
       <div class="effect-action-row effect-reset-row"><span>Reset both controls</span><button class="effect-reset-btn" type="button" onclick="UI.resetPitchSpeed()">Reset</button></div></div>
       <div class="effects-card compact"><div class="effect-control"><div><strong>Volume Boost</strong><span id="boost-value">${Math.round(boost*100)}%</span></div><input type="range" min="0.5" max="2.5" step="0.05" value="${boost}" oninput="UI.setEffectValue('volumeBoost', this.value)"></div></div></div>`;
   },
