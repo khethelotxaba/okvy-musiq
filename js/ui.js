@@ -1,3 +1,21 @@
+
+function appIcon(name, extraClass = '') {
+  const files = {
+    play: 'play.svg', pause: 'pause.svg', search: 'search.svg', queue: 'queue.svg',
+    addPlayNext: 'add-to-play-next.svg', addPlaylist: 'add-to-playlist.svg', favourite: 'favourite.svg',
+    options: 'options.svg', sort: 'sort.svg', tracks: 'tracks.svg', grid: 'grid-style.svg',
+    albums: 'albums.svg', artists: 'artists.svg', folders: 'Folders.svg', playlists: 'playlists.svg',
+    lyrics: 'lyrics.svg', share: 'share.svg', home: 'home.svg', settings: 'setting.svg',
+    previous: 'previous-track.svg', next: 'next-track.svg', shuffle: 'shuffle.svg',
+    repeatNone: 'repeate-all.svg', repeatAll: 'repeate-all.svg', repeatOne: 'repeate-one.svg', repeatN: 'repeat-track-x-times.svg',
+    lightMode: 'light-mode.svg', darkMode: 'dark-mode.svg', theme: 'theme.svg',
+    remove: 'delete.svg', select: 'select.svg', playMini: 'play-for-mini-player.svg', pauseMini: 'pause-for-mini-player.svg', warning: 'warning-info.svg', scanner: 'scanner.svg',
+  };
+  const file = files[name];
+  if (!file) return '';
+  return `<span class="app-icon ${extraClass}" data-icon="${name}" style="--icon:url('Icons/${file}')" aria-hidden="true"></span>`;
+}
+
 const UI = {
   currentPage: 'home',
   currentPageParams: {},
@@ -30,6 +48,8 @@ const UI = {
     this.bindKeyboard();
     this.bindTouchGestures();
 
+    this.applyThemeMode();
+
     window.addEventListener('track-changed', (e) => this.onTrackChanged(e.detail));
     window.addEventListener('playback-state', (e) => this.onPlaybackState(e.detail));
     window.addEventListener('time-update', (e) => this.onTimeUpdate(e.detail));
@@ -43,7 +63,6 @@ const UI = {
       this.onTrackChanged(Player.currentTrack);
     }
     this.updatePlayerControls();
-    this.applyThemeMode();
     this.renderSidebarPlaylists();
     this.navigate('home');
   },
@@ -297,14 +316,57 @@ const UI = {
 
   updatePlayerControls() {
     const isPlaying = Player.isPlaying;
-    const playIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8.2 5.9c0-1.4 1.55-2.28 2.76-1.55l9 5.5a1.85 1.85 0 0 1 0 3.2l-9 5.5c-1.21.73-2.76-.15-2.76-1.55z" fill="currentColor" stroke="none"/></svg>`;
-    const pauseIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16" rx="1.6" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1.6" fill="currentColor" stroke="none"/></svg>`;
+    const npIcon = isPlaying ? 'pause-for-mini-player.svg' : 'play-for-mini-player.svg';
+    const fpIcon = isPlaying ? 'pause.svg' : 'play.svg';
+    const npEl = document.getElementById('np-play-icon');
+    const fpEl = document.getElementById('fp-play-icon');
+    if (npEl) {
+      npEl.dataset.icon = isPlaying ? 'pause-mini' : 'play-mini';
+      npEl.style.setProperty('--icon', `url('Icons/${npIcon}')`);
+    }
+    if (fpEl) {
+      fpEl.dataset.icon = isPlaying ? 'pause' : 'play';
+      fpEl.style.setProperty('--icon', `url('Icons/${fpIcon}')`);
+    }
 
-    document.getElementById('np-play-icon').innerHTML = isPlaying ? pauseIcon : playIcon;
-    document.getElementById('fp-play-icon').innerHTML = isPlaying ? pauseIcon : playIcon;
+    const shuffleButton = document.getElementById('fp-shuffle');
+    const repeatButton = document.getElementById('fp-repeat');
+    if (shuffleButton) shuffleButton.classList.toggle('active', SettingsManager.get('playback.shuffleMode'));
+    this.updateRepeatControl();
+  },
 
-    document.getElementById('fp-shuffle').classList.toggle('active', SettingsManager.get('playback.shuffleMode'));
-    document.getElementById('fp-repeat').classList.toggle('active', SettingsManager.get('playback.repeatMode') !== 'none');
+  updateRepeatControl() {
+    const button = document.getElementById('fp-repeat');
+    const icon = document.getElementById('fp-repeat-icon');
+    const count = document.getElementById('fp-repeat-count');
+    if (!button || !icon) return;
+
+    const mode = SettingsManager.get('playback.repeatMode', 'none');
+    const countValue = Math.max(1, Number(SettingsManager.get('playback.repeatNTimes', 1)) || 1);
+    const iconMap = {
+      none: 'repeate-all.svg',
+      all: 'repeate-all.svg',
+      one: 'repeate-one.svg',
+      n: 'repeat-track-x-times.svg'
+    };
+    const labels = {
+      none: 'Repeat off',
+      all: 'Repeat all',
+      one: 'Repeat one',
+      n: `Repeat track ${countValue} times`
+    };
+
+    icon.dataset.icon = mode;
+    icon.style.setProperty('--icon', `url('Icons/${iconMap[mode] || iconMap.none}')`);
+    button.classList.toggle('active', mode !== 'none');
+    button.dataset.repeatMode = mode;
+    button.setAttribute('aria-label', labels[mode] || labels.none);
+    button.title = labels[mode] || labels.none;
+
+    if (count) {
+      count.textContent = mode === 'n' ? `×${countValue}` : '';
+      count.hidden = mode !== 'n';
+    }
   },
 
   onTrackChanged(track) {
@@ -402,6 +464,7 @@ const UI = {
           break;
         case 'playback.shuffleMode':
         case 'playback.repeatMode':
+        case 'playback.repeatNTimes':
           this.updatePlayerControls();
           break;
         case 'ui.themeMode':
@@ -473,7 +536,19 @@ const UI = {
 
   applyThemeMode() {
     const mode = SettingsManager.get('ui.themeMode', 'dark');
-    document.body.classList.toggle('light', mode === 'light');
+    const isLight = mode === 'light';
+    document.body.classList.toggle('light', isLight);
+    document.body.dataset.theme = mode;
+    document.documentElement.style.colorScheme = mode;
+
+    const themeMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeMeta) themeMeta.setAttribute('content', isLight ? '#f5f5f5' : '#000000');
+
+    const themeIcon = document.getElementById('theme-setting-icon');
+    if (themeIcon) {
+      const iconFile = isLight ? 'light-mode.svg' : 'dark-mode.svg';
+      themeIcon.style.setProperty('--icon', `url('Icons/${iconFile}')`);
+    }
   },
 
   async applyDynamicTheme() {
@@ -643,7 +718,7 @@ const UI = {
     container.innerHTML = `
       <div class="search-hero">
         <div class="search-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.6" cy="10.6" r="7.1"/><path d="M20.5 20.5l-4.35-4.35"/></svg>
+          ${appIcon('search')}
           <input type="text" id="search-input" placeholder="Search songs, albums, artists..." oninput="UI.handleSearch(this.value)">
         </div>
         <div class="search-filters">
@@ -691,20 +766,20 @@ const UI = {
     let html = '<div class="view-toolbar">';
     html += '<div class="view-toolbar-left">';
     if (this.isSelectionMode) {
-      html += `<button class="icon-btn small" onclick="UI.clearSelection()" title="Clear"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.3 6.7 6.7 17.3M6.7 6.7l10.6 10.6" stroke-linecap="round"/></svg></button>`;
+      html += `<button class="icon-btn small" onclick="UI.clearSelection()" title="Clear">${appIcon('remove')}</button>`;
       html += `<span style="font-size:13px;color:var(--text-secondary);font-weight:600;">${this.selectedTracks.size} selected</span>`;
-      html += `<button class="icon-btn small" onclick="UI.addSelectedToQueue()" title="Add to Queue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>`;
-      html += `<button class="icon-btn small" onclick="UI.showPlaylistModal()" title="Add to Playlist"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" stroke-linejoin="round"/><path d="M12 8.2v7.6M8.2 12h7.6" stroke-linecap="round"/></svg></button>`;
+      html += `<button class="icon-btn small" onclick="UI.addSelectedToQueue()" title="Add to Queue">${appIcon('addPlayNext')}</button>`;
+      html += `<button class="icon-btn small" onclick="UI.showPlaylistModal()" title="Add to Playlist">${appIcon('addPlaylist')}</button>`;
     } else {
       html += `<select class="sort-select" onchange="UI.sortTracks(this.value)">`;
       html += `<option value="title">Title</option><option value="artist">Artist</option><option value="album">Album</option><option value="duration">Duration</option><option value="playCount">Plays</option><option value="dateAdded">Date Added</option>`;
       html += `</select>`;
-      html += `<button class="icon-btn small" onclick="UI.toggleSortDir()" title="Toggle sort direction"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 15l5 5 5-5"/><path d="M7 9l5-5 5 5"/></svg></button>`;
+      html += `<button class="icon-btn small" onclick="UI.toggleSortDir()" title="Toggle sort direction">${appIcon('sort')}</button>`;
     }
     html += '</div>';
     html += '<div class="view-toolbar-right">';
-    html += `<button class="view-toggle-btn ${!isGrid ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'list'); UI.renderCurrentPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 6h11M9.5 12h11M9.5 18h11" stroke-linecap="round"/><circle cx="4" cy="6" r="1" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1" fill="currentColor" stroke="none"/></svg></button>`;
-    html += `<button class="view-toggle-btn ${isGrid ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'grid'); UI.renderCurrentPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg></button>`;
+    html += `<button class="view-toggle-btn ${!isGrid ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'list'); UI.renderCurrentPage()">${appIcon('tracks')}</button>`;
+    html += `<button class="view-toggle-btn ${isGrid ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'grid'); UI.renderCurrentPage()">${appIcon('grid')}</button>`;
     html += '</div></div>';
 
     if (tracks.length === 0) {
@@ -743,8 +818,8 @@ const UI = {
     let html = '<div class="view-toolbar">';
     html += '<div class="view-toolbar-left"><h2 style="font-size:18px;font-weight:800;">Albums</h2></div>';
     html += '<div class="view-toolbar-right">';
-    html += `<button class="view-toggle-btn ${!isCollage ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'grid'); UI.renderCurrentPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg></button>`;
-    html += `<button class="view-toggle-btn ${isCollage ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'collage'); UI.renderCurrentPage()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg></button>`;
+    html += `<button class="view-toggle-btn ${!isCollage ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'grid'); UI.renderCurrentPage()">${appIcon('grid')}</button>`;
+    html += `<button class="view-toggle-btn ${isCollage ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'collage'); UI.renderCurrentPage()">${appIcon('grid')}</button>`;
     html += '</div></div>';
 
     if (albums.size === 0) {
@@ -877,7 +952,7 @@ const UI = {
           <span class="track-duration">${Utils.formatDuration(track.duration)}</span>
           <div class="track-actions">
             <button class="icon-btn small" onclick="Player.removeFromQueue(${i}); event.stopPropagation();">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M17.3 6.7 6.7 17.3M6.7 6.7l10.6 10.6" stroke-linecap="round"/></svg>
+              ${appIcon('remove')}
             </button>
           </div>
         </div>
@@ -1003,7 +1078,7 @@ const UI = {
     html += '<div class="track-list">';
     Object.entries(folders).sort((a,b) => a[0].localeCompare(b[0])).forEach(([folder, folderTracks]) => {
       html += `<div class="folder-card" onclick="UI.navigate('tracks', {folder: '${Utils.escapeHtml(folder)}'})">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.4c0-1.6 1.3-2.9 2.9-2.9h3.4l1.9 2.2h7.9c1.6 0 2.9 1.3 2.9 2.9v6.6c0 1.6-1.3 2.9-2.9 2.9H5.4c-1.6 0-2.9-1.3-2.9-2.9z" stroke-linejoin="round"/></svg>
+        ${appIcon('folders')}
         <span class="folder-path">${Utils.escapeHtml(folder)}</span>
         <span style="color:var(--text-tertiary);font-size:13px;font-weight:600;">${folderTracks.length} tracks</span>
       </div>`;
@@ -1067,8 +1142,8 @@ const UI = {
     html += `<div class="settings-group"><h3>Playback</h3>`;
     html += toggle('playback.persistentQueue', 'Persistent Queue', s.playback.persistentQueue, 'Keeps the current queue across reloads.');
     html += toggle('playback.shuffleMode', 'Shuffle', s.playback.shuffleMode);
-    html += select('playback.repeatMode', 'Repeat Mode', s.playback.repeatMode, [['none','Off'],['one','One'],['all','All'],['n','N Times']]);
-    html += number('playback.repeatNTimes', 'Repeat Count', s.playback.repeatNTimes, 1, 20, 1);
+    html += select('playback.repeatMode', 'Repeat Mode', s.playback.repeatMode, [['none','Off'],['all','All Tracks'],['one','One Track'],['n','Repeat Track N Times']]);
+    html += number('playback.repeatNTimes', 'Repeat Track N Times', s.playback.repeatNTimes, 1, 20, 1, 'Used when Repeat Mode is set to Repeat Track N Times.');
     html += toggle('playback.autoPlayOnInsert', 'Autoplay Inserted Tracks', s.playback.autoPlayOnInsert);
     html += toggle('playback.smartPause.onAppSwitch', 'Pause When App Is Hidden', s.playback.smartPause.onAppSwitch);
     html += toggle('playback.smartPause.onVolumeZero', 'Pause When Volume Reaches Zero', s.playback.smartPause.onVolumeZero);
@@ -1076,6 +1151,14 @@ const UI = {
     html += `</div>`;
 
     html += `<div class="settings-group"><h3>Interface</h3>`;
+    html += `<div class="setting-row theme-setting-row">
+      <div style="flex:1;min-width:0;"><span><span id="theme-setting-icon" class="app-icon setting-icon" style="--icon:url('Icons/${s.ui.themeMode === 'light' ? 'light-mode.svg' : 'dark-mode.svg'}')" aria-hidden="true"></span>Theme</span>
+      <small style="display:block;color:var(--text-tertiary);font-size:11px;margin-top:3px;line-height:1.4;">Choose between the light and dark interface.</small></div>
+      <select aria-label="Theme" onchange="SettingsManager.set('ui.themeMode', this.value)">
+        <option value="dark" ${s.ui.themeMode === 'dark' ? 'selected' : ''}>Dark</option>
+        <option value="light" ${s.ui.themeMode === 'light' ? 'selected' : ''}>Light</option>
+      </select>
+    </div>`;
     html += toggle('ui.dynamicTheming', 'Dynamic Theming', s.ui.dynamicTheming, 'Uses the current artwork to tint the interface.');
     html += toggle('ui.particlesEnabled', 'Particles', s.ui.particlesEnabled);
     html += number('ui.particlesIntensity', 'Particle Intensity', s.ui.particlesIntensity, 0, 2, 0.1);
@@ -1250,18 +1333,18 @@ const UI = {
     const isSelected = this.selectedTracks.has(track.id);
     return `
       <div class="track-row ${isPlaying ? 'playing' : ''} ${isSelected ? 'selected' : ''}" onclick="${this.isSelectionMode ? `UI.toggleTrackSelection('${track.id}')` : `UI.playTrackById('${track.id}')`}" oncontextmenu="UI.showTrackMenu('${track.id}', event)">
-        ${this.isSelectionMode ? `<div class="track-check ${isSelected ? 'checked' : ''}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>` : ''}
+        ${this.isSelectionMode ? `<div class="track-check ${isSelected ? 'checked' : ''}">${appIcon('select')}</div>` : ''}
         <img class="track-art" src="${this.getArtworkUrl(track)}" alt="">
         <div class="track-info">
           <span class="track-title">${Utils.escapeHtml(track.title)}</span>
           <span class="track-meta">${Utils.escapeHtml(track.artist)}${track.album ? ' &bull; ' + Utils.escapeHtml(track.album) : ''}</span>
         </div>
         <div class="track-actions">
-          <button class="icon-btn small" onclick="event.stopPropagation(); UI.toggleTrackFavorite('${track.id}')">
-            <svg viewBox="0 0 24 24" fill="${track.favorite ? '#ff4444' : 'none'}" stroke="${track.favorite ? '#ff4444' : 'currentColor'}" stroke-width="2"><path d="M12 20.1c-.28 0-.55-.08-.78-.23C7.2 17.1 3.3 13.9 3.3 9.9c0-2.9 2.3-5.2 5.1-5.2 1.7 0 3.2.83 4.1 2.1a5.02 5.02 0 0 1 4.1-2.1c2.8 0 5.1 2.3 5.1 5.2 0 4-3.9 7.2-7.92 10-.23.15-.5.23-.78.23z" stroke-linejoin="round"/></svg>
+          <button class="icon-btn small track-favorite-btn ${track.favorite ? 'is-favorite' : ''}" onclick="event.stopPropagation(); UI.toggleTrackFavorite('${track.id}')">
+            ${appIcon('favourite')}
           </button>
           <button class="icon-btn small" onclick="event.stopPropagation(); UI.showTrackMenu('${track.id}', event)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+            ${appIcon('options')}
           </button>
         </div>
       </div>
@@ -1277,7 +1360,7 @@ const UI = {
         <img src="${art}" alt="" loading="lazy">
         <div class="grid-overlay">
           <button class="play-overlay" onclick="event.stopPropagation(); ${item.id ? `UI.playTrackById('${item.id}')` : ''}">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.2 5.9c0-1.4 1.55-2.28 2.76-1.55l9 5.5a1.85 1.85 0 0 1 0 3.2l-9 5.5c-1.21.73-2.76-.15-2.76-1.55z" fill="currentColor" stroke="none"/></svg>
+            ${appIcon('play')}
           </button>
         </div>
       </div>
@@ -1292,7 +1375,7 @@ const UI = {
         <img src="${this.getArtistArtwork(artist)}" alt="" loading="lazy">
         <div class="grid-overlay">
           <button class="play-overlay" onclick="event.stopPropagation(); UI.navigate('tracks', {artist: '${Utils.escapeHtml(artist.name)}'})">
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.2 5.9c0-1.4 1.55-2.28 2.76-1.55l9 5.5a1.85 1.85 0 0 1 0 3.2l-9 5.5c-1.21.73-2.76-.15-2.76-1.55z" fill="currentColor" stroke="none"/></svg>
+            ${appIcon('play')}
           </button>
         </div>
       </div>
@@ -1368,6 +1451,7 @@ const UI = {
     const modes = ['none', 'all', 'one', 'n'];
     const current = SettingsManager.get('playback.repeatMode');
     const next = modes[(modes.indexOf(current) + 1) % modes.length];
+    if (next !== current) Player.repeatCount = 0;
     SettingsManager.set('playback.repeatMode', next);
     this.updatePlayerControls();
   },
@@ -1758,7 +1842,7 @@ const UI = {
     const userPls = playlists.filter(p => p.type === 'user');
     container.innerHTML = userPls.map(p => `
       <a href="#playlist-${p.id}" class="playlist-link" onclick="event.preventDefault(); UI.navigate('playlist-detail', {playlistId: '${p.id}'})">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" stroke-linejoin="round"/><path d="M8.5 9h7M8.5 15h7" stroke-linecap="round"/></svg>
+        ${appIcon('playlists')}
         <span>${Utils.escapeHtml(p.name)}</span>
       </a>
     `).join('');
@@ -1878,7 +1962,7 @@ const UI = {
       const track = tracks.find(t => t.artwork) || tracks[0];
       return `<img src="${this.getArtworkUrl(track)}" alt="">`;
     }
-    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" stroke-linejoin="round"/><path d="M8.5 9h7M8.5 15h7" stroke-linecap="round"/></svg></div>`;
+    return `<div class="playlist-empty">${appIcon('playlists')}</div>`;
   },
 
   getMood(energy) {
@@ -1914,7 +1998,7 @@ const UI = {
       const track = tracks.find(t => t.artwork) || tracks[0];
       return `<img src="${this.getArtworkUrl(track)}" alt="">`;
     }
-    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" stroke-linejoin="round"/><circle cx="9" cy="9" r="1.6"/><path d="M21 15.5 16.3 11 6 21" stroke-linejoin="round"/></svg></div>`;
+    return `<div class="playlist-empty">${appIcon('albums')}</div>`;
   },
 
   getArtistArtwork(artist, tracks) {
@@ -1922,7 +2006,7 @@ const UI = {
       const track = tracks.find(t => t.artwork) || tracks[0];
       return `<img src="${this.getArtworkUrl(track)}" alt="">`;
     }
-    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-1.6a4.4 4.4 0 0 0-4.4-4.4H9.4A4.4 4.4 0 0 0 5 19.4V21" stroke-linecap="round"/><circle cx="12" cy="7.3" r="3.8"/></svg></div>`;
+    return `<div class="playlist-empty">${appIcon('artists')}</div>`;
   },
 
   getGenreArtwork(genre) {
@@ -1934,7 +2018,7 @@ const UI = {
       const track = tracks.find(t => t.artwork) || tracks[0];
       return `<img src="${this.getArtworkUrl(track)}" alt="">`;
     }
-    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.4c0-1.6 1.3-2.9 2.9-2.9h3.4l1.9 2.2h7.9c1.6 0 2.9 1.3 2.9 2.9v6.6c0 1.6-1.3 2.9-2.9 2.9H5.4c-1.6 0-2.9-1.3-2.9-2.9z" stroke-linejoin="round"/></svg></div>`;
+    return `<div class="playlist-empty">${appIcon('folders')}</div>`;
   },
 
   getPlaylistArtwork(playlist, tracks) {
@@ -1945,7 +2029,7 @@ const UI = {
       const track = tracks.find(t => t.artwork) || tracks[0];
       return `<img src="${this.getArtworkUrl(track)}" alt="">`;
     }
-    return `<div class="playlist-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4" stroke-linejoin="round"/><path d="M8.5 9h7M8.5 15h7" stroke-linecap="round"/></svg></div>`;
+    return `<div class="playlist-empty">${appIcon('playlists')}</div>`;
   },
 
   shufflePlaylist(id) {

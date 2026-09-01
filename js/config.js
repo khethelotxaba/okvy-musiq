@@ -123,7 +123,7 @@ const SETTINGS_RULES = {
   'ui.glassIntensity': { type: 'number', min: 0, max: 1 },
   'ui.gridColumns': { type: 'enum', values: ['auto', '2', '3', '4', '5'] },
   'ui.gridViewStyle': { type: 'enum', values: ['grid', 'list', 'collage'] },
-  'ui.themeMode': { type: 'enum', values: ['dark'] },
+  'ui.themeMode': { type: 'enum', values: ['dark', 'light'] },
   'ui.miniplayerGlowMode': { type: 'enum', values: ['dynamic', 'static'] },
   'ui.landscapeLayout': { type: 'enum', values: ['auto', 'compact', 'expanded'] },
   'ui.vibrationMode': { type: 'enum', values: ['haptic', 'none'] },
