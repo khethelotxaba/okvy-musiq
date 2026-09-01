@@ -53,6 +53,8 @@ const UI = {
   currentSortDir: 'asc',
   particleAnimationId: null,
   particleResizeHandler: null,
+  _waveformCache: new Map(),
+  _waveformToken: 0,
 
   getArtworkUrl(track) {
     if (!track) return 'assets/default-art.png';
@@ -423,6 +425,7 @@ const UI = {
     document.getElementById('sidebar-artist').textContent = track.artist || '-';
     document.getElementById('sidebar-art').src = artwork;
     this.updatePlayerControls();
+    this._prepareTrackWaveform(track);
     if (this.currentPage === 'tracks' || this.currentPage === 'favorites' || this.currentPage === 'queue') {
       this.renderCurrentPage();
     }
@@ -441,6 +444,7 @@ const UI = {
     document.getElementById('fp-progress-handle').style.left = progress + '%';
     document.getElementById('fp-current').textContent = Utils.formatTime(detail.current);
     document.getElementById('fp-duration').textContent = Utils.formatTime(detail.duration);
+    if (SettingsManager.get('ui.waveformSeekbar')) this.renderWaveform();
   },
 
   onAudioPeak(detail) {
@@ -468,6 +472,7 @@ const UI = {
     root.style.setProperty('--dynamic-vibrant', detail.vibrant);
     const rgb = detail.dominant.match(/\d+/g);
     if (rgb) root.style.setProperty('--accent-rgb', rgb.join(', '));
+    if (SettingsManager.get('ui.waveformSeekbar')) requestAnimationFrame(() => this.renderWaveform());
   },
 
   async onSettingChanged(detail) {
@@ -538,7 +543,10 @@ const UI = {
           this.renderCurrentPage();
           break;
         case 'ui.waveformSeekbar':
+          this.applyWaveformMode();
+          break;
         case 'ui.waveformBars':
+          this._waveformCache.clear();
           this.applyWaveformMode();
           break;
         case 'ui.vibrationMode':
@@ -611,6 +619,7 @@ const UI = {
       root.style.removeProperty('--dynamic-primary');
       root.style.removeProperty('--dynamic-vibrant');
       root.style.setProperty('--accent-rgb', '212, 175, 55');
+      if (SettingsManager.get('ui.waveformSeekbar')) requestAnimationFrame(() => this.renderWaveform());
       return;
     }
 
@@ -1555,6 +1564,7 @@ const UI = {
   },
 
   openFullPlayer() {
+    document.body.classList.add('full-player-open');
     document.getElementById('full-player').classList.add('open');
     this.applyFillAlbumArt();
     this.applyWaveformMode();
@@ -1562,6 +1572,7 @@ const UI = {
 
   closeFullPlayer() {
     document.getElementById('full-player').classList.remove('open');
+    document.body.classList.remove('full-player-open');
     this.hidePlayerOptions();
     this.closePlayerOverlay('lyrics');
     this.closePlayerOverlay('audio-effects');
@@ -2133,22 +2144,101 @@ const UI = {
 
     const on = Boolean(SettingsManager.get('ui.waveformSeekbar'));
     container.classList.toggle('waveform-mode', on);
-
-    this._waveformRunId = (this._waveformRunId || 0) + 1;
+    this._waveformToken = (this._waveformToken || 0) + 1;
 
     if (!on) {
       const canvas = document.getElementById('waveform-canvas');
       if (canvas) {
         const ctx = canvas.getContext('2d');
-        if (ctx) ctx.clearRect(0, 0, canvas.clientWidth || canvas.width, canvas.clientHeight || canvas.height);
+        if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
       }
       return;
     }
 
-    // The full player sheet slides in, so its width can still be zero on the
-    // same frame that the .open class is added. Wait for layout to settle.
-    if (fp && fp.classList.contains('open')) {
-      requestAnimationFrame(() => requestAnimationFrame(() => this.renderWaveform()));
+    // Layout is already full-viewport, but defer one frame so CSS variables,
+    // artwork, and accent colors have settled before measuring the canvas.
+    requestAnimationFrame(() => this.renderWaveform());
+    if (Player.currentTrack) this._prepareTrackWaveform(Player.currentTrack);
+  },
+
+  async _prepareTrackWaveform(track) {
+    if (!track || !SettingsManager.get('ui.waveformSeekbar')) return;
+    const key = String(track.id || track.path || track.title || 'current');
+    const cached = this._waveformCache.get(key);
+    if (cached?.length) {
+      this.renderWaveform();
+      return;
+    }
+
+    const token = ++this._waveformToken;
+    try {
+      // The waveform needs actual time-domain samples, not analyser frequency
+      // bins. Decode the current audio source and reduce it to stable peak
+      // values distributed across the entire track, including quiet sections.
+      if (!Player.currentBlobUrl) return;
+      const response = await fetch(Player.currentBlobUrl);
+      const buffer = await response.arrayBuffer();
+      if (token !== this._waveformToken) return;
+
+      if (!Player.audioCtx) Player.initAudioContext();
+      if (!Player.audioCtx) return;
+      const audioBuffer = await Player.audioCtx.decodeAudioData(buffer.slice(0));
+      if (token !== this._waveformToken) return;
+
+      const channelCount = audioBuffer.numberOfChannels || 1;
+      const channels = [];
+      for (let c = 0; c < channelCount; c++) channels.push(audioBuffer.getChannelData(c));
+
+      const bars = Math.max(48, Math.min(300, Number(SettingsManager.get('ui.waveformBars')) || 120));
+      const samplesPerBar = Math.max(1, Math.floor(audioBuffer.length / bars));
+      const peaks = new Float32Array(bars);
+      const rms = new Float32Array(bars);
+
+      for (let i = 0; i < bars; i++) {
+        const start = i * samplesPerBar;
+        const end = i === bars - 1 ? audioBuffer.length : Math.min(audioBuffer.length, start + samplesPerBar);
+        let peak = 0;
+        let energy = 0;
+        // Sample the block at a bounded density so very long tracks do not
+        // freeze the UI while still preserving clear climaxes/rests.
+        const stride = Math.max(1, Math.floor((end - start) / 240));
+        let count = 0;
+        for (let n = start; n < end; n += stride) {
+          let sample = 0;
+          for (const data of channels) sample += Math.abs(data[n] || 0);
+          sample /= channelCount;
+          peak = Math.max(peak, sample);
+          energy += sample * sample;
+          count++;
+        }
+        peaks[i] = peak;
+        rms[i] = count ? Math.sqrt(energy / count) : peak;
+      }
+
+      // A small temporal normalization keeps quiet tracks visible without
+      // erasing their relative dynamics. Peaks remain the dominant signal.
+      let maxPeak = 0;
+      for (const v of peaks) maxPeak = Math.max(maxPeak, v);
+      if (maxPeak > 0) {
+        for (let i = 0; i < peaks.length; i++) {
+          const normalized = peaks[i] / maxPeak;
+          const floor = Math.min(0.055, Math.max(0.018, rms[i] / maxPeak * 0.35));
+          peaks[i] = Math.max(floor, Math.pow(normalized, 0.72));
+        }
+      }
+
+      this._waveformCache.set(key, peaks);
+      // Keep memory bounded when users play through a very large library.
+      while (this._waveformCache.size > 12) {
+        const first = this._waveformCache.keys().next().value;
+        this._waveformCache.delete(first);
+      }
+      this.renderWaveform();
+    } catch (e) {
+      // Waveform extraction is visual enhancement only. Keep the normal
+      // seekbar available when a browser cannot decode the source.
+      console.warn('Waveform extraction failed:', e);
+      this.renderWaveform();
     }
   },
 
@@ -2158,17 +2248,16 @@ const UI = {
     if (!canvas || !container || !container.classList.contains('waveform-mode')) return;
 
     const rect = container.getBoundingClientRect();
-    const width = Math.max(1, Math.round(rect.width));
-    const height = Math.max(1, Math.round(rect.height));
-    if (width < 8 || height < 8) {
-      requestAnimationFrame(() => this.renderWaveform());
-      return;
-    }
+    const width = Math.round(rect.width);
+    const height = Math.round(rect.height);
+    if (width < 24 || height < 16) return;
 
     const dpr = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
-    if (canvas.width !== width * dpr || canvas.height !== height * dpr) {
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
+    const pixelWidth = Math.max(1, Math.round(width * dpr));
+    const pixelHeight = Math.max(1, Math.round(height * dpr));
+    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+      canvas.width = pixelWidth;
+      canvas.height = pixelHeight;
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
     }
@@ -2178,55 +2267,49 @@ const UI = {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
-    const bars = Math.max(24, Math.min(120, Number(SettingsManager.get('ui.waveformBars')) || 80));
-    const step = width / bars;
-    const gap = Math.max(1, Math.min(2.5, step * 0.25));
-    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#d4af37';
-    const analyser = Player.analyser;
-    const data = analyser ? new Uint8Array(analyser.frequencyBinCount) : null;
-    if (data) analyser.getByteFrequencyData(data);
+    const track = Player.currentTrack;
+    const key = String(track?.id || track?.path || track?.title || 'current');
+    const peaks = this._waveformCache.get(key);
+    if (!peaks || !peaks.length) return;
 
-    // The analyzer is frequency data, not a sample waveform. Use it as a stable
-    // visual texture and blend in a deterministic baseline so the seekbar never
-    // disappears while paused, loading, or before the audio graph is ready.
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#d4af37';
+    const duration = Number(Player.audio?.duration);
+    const progress = duration > 0 && Number.isFinite(Player.audio?.currentTime)
+      ? Math.max(0, Math.min(1, Player.audio.currentTime / duration))
+      : 0;
+
+    const bars = peaks.length;
+    const step = width / bars;
+    const gap = Math.max(1, Math.min(2.2, step * 0.28));
+    const center = height / 2;
+    const minBar = Math.max(2, height * 0.07);
+    const maxBar = height * 0.90;
+    const playedIndex = progress * bars;
+
+    // Rounded vertical bars closely mimic Namida's waveform-seekbar idea:
+    // the actual track envelope is persistent, while played/unplayed regions
+    // use the current accent color with different opacity.
     for (let i = 0; i < bars; i++) {
-      const idx = data?.length ? Math.min(data.length - 1, Math.floor(i / bars * data.length)) : 0;
-      const live = data?.length ? data[idx] / 255 : 0;
-      const baseline = 0.16 + 0.10 * (0.5 + 0.5 * Math.sin(i * 1.73));
-      const value = Math.max(baseline, live);
-      const barHeight = Math.max(3, value * height * 0.9);
+      const amount = Math.max(0, Math.min(1, peaks[i]));
+      const barHeight = Math.max(minBar, amount * maxBar);
       const x = i * step + gap / 2;
-      const y = (height - barHeight) / 2;
+      const y = center - barHeight / 2;
+      const w = Math.max(1, step - gap);
       ctx.fillStyle = accent;
-      ctx.globalAlpha = 0.32 + value * 0.68;
-      ctx.fillRect(x, y, Math.max(1, step - gap), barHeight);
+      ctx.globalAlpha = i < playedIndex ? 0.98 : 0.23;
+      const r = Math.min(w / 2, 2.5);
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, barHeight, r);
+      ctx.fill();
     }
     ctx.globalAlpha = 1;
 
-    if (!this._waveformResizeBound) {
-      this._waveformResizeBound = true;
-      const resize = () => {
-        if (SettingsManager.get('ui.waveformSeekbar')) requestAnimationFrame(() => this.renderWaveform());
-      };
-      window.addEventListener('resize', resize);
-      if (window.ResizeObserver) {
-        this._waveformObserver = new ResizeObserver(resize);
-        this._waveformObserver.observe(container);
-      }
-    }
-
-    if (Player.isPlaying && !this._waveformFrame) {
-      const tick = () => {
-        this._waveformFrame = requestAnimationFrame(() => {
-          this._waveformFrame = null;
-          if (Player.isPlaying && container.classList.contains('waveform-mode')) {
-            this.renderWaveform();
-            tick();
-          }
-        });
-      };
-      tick();
-    }
+    // A slim accent marker makes the current position unmistakable without
+    // turning the waveform into a conventional line seekbar.
+    const markerX = Math.min(width - 1, Math.max(0, progress * width));
+    ctx.fillStyle = accent;
+    ctx.globalAlpha = 1;
+    ctx.fillRect(markerX, 0, Math.max(2, dpr), height);
   },
 
   async renderSidebarPlaylists() {
