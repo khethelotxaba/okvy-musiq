@@ -1973,6 +1973,10 @@ body.light .app-icon { filter: none; }
 .menu-action-item:hover .app-icon { opacity:1; }
 /* Correct centering/alignment inside controls without adding image backgrounds. */
 .control-btn, .icon-btn, .nav-item, .tab-btn, .fp-actions button, .menu-action-item { align-items:center; justify-content:center; }
+
+/* Sidebar navigation is intentionally left-aligned; global control centering must not affect it. */
+.sidebar .nav-item { justify-content: flex-start; text-align: left; }
+.sidebar .section-label { text-align: left; }
 .fp-options-btn { position:absolute; top:12px; right:12px; z-index:10; width:32px; height:32px; border-radius:0; }
 
 .effects-panel { display:flex; flex-direction:column; gap:14px; padding-bottom:32px; }
@@ -2256,10 +2260,10 @@ body:not(.glass-enabled) .now-playing-bar { background: var(--bg-elevated); back
 
 /* bottom nav as a floating card */
 .tab-bar { left: 12px; right: 12px; bottom: max(10px, env(safe-area-inset-bottom, 0px)); height: 62px; border: 1px solid var(--border); border-radius: 20px; padding: 4px 8px; box-shadow: 0 12px 40px rgba(0,0,0,.28); }
-.tab-btn { padding: 6px 14px; border-radius: 14px; }
+.tab-btn { padding: 6px 8px; border-radius: 14px; min-width: 0; }
 
 /* sidebar as a floating card */
-.sidebar { top: 12px; left: 12px; bottom: 12px; width: min(320px, calc(100vw - 24px)); border-radius: 24px; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,.38); }
+.sidebar { top: 12px; left: 12px; bottom: 12px; width: clamp(280px, 50vw, 520px); border-radius: 24px; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,.38); }
 .sidebar-overlay { z-index: 98; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 
 /* layered player overlays */
@@ -3910,7 +3914,7 @@ body.light .full-player.fill-album-art .fp-content::before {
 
 
 /* === Embedded adaptive SVG icons ===
-   Icons are inline SVGs now; no external Icons/ folder is fetched. */
+   Icons are inline SVGs now; no external external icon folder/ folder is fetched. */
 .app-icon {
   display: inline-block;
   width: 1em;
@@ -3933,3 +3937,148 @@ body.light .full-player.fill-album-art .fp-content::before {
   color: var(--fp-art-accent) !important;
   filter: none !important;
 }
+
+/* === Playback-state highlights ===
+   Active shuffle, repeat and favourite controls come alive with a restrained
+   artwork accent glow. The central Play/Pause control is deliberately neutral
+   and never inherits the artwork accent. */
+.full-player.fill-album-art #fp-shuffle.active,
+.full-player.fill-album-art #fp-repeat.active,
+.full-player.fill-album-art #fp-favorite.active {
+  color: var(--fp-art-accent) !important;
+  text-shadow:
+    0 0 6px color-mix(in srgb, var(--fp-art-accent) 70%, transparent),
+    0 0 16px color-mix(in srgb, var(--fp-art-accent) 35%, transparent) !important;
+}
+.full-player.fill-album-art #fp-shuffle.active .app-icon,
+.full-player.fill-album-art #fp-repeat.active .app-icon,
+.full-player.fill-album-art #fp-favorite.active .app-icon {
+  color: var(--fp-art-accent) !important;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--fp-art-accent) 70%, transparent))
+          drop-shadow(0 0 10px color-mix(in srgb, var(--fp-art-accent) 30%, transparent)) !important;
+  transform: scale(1.03);
+  transition: color .18s ease, filter .18s ease, transform .18s ease;
+}
+.full-player.fill-album-art #fp-shuffle.active .app-icon,
+.full-player.fill-album-art #fp-repeat.active .app-icon {
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--fp-art-accent) 72%, transparent))
+          drop-shadow(0 0 12px color-mix(in srgb, var(--fp-art-accent) 32%, transparent)) !important;
+}
+.full-player.fill-album-art #fp-favorite.active .app-icon {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--fp-art-accent) 78%, transparent))
+          drop-shadow(0 0 14px color-mix(in srgb, var(--fp-art-accent) 34%, transparent)) !important;
+  transform: scale(1.06);
+}
+
+/* Play/Pause stays neutral regardless of artwork accent. */
+.full-player.fill-album-art #fp-play,
+.full-player.fill-album-art #fp-play .app-icon {
+  color: var(--fp-foreground) !important;
+}
+.full-player.fill-album-art #fp-play .app-icon {
+  filter: none !important;
+}
+
+/* Never accept near-black or near-white fallback accents. */
+.full-player.fill-album-art {
+  --fp-art-accent-safe: var(--fp-art-accent);
+}
+
+/* === Final playback state colors === */
+.full-player.fill-album-art #fp-play,
+.full-player.fill-album-art #fp-play .app-icon {
+  color: var(--fp-foreground) !important;
+  filter: none !important;
+}
+.full-player.fill-album-art #fp-shuffle.active,
+.full-player.fill-album-art #fp-repeat.active,
+.full-player.fill-album-art #fp-favorite.active {
+  color: var(--fp-art-accent) !important;
+}
+.full-player.fill-album-art #fp-shuffle.active .app-icon,
+.full-player.fill-album-art #fp-repeat.active .app-icon,
+.full-player.fill-album-art #fp-favorite.active .app-icon {
+  color: var(--fp-art-accent) !important;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--fp-art-accent) 80%, transparent))
+          drop-shadow(0 0 12px color-mix(in srgb, var(--fp-art-accent) 34%, transparent)) !important;
+}
+.full-player.fill-album-art #fp-shuffle.active .app-icon { transform: scale(1.04); }
+.full-player.fill-album-art #fp-repeat.active .app-icon { transform: scale(1.04); }
+.full-player.fill-album-art #fp-favorite.active .app-icon { transform: scale(1.06); }
+
+/* Keep the user's adaptive foreground rules: accents must not collapse into
+   black/near-black or white/near-white, even in a sparse artwork palette. */
+
+@keyframes fpActiveGlow {
+  0%, 100% { filter: drop-shadow(0 0 4px color-mix(in srgb, var(--fp-art-accent) 68%, transparent)); }
+  50% { filter: drop-shadow(0 0 7px color-mix(in srgb, var(--fp-art-accent) 86%, transparent))
+                  drop-shadow(0 0 14px color-mix(in srgb, var(--fp-art-accent) 34%, transparent)); }
+}
+.full-player.fill-album-art #fp-shuffle.active .app-icon,
+.full-player.fill-album-art #fp-repeat.active .app-icon,
+.full-player.fill-album-art #fp-favorite.active .app-icon {
+  animation: fpActiveGlow 2.2s ease-in-out infinite;
+}
+
+/* The transport button is never part of the accent-state system. */
+.full-player.fill-album-art #fp-play,
+.full-player.fill-album-art #fp-play .app-icon {
+  color: var(--fp-foreground) !important;
+  filter: none !important;
+  animation: none !important;
+}
+
+/* === v3.6 — stable full-width blurred artwork background ===
+   The lower half is rendered as the artwork-backed surface itself.  This keeps
+   the area painted even while the track's <img> source is being replaced. */
+.full-player.fill-album-art .fp-reflection {
+  display: block !important;
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 50% !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 50% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  z-index: 1 !important;
+  opacity: 1 !important;
+  background-image: var(--fp-art-url) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center top !important;
+  background-color: transparent !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  filter: blur(calc(22px + var(--glass-intensity) * 24px)) !important;
+  -webkit-filter: blur(calc(22px + var(--glass-intensity) * 24px)) !important;
+  transform: scaleY(-1) !important;
+  transform-origin: center center !important;
+}
+
+.full-player.fill-album-art .fp-reflection img {
+  display: none !important;
+}
+
+/* Enhanced search */
+.search-page-hero { margin-bottom: 18px; }
+.search-box-enhanced { display:flex; align-items:center; gap:10px; }
+.search-box-enhanced input { flex:1; min-width:0; }
+.search-filter-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; }
+.search-filter-chip { border:1px solid var(--border); background:var(--bg-surface); color:var(--text-secondary); border-radius:999px; padding:8px 12px; cursor:pointer; font:inherit; font-size:12px; }
+.search-filter-chip.active { color:var(--accent); border-color:rgba(var(--accent-rgb),.38); background:rgba(var(--accent-rgb),.10); }
+.search-history { display:flex; align-items:center; gap:7px; flex-wrap:wrap; margin-top:10px; min-height:20px; }
+.search-history-label { font-size:11px; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:.08em; }
+.search-history-item { border:0; background:transparent; color:var(--text-secondary); cursor:pointer; padding:3px 6px; font-size:12px; }
+.search-history-item:hover { color:var(--text-primary); }
+.search-result-summary { display:flex; align-items:center; justify-content:space-between; margin:8px 2px 10px; color:var(--text-secondary); font-size:12px; }
+.search-sort-label { border:0; background:none; color:var(--text-tertiary); cursor:pointer; font:inherit; }
+.search-loading, .search-empty-prompt { color:var(--text-secondary); text-align:center; padding:52px 18px; }
+.search-empty-prompt h3 { color:var(--text-primary); margin:12px 0 6px; }
+.search-empty-prompt p { max-width:420px; margin:0 auto; line-height:1.55; }
+.search-empty-icon { display:flex; justify-content:center; color:var(--accent); }
+.search-empty-icon svg { width:34px; height:34px; }
+.search-no-result-hint { color:var(--text-tertiary); font-size:12px; margin-top:8px; }
