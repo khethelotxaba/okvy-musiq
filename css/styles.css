@@ -3760,12 +3760,14 @@ body.light .full-player.fill-album-art .fp-content::before {
   position: absolute !important;
   left: 0 !important;
   top: 0 !important;
-  width: 100% !important;
-  height: 100% !important;
+  width: 125% !important;
+  height: 125% !important;
   min-height: 0 !important;
   max-width: none !important;
+  left: -12.5% !important;
+  top: -12.5% !important;
   object-fit: cover !important;
-  object-position: center bottom !important;
+  object-position: center center !important;
   transform: scaleY(-1) !important;
   transform-origin: center center !important;
   opacity: 1 !important;
@@ -3819,3 +3821,31 @@ body.light .full-player.fill-album-art .fp-content::before {
   background-image: none !important;
   opacity: 0 !important;
 }
+
+/* === v3.5 — blur edge containment ===
+   The blur filter can create transparent pixels at an element's edges.
+   Oversize the source inside the clipped lower-half container so the
+   visible bottom plane is fully covered by artwork at every edge. */
+.full-player.fill-album-art .fp-reflection {
+  top: 50% !important;
+  bottom: 0 !important;
+  height: 50% !important;
+  overflow: hidden !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+.full-player.fill-album-art .fp-reflection img {
+  width: 125% !important;
+  height: 125% !important;
+  left: -12.5% !important;
+  top: -12.5% !important;
+  object-fit: cover !important;
+  object-position: center center !important;
+  transform: scaleY(-1) !important;
+  filter: blur(calc(22px + var(--glass-intensity) * 24px)) !important;
+  -webkit-filter: blur(calc(22px + var(--glass-intensity) * 24px)) !important;
+  opacity: 1 !important;
+}
+
