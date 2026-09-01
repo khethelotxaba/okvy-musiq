@@ -503,12 +503,9 @@ const UI = {
     document.getElementById('fp-title').textContent = track.title || 'Unknown';
     document.getElementById('fp-artist').textContent = track.artist || '-';
     document.getElementById('fp-art').src = artwork;
+    this.applyFillArtworkForeground(artwork);
     const reflectionArt = document.getElementById('fp-reflection-art');
     if (reflectionArt) reflectionArt.src = artwork;
-    const fpReflection = document.querySelector('#full-player .fp-reflection');
-    if (fpReflection && artwork) {
-      fpReflection.style.setProperty('--fp-reflection-url', `url(\"${String(artwork).replace(/\"/g, '%22')}\")`);
-    }
     const fpSheet = document.querySelector('#full-player .fp-sheet');
     if (fpSheet && artwork) fpSheet.style.setProperty('--fp-art-url', `url(\"${String(artwork).replace(/\"/g, '%22')}\")`);
     document.getElementById('fp-favorite').classList.toggle('active', track.favorite);
@@ -588,14 +585,107 @@ const UI = {
   },
   onThemeColors(detail) {
     const root = document.documentElement;
-    const accent = this.safeAccentColor(detail.dominant, detail.vibrant, detail.palette || []);
+    const palette = Array.isArray(detail.palette) ? detail.palette : [];
+    const accent = this.safeAccentColor(detail.dominant, detail.vibrant, palette);
     if (accent) {
       root.style.setProperty('--dynamic-primary', accent.css);
       root.style.setProperty('--dynamic-vibrant', accent.css);
       root.style.setProperty('--accent-rgb', accent.rgb.join(', '));
     }
     this.setAlbumDominantColor(detail.dominant);
+    this.applyFillArtworkForeground(null, palette);
     if (SettingsManager.get('ui.waveformSeekbar')) requestAnimationFrame(() => this.renderWaveform());
+  },
+
+  async applyFillArtworkForeground(artworkSrc = null, palette = []) {
+    const root = document.documentElement;
+    const fp = document.getElementById('full-player');
+    if (!fp) return;
+
+    const parseRgb = (value) => {
+      if (!value) return null;
+      const m = String(value).match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+      if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
+      const h = String(value).trim().replace('#', '');
+      if (/^[0-9a-f]{6}$/i.test(h)) return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+      return null;
+    };
+    const luminance = ([r,g,b]) => (0.2126*r + 0.7152*g + 0.0722*b) / 255;
+    const css = ([r,g,b]) => `rgb(${r}, ${g}, ${b})`;
+    const toArray = (values) => values.map(parseRgb).filter(Boolean);
+
+    let luma = null;
+    const src = artworkSrc || document.getElementById('fp-art')?.currentSrc || document.getElementById('fp-art')?.src;
+    if (src && src !== 'assets/default-art.png') {
+      try {
+        const image = new Image();
+        image.crossOrigin = 'anonymous';
+        image.src = src;
+        await new Promise((resolve) => {
+          image.onload = resolve;
+          image.onerror = resolve;
+          setTimeout(resolve, 1200);
+        });
+        if (image.naturalWidth && image.naturalHeight) {
+          const canvas = document.createElement('canvas');
+          canvas.width = 64; canvas.height = 64;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          ctx.drawImage(image, 0, 0, 64, 64);
+          const data = ctx.getImageData(0, 0, 64, 64).data;
+          let sum = 0, weight = 0;
+          for (let i=0; i<data.length; i+=16) {
+            const rgb = [data[i], data[i+1], data[i+2]];
+            const a = data[i+3] / 255;
+            if (!a) continue;
+            // Bias toward the lower artwork atmosphere where the metadata and controls live.
+            const px = ((i/4) % 64);
+            const py = Math.floor((i/4) / 64);
+            const regionWeight = py >= 28 ? 1.35 : 0.85;
+            sum += luminance(rgb) * a * regionWeight;
+            weight += a * regionWeight;
+          }
+          if (weight) luma = sum / weight;
+        }
+      } catch (e) {}
+    }
+
+    const parsedPalette = toArray(palette);
+    if (luma == null && parsedPalette.length) {
+      const total = parsedPalette.reduce((n,c)=>n+luminance(c),0);
+      luma = total / parsedPalette.length;
+    }
+    if (luma == null) luma = document.body.classList.contains('light') ? 0.78 : 0.22;
+
+    // Opposite-contrast foreground, independent of the app's light/dark theme.
+    const foreground = luma >= 0.58 ? [18,18,18] : [245,245,245];
+    const muted = luma >= 0.58 ? [52,52,52] : [218,218,218];
+
+    // Pick a real artwork palette color for the accent; reject near-black/near-white
+    // and prefer colors with enough saturation and contrast from the foreground.
+    let accent = null;
+    const candidates = [...parsedPalette];
+    const dominant = parseRgb(getComputedStyle(root).getPropertyValue('--dynamic-primary').trim());
+    if (dominant) candidates.push(dominant);
+    let bestScore = -Infinity;
+    for (const c of candidates) {
+      const [r,g,b] = c;
+      const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
+      const sat = mx === mn ? 0 : (mx-mn)/Math.max(1,mx);
+      const L = luminance(c);
+      if (L <= 0.10 || L >= 0.90 || sat < 0.20) continue;
+      const contrastGap = Math.abs(L - luminance(foreground));
+      const score = sat * 1.6 + contrastGap * 0.9 - Math.abs(L - 0.52) * 0.25;
+      if (score > bestScore) { bestScore = score; accent = c; }
+    }
+    if (!accent && parsedPalette.length) accent = parsedPalette[0];
+
+    root.style.setProperty('--fp-foreground', css(foreground));
+    root.style.setProperty('--fp-muted', css(muted));
+    root.style.setProperty('--fp-icon-color', css(foreground));
+    if (accent) {
+      root.style.setProperty('--fp-art-accent', css(accent));
+      root.style.setProperty('--fp-art-accent-rgb', accent.join(', '));
+    }
   },
 
 

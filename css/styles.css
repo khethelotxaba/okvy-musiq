@@ -3851,54 +3851,59 @@ body.light .full-player.fill-album-art .fp-content::before {
 
 
 
-/* === v3.6 — full bottom artwork, no transparent blur edges ===
-   The lower half is a complete flipped artwork background. The blur is
-   applied via backdrop-filter, so the artwork itself remains fully opaque
-   all the way to the edges instead of producing transparent blur pixels. */
-.full-player.fill-album-art .fp-reflection {
-  position: absolute !important;
-  left: 0 !important;
-  right: 0 !important;
-  top: 50% !important;
-  bottom: 0 !important;
-  width: 100% !important;
-  height: 50% !important;
-  overflow: hidden !important;
-  background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
-  opacity: 1 !important;
-  mask: none !important;
-  -webkit-mask: none !important;
-  z-index: 0 !important;
+/* === Fill Artwork foreground contrast ===
+   Artwork geometry remains untouched. Only foreground colors adapt to the
+   artwork so light/dark app theme has no visual influence on the player. */
+.full-player.fill-album-art {
+  --fp-foreground: var(--text-primary);
+  --fp-muted: var(--text-secondary);
+  --fp-icon-color: var(--text-primary);
+  --fp-art-accent: var(--accent);
+  --fp-art-accent-rgb: var(--accent-rgb);
 }
 
-.full-player.fill-album-art .fp-reflection::before {
-  content: '' !important;
-  position: absolute !important;
-  inset: 0 !important;
-  display: block !important;
-  background-image: var(--fp-reflection-url) !important;
-  background-size: cover !important;
-  background-position: center !important;
-  background-repeat: no-repeat !important;
-  transform: scaleY(-1) !important;
-  transform-origin: center center !important;
-  filter: none !important;
-  opacity: 1 !important;
+.full-player.fill-album-art .fp-title,
+.full-player.fill-album-art .fp-artist,
+.full-player.fill-album-art .fp-current,
+.full-player.fill-album-art .fp-duration,
+.full-player.fill-album-art .fp-text,
+.full-player.fill-album-art .fp-meta,
+.full-player.fill-album-art .fp-close-btn,
+.full-player.fill-album-art .fp-options-btn,
+.full-player.fill-album-art .fp-favorite-btn,
+.full-player.fill-album-art .fp-progress-section,
+.full-player.fill-album-art .fp-controls,
+.full-player.fill-album-art .fp-bottom-row,
+.full-player.fill-album-art .time-display {
+  color: var(--fp-foreground) !important;
 }
 
-.full-player.fill-album-art .fp-reflection::after {
-  content: '' !important;
-  position: absolute !important;
-  inset: 0 !important;
-  display: block !important;
-  background: transparent !important;
-  backdrop-filter: blur(calc(22px + var(--glass-intensity) * 24px)) !important;
-  -webkit-backdrop-filter: blur(calc(22px + var(--glass-intensity) * 24px)) !important;
-  pointer-events: none !important;
+.full-player.fill-album-art .fp-artist,
+.full-player.fill-album-art .time-display {
+  color: var(--fp-muted) !important;
 }
 
-.full-player.fill-album-art .fp-reflection img {
-  display: none !important;
+.full-player.fill-album-art .app-icon {
+  color: var(--fp-icon-color) !important;
+  filter: brightness(0) saturate(100%) drop-shadow(0 0 0 var(--fp-icon-color)) !important;
+}
+
+.full-player.fill-album-art .fp-progress-bar,
+.full-player.fill-album-art .progress-handle,
+.full-player.fill-album-art .progress-track::after {
+  background: var(--fp-art-accent) !important;
+  border-color: var(--fp-art-accent) !important;
+}
+
+.full-player.fill-album-art .control-btn.play-btn,
+.full-player.fill-album-art .fp-actions button.active,
+.full-player.fill-album-art .fp-favorite-btn.active {
+  color: var(--fp-art-accent) !important;
+}
+
+.full-player.fill-album-art .control-btn.play-btn .app-icon,
+.full-player.fill-album-art .fp-actions button.active .app-icon,
+.full-player.fill-album-art .fp-favorite-btn.active .app-icon {
+  color: var(--fp-art-accent) !important;
+  filter: brightness(0) saturate(100%) drop-shadow(0 0 0 var(--fp-art-accent)) !important;
 }
