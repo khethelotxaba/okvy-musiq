@@ -1214,71 +1214,104 @@ const UI = {
     const s = CONFIG.audio;
     const presets = s.eqPresets || [];
     const freqs = [60, 250, 1000, 4000, 16000];
-    const values = s.eqCurrentPreset === 'Custom'
-      ? s.eqCustomValues
-      : ((presets.find(p => p.name === s.eqCurrentPreset) || presets[0])?.values || Array(5).fill(0));
+    const selectedPreset = s.eqCurrentPreset || 'Flat';
+    const presetValues = presets.find(p => p.name === selectedPreset)?.values;
+    const values = selectedPreset === 'Custom'
+      ? (Array.isArray(s.eqCustomValues) ? s.eqCustomValues : Array(5).fill(0))
+      : (presetValues || Array(5).fill(0));
     const pitch = Number(s.pitchSemitones || 0);
     const speed = Number(s.playbackSpeed || 1);
     const combined = Math.max(-12, Math.min(12, Math.round(pitch)));
     const combinedValue = `${combined > 0 ? '+' : ''}${combined} st · ${speed.toFixed(2)}×`;
+    const boost = Number(s.volumeBoost || 1);
 
     let html = `<div class="view-toolbar audio-effects-toolbar">
       <div class="view-toolbar-left">
-        <button class="icon-btn" onclick="UI.navigate('home')">${appIcon('previous')}</button>
-        <div><h2 class="audio-effects-title">Audio Effects</h2><p class="audio-effects-kicker">Shape playback without leaving the player.</p></div>
+        <button class="icon-btn" onclick="UI.navigate('home')" aria-label="Back">${appIcon('previous')}</button>
+        <div><h2 class="audio-effects-title">Audio Effects</h2><p class="audio-effects-kicker">Playback controls</p></div>
       </div>
     </div>`;
 
-    html += `<div class="effects-page">`;
-    html += `<section class="effects-section eq-section">
-      <div class="effects-section-head">
-        <div><span class="effects-section-eyebrow">Equalizer</span><h3>5-band EQ</h3><p>Fine-tune bass, mids and air.</p></div>
-        <label class="toggle-switch" title="Enable equalizer"><input type="checkbox" ${s.equalizerEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span class="toggle-slider"></span></label>
-      </div>
-      <div class="effects-toolbar-row">
-        <label class="effects-select-wrap"><span>Preset</span><select onchange="UI.setEqPreset(this.value)">${presets.map(p=>`<option value="${Utils.escapeHtml(p.name)}" ${s.eqCurrentPreset===p.name?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}<option value="Custom" ${s.eqCurrentPreset==='Custom'?'selected':''}>Custom</option></select></label>
-        <button class="effect-reset-btn" type="button" onclick="UI.resetEqualizer()">Reset</button>
-      </div>
-      <div class="eq-grid">
-        ${freqs.map((f,i)=>{
-          const v=Number(values[i]||0);
-          return `<div class="eq-band">
-            <div class="eq-band-value" id="eq-value-${i}">${v>0?'+':''}${v} dB</div>
-            <div class="eq-band-slider"><span class="eq-visual-rail"><span class="eq-visual-fill"></span></span><span class="eq-visual-knob"></span><input aria-label="${f} Hz EQ" type="range" min="-12" max="12" step="0.5" value="${v}" oninput="UI.setEqBand(${i}, this.value); UI.updateEqVisual(this, ${i})"><span class="eq-zero-line"></span></div>
-            <div class="eq-band-label">${f >= 1000 ? `${f/1000}k` : f}<small>Hz</small></div>
-          </div>`;
-        }).join('')}
-      </div>
-    </section>`;
+    html += `<main class="effects-page-modern">
+      <section class="effects-modern-section effects-modern-eq">
+        <div class="effects-modern-head">
+          <div>
+            <span class="effects-modern-overline">EQUALIZER</span>
+            <h3>5-band EQ</h3>
+          </div>
+          <label class="switch-modern" title="Enable equalizer">
+            <input type="checkbox" ${s.equalizerEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)">
+            <span></span>
+          </label>
+        </div>
 
-    html += `<section class="effects-section">
-      <div class="effects-section-head compact-head">
-        <div><span class="effects-section-eyebrow">Pitch & Speed</span><h3>Pitch & Speed</h3><p>One linked control moves both together.</p></div>
-        ${appIcon('pitchSpeed')}
-      </div>
-      <div class="combined-effect-control">
-        <div class="combined-value-row"><span>Pitch & Speed</span><strong id="pitch-speed-combined-value">${combinedValue}</strong></div>
-        <input id="pitch-speed-combined" type="range" min="-12" max="12" step="1" value="${combined}" oninput="UI.setPitchSpeedCombined(this.value, this)">
-        <div class="range-scale"><span>-12 st · 0.50×</span><span>Neutral</span><span>+12 st · 2.00×</span></div>
-      </div>
-      <div class="effects-action-footer"><span>Reset pitch and speed to neutral.</span><button class="effect-reset-btn" type="button" onclick="UI.resetPitchSpeed()">Reset</button></div>
-    </section>`;
+        <div class="effects-modern-toolbar">
+          <label class="effects-modern-select">
+            <span>Preset</span>
+            <select onchange="UI.setEqPreset(this.value)">
+              ${presets.map(p => `<option value="${Utils.escapeHtml(p.name)}" ${selectedPreset === p.name ? 'selected' : ''}>${Utils.escapeHtml(p.name)}</option>`).join('')}
+              <option value="Custom" ${selectedPreset === 'Custom' ? 'selected' : ''}>Custom</option>
+            </select>
+          </label>
+          <button class="effects-modern-action" type="button" onclick="UI.resetEqualizer()">Reset</button>
+        </div>
 
-    const boost = Number(s.volumeBoost || 1);
-    html += `<section class="effects-section">
-      <div class="effects-section-head compact-head"><div><span class="effects-section-eyebrow">Output</span><h3>Volume Boost</h3><p>Add gain after the processing chain.</p></div>${appIcon('volumeBoost')}</div>
-      <div class="combined-effect-control single-control">
-        <div class="combined-value-row"><span>Boost</span><strong id="boost-value">${Math.round(boost*100)}%</strong></div>
-        <input id="volume-boost-range" type="range" min="0.5" max="2.5" step="0.05" value="${boost}" oninput="UI.setEffectValue('volumeBoost', this.value, this)">
-        <div class="range-scale"><span>50%</span><span>100%</span><span>250%</span></div>
-      </div>
-    </section>`;
+        <div class="eq-modern-grid">
+          ${freqs.map((f, i) => {
+            const v = Number(values[i] || 0);
+            return `<div class="eq-modern-band">
+              <div class="eq-modern-value" id="eq-value-${i}">${v > 0 ? '+' : ''}${v} dB</div>
+              <div class="eq-modern-track">
+                <span class="eq-modern-rail"></span>
+                <span class="eq-modern-fill"></span>
+                <span class="eq-modern-zero"></span>
+                <span class="eq-modern-knob"></span>
+                <input class="eq-modern-input" aria-label="${f} Hz EQ" type="range" min="-12" max="12" step="0.5" value="${v}" oninput="UI.setEqBand(${i}, this.value); UI.updateEqVisual(this, ${i})">
+              </div>
+              <div class="eq-modern-frequency">${f >= 1000 ? `${f/1000}k` : f}<span>Hz</span></div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div class="eq-modern-scale"><span>-12 dB</span><span>0</span><span>+12 dB</span></div>
+      </section>
 
-    html += `</div>`;
+      <section class="effects-modern-section">
+        <div class="effects-modern-head">
+          <div>
+            <span class="effects-modern-overline">PLAYBACK</span>
+            <h3>Pitch &amp; Speed</h3>
+            <p>One linked control</p>
+          </div>
+          ${appIcon('pitchSpeed')}
+        </div>
+        <div class="modern-range-block">
+          <div class="modern-range-value-row"><span>Pitch &amp; Speed</span><strong id="pitch-speed-combined-value">${combinedValue}</strong></div>
+          <input class="modern-range" id="pitch-speed-combined" type="range" min="-12" max="12" step="1" value="${combined}" oninput="UI.setPitchSpeedCombined(this.value, this)">
+          <div class="modern-range-scale"><span>-12 st</span><span>Neutral</span><span>+12 st</span></div>
+        </div>
+        <button class="modern-inline-reset" type="button" onclick="UI.resetPitchSpeed()">Reset to neutral</button>
+      </section>
+
+      <section class="effects-modern-section">
+        <div class="effects-modern-head">
+          <div>
+            <span class="effects-modern-overline">OUTPUT</span>
+            <h3>Volume Boost</h3>
+            <p>Additional playback gain</p>
+          </div>
+          ${appIcon('volumeBoost')}
+        </div>
+        <div class="modern-range-block">
+          <div class="modern-range-value-row"><span>Boost</span><strong id="boost-value">${Math.round(boost * 100)}%</strong></div>
+          <input class="modern-range" id="volume-boost-range" type="range" min="0.5" max="2.5" step="0.05" value="${boost}" oninput="UI.setEffectValue('volumeBoost', this.value, this)">
+          <div class="modern-range-scale"><span>50%</span><span>100%</span><span>250%</span></div>
+        </div>
+      </section>
+    </main>`;
+
     container.innerHTML = html;
-    container.querySelectorAll('input[type="range"]').forEach(input => this.updateRangeProgress(input));
-    container.querySelectorAll('.eq-sliders input[type="range"]').forEach(input => this.updateRangeProgress(input));
-    container.querySelectorAll('.eq-band input[type="range"]').forEach((input,i) => this.updateEqVisual(input,i));
+    container.querySelectorAll('.eq-modern-input').forEach((input, i) => this.updateEqVisual(input, i));
+    container.querySelectorAll('.modern-range').forEach(input => this.updateRangeProgress(input));
     this.updatePitchSpeedVisual(combined);
   },
 
@@ -1324,22 +1357,22 @@ const UI = {
     const v = Number(input.value || 0);
     const pct = ((v + 12) / 24) * 100;
     input.style.setProperty('--eq-progress', `${pct}%`);
-    const wrap = input.closest('.eq-band-slider');
-    const fill = wrap?.querySelector('.eq-visual-fill');
-    const knob = wrap?.querySelector('.eq-visual-knob');
+    const wrap = input.closest('.eq-modern-track');
+    const fill = wrap?.querySelector('.eq-modern-fill');
+    const knob = wrap?.querySelector('.eq-modern-knob');
     if (fill) {
-      if (v >= 0) {
-        fill.style.bottom = '50%';
-        fill.style.top = `${100 - pct}%`;
+      const zero = 50;
+      const valuePct = pct;
+      if (valuePct >= zero) {
+        fill.style.top = `${100 - valuePct}%`;
+        fill.style.height = `${valuePct - zero}%`;
       } else {
-        fill.style.top = '50%';
-        fill.style.bottom = `${pct}%`;
+        fill.style.top = `${zero}%`;
+        fill.style.height = `${zero - valuePct}%`;
       }
-      fill.style.height = `${Math.abs(pct - 50)}%`;
     }
     if (knob) {
-      const y = 100 - pct;
-      knob.style.top = `${y}%`;
+      knob.style.top = `${100 - pct}%`;
       knob.style.transform = 'translate(-50%, -50%)';
     }
     const id = prefix ? `${prefix}eq-value-${index}` : `eq-value-${index}`;
@@ -2100,22 +2133,27 @@ const UI = {
   },
 
   buildAudioEffectsControls() {
-    const values = SettingsManager.get('audio.eqCustomValues', Array(5).fill(0));
+    const presets = SettingsManager.get('audio.eqPresets', CONFIG.audio.eqPresets || []);
     const preset = SettingsManager.get('audio.eqCurrentPreset','Flat');
     const bands = [60,250,1000,4000,16000];
+    const presetValues = presets.find(p => p.name === preset)?.values;
+    const values = preset === 'Custom'
+      ? (Array.isArray(SettingsManager.get('audio.eqCustomValues', [])) ? SettingsManager.get('audio.eqCustomValues', Array(5).fill(0)) : Array(5).fill(0))
+      : (presetValues || Array(5).fill(0));
     const eqEnabled = SettingsManager.get('audio.equalizerEnabled', true);
     const pitch = Number(SettingsManager.get('audio.pitchSemitones',0));
     const speed = Number(SettingsManager.get('audio.playbackSpeed',1));
     const combined = Math.max(-12, Math.min(12, Math.round(pitch)));
     const boost = Number(SettingsManager.get('audio.volumeBoost',1));
-    return `<div class="effects-overlay-page">
-      <section class="effects-section eq-section">
-        <div class="effects-section-head"><div><span class="effects-section-eyebrow">Equalizer</span><h3>5-band EQ</h3><p>Fine-tune bass, mids and air.</p></div><label class="toggle-switch"><input type="checkbox" ${eqEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span class="toggle-slider"></span></label></div>
-        <div class="effects-toolbar-row"><label class="effects-select-wrap"><span>Preset</span><select onchange="UI.setEqPreset(this.value)">${SettingsManager.get('audio.eqPresets',[]).map(p=>`<option value="${Utils.escapeHtml(p.name)}" ${p.name===preset?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}<option value="Custom" ${preset==='Custom'?'selected':''}>Custom</option></select></label><button class="effect-reset-btn" type="button" onclick="UI.resetEqualizer()">Reset</button></div>
-        <div class="eq-grid">${bands.map((f,i)=>{ const v=Number(values[i]||0); return `<div class="eq-band"><div class="eq-band-value" id="overlay-eq-value-${i}">${v>0?'+':''}${v} dB</div><div class="eq-band-slider"><span class="eq-visual-rail"><span class="eq-visual-fill"></span></span><span class="eq-visual-knob"></span><input aria-label="${f} Hz EQ" type="range" min="-12" max="12" step="0.5" value="${v}" oninput="UI.setQuickEQ(${i}, this.value); UI.updateEqVisual(this, ${i}, 'overlay-')"><span class="eq-zero-line"></span></div><div class="eq-band-label">${f>=1000?`${f/1000}k`:f}<small>Hz</small></div></div>`; }).join('')}</div>
+    return `<div class="effects-modern-page effects-overlay-modern-page">
+      <section class="effects-modern-section effects-modern-eq">
+        <div class="effects-modern-head"><div><span class="effects-modern-overline">EQUALIZER</span><h3>5-band EQ</h3></div><label class="switch-modern"><input type="checkbox" ${eqEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span></span></label></div>
+        <div class="effects-modern-toolbar"><label class="effects-modern-select"><span>Preset</span><select onchange="UI.setEqPreset(this.value)">${presets.map(p=>`<option value="${Utils.escapeHtml(p.name)}" ${p.name===preset?'selected':''}>${Utils.escapeHtml(p.name)}</option>`).join('')}<option value="Custom" ${preset==='Custom'?'selected':''}>Custom</option></select></label><button class="effects-modern-action" type="button" onclick="UI.resetEqualizer()">Reset</button></div>
+        <div class="eq-modern-grid">${bands.map((f,i)=>{const v=Number(values[i]||0);return `<div class="eq-modern-band"><div class="eq-modern-value" id="overlay-eq-value-${i}">${v>0?'+':''}${v} dB</div><div class="eq-modern-track"><span class="eq-modern-rail"></span><span class="eq-modern-fill"></span><span class="eq-modern-zero"></span><span class="eq-modern-knob"></span><input class="eq-modern-input" aria-label="${f} Hz EQ" type="range" min="-12" max="12" step="0.5" value="${v}" oninput="UI.setQuickEQ(${i}, this.value); UI.updateEqVisual(this, ${i}, 'overlay-')"></div><div class="eq-modern-frequency">${f>=1000?`${f/1000}k`:f}<span>Hz</span></div></div>`;}).join('')}</div>
+        <div class="eq-modern-scale"><span>-12 dB</span><span>0</span><span>+12 dB</span></div>
       </section>
-      <section class="effects-section"><div class="effects-section-head compact-head"><div><span class="effects-section-eyebrow">Pitch & Speed</span><h3>Pitch & Speed</h3><p>One linked control moves both together.</p></div>${appIcon('pitchSpeed')}</div><div class="combined-effect-control"><div class="combined-value-row"><span>Pitch & Speed</span><strong id="overlay-pitch-speed-combined-value">${combined>0?'+':''}${combined} st · ${speed.toFixed(2)}×</strong></div><input id="overlay-pitch-speed-combined" type="range" min="-12" max="12" step="1" value="${combined}" oninput="UI.setPitchSpeedCombined(this.value, this)"><div class="range-scale"><span>-12 st · 0.50×</span><span>Neutral</span><span>+12 st · 2.00×</span></div></div><div class="effects-action-footer"><span>Reset pitch and speed to neutral.</span><button class="effect-reset-btn" type="button" onclick="UI.resetPitchSpeed()">Reset</button></div></section>
-      <section class="effects-section"><div class="effects-section-head compact-head"><div><span class="effects-section-eyebrow">Output</span><h3>Volume Boost</h3><p>Add gain after the processing chain.</p></div>${appIcon('volumeBoost')}</div><div class="combined-effect-control single-control"><div class="combined-value-row"><span>Boost</span><strong id="overlay-boost-value">${Math.round(boost*100)}%</strong></div><input id="overlay-volume-boost-range" type="range" min="0.5" max="2.5" step="0.05" value="${boost}" oninput="UI.setEffectValue('volumeBoost', this.value, this)"><div class="range-scale"><span>50%</span><span>100%</span><span>250%</span></div></div></section>
+      <section class="effects-modern-section"><div class="effects-modern-head"><div><span class="effects-modern-overline">PLAYBACK</span><h3>Pitch &amp; Speed</h3><p>One linked control</p></div>${appIcon('pitchSpeed')}</div><div class="modern-range-block"><div class="modern-range-value-row"><span>Pitch &amp; Speed</span><strong id="overlay-pitch-speed-combined-value">${combined>0?'+':''}${combined} st · ${speed.toFixed(2)}×</strong></div><input class="modern-range" id="overlay-pitch-speed-combined" type="range" min="-12" max="12" step="1" value="${combined}" oninput="UI.setPitchSpeedCombined(this.value,this)"><div class="modern-range-scale"><span>-12 st</span><span>Neutral</span><span>+12 st</span></div></div><button class="modern-inline-reset" type="button" onclick="UI.resetPitchSpeed()">Reset to neutral</button></section>
+      <section class="effects-modern-section"><div class="effects-modern-head"><div><span class="effects-modern-overline">OUTPUT</span><h3>Volume Boost</h3><p>Additional playback gain</p></div>${appIcon('volumeBoost')}</div><div class="modern-range-block"><div class="modern-range-value-row"><span>Boost</span><strong id="overlay-boost-value">${Math.round(boost*100)}%</strong></div><input class="modern-range" id="overlay-volume-boost-range" type="range" min="0.5" max="2.5" step="0.05" value="${boost}" oninput="UI.setEffectValue('volumeBoost',this.value,this)"><div class="modern-range-scale"><span>50%</span><span>100%</span><span>250%</span></div></div></section>
     </div>`;
   },
 
