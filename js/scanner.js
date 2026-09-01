@@ -169,10 +169,8 @@ const Scanner = {
             track.lyrics = t.lyrics ? (t.lyrics.lyrics || t.lyrics) : '';
 
             const featured = Utils.extractFeaturedArtists(track.title);
-            if (featured.length > 0) {
-              track.featuredArtists = featured;
-              track.cleanTitle = Utils.removeFeaturedFromTitle(track.title);
-            }
+            track.featuredArtists = featured;
+            track.cleanTitle = featured.length > 0 ? Utils.removeFeaturedFromTitle(track.title) : track.title;
 
             if (t.picture) {
               const pic = t.picture;

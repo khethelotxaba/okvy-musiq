@@ -26,6 +26,7 @@ const UI = {
   lastLyricIndex: -1,
   trackMenuTargetId: null,
   trackMenuActions: null,
+  currentSortBy: 'title',
   currentSortDir: 'asc',
   particleAnimationId: null,
   particleResizeHandler: null,
@@ -490,7 +491,11 @@ const UI = {
     document.getElementById('sidebar-art').src = artwork;
     this.updatePlayerControls();
     this._prepareTrackWaveform(track);
-    if (this.currentPage === 'tracks' || this.currentPage === 'favorites' || this.currentPage === 'queue') {
+    if (this.currentPage === 'tracks' || this.currentPage === 'favorites' ||
+        this.currentPage === 'album-detail' || this.currentPage === 'artist-detail' ||
+        this.currentPage === 'genre-detail' || this.currentPage === 'playlist-detail') {
+      this.updateVisibleTrackRows(track?.id);
+    } else if (this.currentPage === 'queue') {
       this.renderCurrentPage();
     }
     this.applyWaveformMode();
@@ -911,7 +916,7 @@ const UI = {
   updatePageTitle() {
     const titles = {
       home: 'Home', search: 'Search', tracks: 'Tracks', albums: 'Albums',
-      artists: 'Artists', genres: 'Genres', playlists: 'Playlists',
+      artists: 'Artists', 'artist-detail': 'Artist', genres: 'Genres', playlists: 'Playlists',
       queue: 'Queue', lyrics: 'Lyrics', folders: 'Folders',
       favorites: 'Favorites', settings: 'Settings', 'audio-effects': 'Audio Effects'
     };
@@ -1004,126 +1009,44 @@ const UI = {
 
   renderSearch(container) {
     container.innerHTML = `
-      <div class="search-hero search-page-hero">
-        <div class="search-box search-box-enhanced">
+      <div class="search-hero">
+        <div class="search-box">
           ${appIcon('search')}
-          <input type="text" id="search-input" autocomplete="off" spellcheck="false" placeholder="Search songs, albums, artists, playlists...">
-          <button class="icon-btn small search-clear" id="search-clear" aria-label="Clear search" title="Clear" style="display:none">${appIcon('close')}</button>
+          <input type="text" id="search-input" placeholder="Search songs, albums, artists..." oninput="UI.handleSearch(this.value)">
         </div>
-        <div class="search-filters search-filter-row">
-          <select id="search-type" aria-label="Search in">
-            <option value="all">Everything</option>
-            <option value="tracks">Songs</option>
+        <div class="search-filters">
+          <select id="search-type" onchange="UI.handleSearch(document.getElementById('search-input').value)">
+            <option value="all">All</option>
+            <option value="tracks">Tracks</option>
             <option value="albums">Albums</option>
             <option value="artists">Artists</option>
-            <option value="playlists">Playlists</option>
           </select>
-          <button class="search-filter-chip" type="button" data-search-filter="favorites">Favorites</button>
-          <button class="search-filter-chip" type="button" data-search-filter="recent">Recently added</button>
-          <button class="search-filter-chip" type="button" data-search-filter="played">Recently played</button>
         </div>
-        <div id="search-history" class="search-history" aria-live="polite"></div>
       </div>
       <div id="search-results"></div>
     `;
-
-    this.searchState = { requestId: 0, mode: null };
-    const input = document.getElementById('search-input');
-    const clear = document.getElementById('search-clear');
-    const type = document.getElementById('search-type');
-
-    const run = () => this.handleSearch(input.value);
-    input.addEventListener('input', run);
-    input.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') { input.value = ''; run(); }
-      if (event.key === 'Enter' && input.value.trim()) this.rememberSearch(input.value);
-    });
-    clear.addEventListener('click', () => { input.value = ''; run(); input.focus(); });
-    type.addEventListener('change', run);
-
-    container.querySelectorAll('[data-search-filter]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        container.querySelectorAll('[data-search-filter]').forEach(b => b.classList.remove('active'));
-        btn.classList.toggle('active');
-        this.searchState.mode = btn.classList.contains('active') ? btn.dataset.searchFilter : null;
-        run();
-      });
-    });
-    this.renderSearchHistory();
-  },
-
-  getSearchHistory() {
-    try { return JSON.parse(localStorage.getItem('okvy-search-history') || '[]'); }
-    catch { return []; }
-  },
-
-  rememberSearch(query) {
-    const q = String(query || '').trim();
-    if (!q) return;
-    const next = [q, ...this.getSearchHistory().filter(v => v.toLowerCase() !== q.toLowerCase())].slice(0, 8);
-    localStorage.setItem('okvy-search-history', JSON.stringify(next));
-    this.renderSearchHistory();
-  },
-
-  renderSearchHistory() {
-    const host = document.getElementById('search-history');
-    if (!host) return;
-    const history = this.getSearchHistory();
-    host.innerHTML = history.length
-      ? `<span class="search-history-label">Recent</span>${history.map(q => `<button class="search-history-item" type="button" data-query="${Utils.escapeHtml(q)}">${Utils.escapeHtml(q)}</button>`).join('')}`
-      : '';
-    host.querySelectorAll('.search-history-item').forEach(btn => btn.addEventListener('click', () => {
-      const input = document.getElementById('search-input');
-      if (!input) return;
-      input.value = btn.dataset.query || '';
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      input.focus();
-    }));
   },
 
   async handleSearch(query) {
-    const input = document.getElementById('search-input');
-    const resultsEl = document.getElementById('search-results');
-    const clear = document.getElementById('search-clear');
-    if (!resultsEl) return;
-    const text = String(query || '').trim();
-    if (clear) clear.style.display = text ? '' : 'none';
+    if (!query.trim()) {
+      document.getElementById('search-results').innerHTML = '';
+      return;
+    }
+    const type = document.getElementById('search-type').value;
+    const results = await Data.search(query, type);
+    const container = document.getElementById('search-results');
 
-    const requestId = ++this.searchState.requestId;
-    if (!text) {
-      resultsEl.innerHTML = '<div class="search-empty-prompt"><div class="search-empty-icon">' + appIcon('search') + '</div><h3>Search your library</h3><p>Find songs, albums, artists and playlists by name, artist, genre or filename.</p></div>';
+    if (results.length === 0) {
+      container.innerHTML = '<div class="empty-state">No results found</div>';
       return;
     }
 
-    resultsEl.innerHTML = '<div class="search-loading">Searching your library…</div>';
-    const type = document.getElementById('search-type')?.value || 'all';
-    let results = await Data.search(text, type, { limit: 150 });
-    if (requestId !== this.searchState.requestId) return;
-
-    const mode = this.searchState.mode;
-    const now = Date.now();
-    if (mode === 'favorites') results = results.filter(t => t.favorite);
-    else if (mode === 'recent') results = results.filter(t => now - (t.dateAdded || 0) <= 30 * 86400000);
-    else if (mode === 'played') results = results.filter(t => t.lastPlayed || t.playCount);
-
-    if (!results.length) {
-      resultsEl.innerHTML = `<div class="empty-state">No results for <strong>${Utils.escapeHtml(text)}</strong><div class="search-no-result-hint">Try a song title, artist, album, genre, or a smaller part of the name.</div></div>`;
-      return;
-    }
-
-    this.rememberSearch(text);
-    let html = `<div class="search-result-summary"><span>${results.length}${results.length >= 150 ? '+' : ''} result${results.length === 1 ? '' : 's'}</span><button type="button" class="search-sort-label" onclick="UI.searchResultsSort()">Relevance</button></div>`;
-    html += '<div class="track-list">';
-    results.forEach((track, i) => { html += this.renderTrackRow(track, i + 1); });
+    let html = '<div class="track-list">';
+    results.forEach((track, i) => {
+      html += this.renderTrackRow(track, i + 1);
+    });
     html += '</div>';
-    resultsEl.innerHTML = html;
-  },
-
-  searchResultsSort() {
-    const btn = document.querySelector('.search-sort-label');
-    if (btn) btn.textContent = btn.textContent === 'Relevance' ? 'Title' : 'Relevance';
-    const input = document.getElementById('search-input');
-    if (input) this.handleSearch(input.value);
+    container.innerHTML = html;
   },
 
   async renderTracks(container, params = {}) {
@@ -1141,10 +1064,19 @@ const UI = {
       html += `<button class="icon-btn small" onclick="UI.addSelectedToQueue()" title="Add to Queue">${appIcon('addPlayNext')}</button>`;
       html += `<button class="icon-btn small" onclick="UI.showPlaylistModal()" title="Add to Playlist">${appIcon('addPlaylist')}</button>`;
     } else {
-      html += `<select class="sort-select" onchange="UI.sortTracks(this.value)">`;
-      html += `<option value="title">Title</option><option value="artist">Artist</option><option value="album">Album</option><option value="duration">Duration</option><option value="playCount">Plays</option><option value="dateAdded">Date Added</option>`;
+      const sortBy = params.sortBy || this.currentSortBy || 'title';
+      const sortDir = params.sortDir || this.currentSortDir || 'asc';
+      this.currentSortBy = sortBy;
+      this.currentSortDir = sortDir;
+      html += `<select class="sort-select" onchange="UI.sortTracks(this.value)" aria-label="Sort tracks by">`;
+      html += `<option value="title" ${sortBy === 'title' ? 'selected' : ''}>Title</option>`;
+      html += `<option value="artist" ${sortBy === 'artist' ? 'selected' : ''}>Artist</option>`;
+      html += `<option value="album" ${sortBy === 'album' ? 'selected' : ''}>Album</option>`;
+      html += `<option value="duration" ${sortBy === 'duration' ? 'selected' : ''}>Duration</option>`;
+      html += `<option value="playCount" ${sortBy === 'playCount' ? 'selected' : ''}>Plays</option>`;
+      html += `<option value="dateAdded" ${sortBy === 'dateAdded' ? 'selected' : ''}>Date Added</option>`;
       html += `</select>`;
-      html += `<button class="icon-btn small" onclick="UI.toggleSortDir()" title="Toggle sort direction">${appIcon('sort')}</button>`;
+      html += `<button class="icon-btn small sort-dir-btn" onclick="UI.toggleSortDir()" title="Sort ${sortDir === 'asc' ? 'ascending' : 'descending'}" aria-label="Sort ${sortDir === 'asc' ? 'ascending' : 'descending'}"><span class="sort-direction-label">${sortDir === 'asc' ? '↑' : '↓'}</span>${appIcon('sort')}</button>`;
     }
     html += '</div>';
     html += '<div class="view-toolbar-right">';
@@ -1180,49 +1112,99 @@ const UI = {
     container.innerHTML = html;
   },
 
+  getCollectionViewStyle() {
+    const configured = SettingsManager.get('ui.gridViewStyle');
+    return ['grid','list','collage'].includes(configured) ? configured : 'grid';
+  },
+
+  getGridColumnClass() {
+    const cols = SettingsManager.get('ui.gridColumns');
+    return cols === '3' ? 'grid-cols-3' : cols === '4' ? 'grid-cols-4' : cols === '5' ? 'grid-cols-5' : 'grid-cols-2';
+  },
+
+  collectionViewToolbar(title) {
+    const mode = this.getCollectionViewStyle();
+    const cols = SettingsManager.get('ui.gridColumns') || 'auto';
+    let html = '<div class="view-toolbar collection-toolbar">';
+    html += `<div class="view-toolbar-left"><h2 style="font-size:18px;font-weight:800;">${Utils.escapeHtml(title)}</h2></div>`;
+    html += '<div class="view-toolbar-right">';
+    html += `<div class="collection-view-modes">`;
+    html += `<button class="view-toggle-btn ${mode === 'list' ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle','list'); UI.renderCurrentPage()" title="List view" aria-label="List view">${appIcon('tracks')}</button>`;
+    html += `<button class="view-toggle-btn ${mode === 'grid' ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle','grid'); UI.renderCurrentPage()" title="Grid view" aria-label="Grid view">${appIcon('grid')}</button>`;
+    html += `<button class="view-toggle-btn ${mode === 'collage' ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle','collage'); UI.renderCurrentPage()" title="Collage view" aria-label="Collage view">${appIcon('grid')}</button>`;
+    html += '</div>';
+    if (mode !== 'list') {
+      html += `<select class="sort-select collection-columns-select" onchange="SettingsManager.set('ui.gridColumns', this.value)" aria-label="Grid columns">`;
+      html += `<option value="auto" ${cols === 'auto' ? 'selected' : ''}>Auto</option>`;
+      ['2','3','4','5'].forEach(c => html += `<option value="${c}" ${cols === c ? 'selected' : ''}>${c} columns</option>`);
+      html += '</select>';
+    }
+    html += '</div></div>';
+    return html;
+  },
+
+  collectionCollageStyle(id, index) {
+    let h = 2166136261 >>> 0;
+    for (const ch of String(id || index)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+    const rand = () => { h += 0x6D2B79F5; let t=h; t=Math.imul(t^(t>>>15),t|1); t^=t+Math.imul(t^(t>>>7),t|61); return ((t^(t>>>14))>>>0)/4294967296; };
+    const rotate = Math.round((rand()*14)-7);
+    const x = Math.round((rand()*14)-7);
+    const y = Math.round((rand()*10)-5);
+    const z = Math.round(rand()*100);
+    return `--collage-rotate:${rotate}deg;--collage-x:${x}px;--collage-y:${y}px;--collage-z:${z}`;
+  },
+
+  renderAlbumListItem(album) {
+    const tracksCount = album.tracks?.length || 0;
+    return `<div class="collection-list-item" onclick="UI.navigate('album-detail',{albumId:'${album.id}'})">
+      <div class="collection-list-art">${this.getAlbumArtwork(album, [])}</div>
+      <div class="collection-list-info"><strong>${Utils.escapeHtml(album.name || 'Unknown Album')}</strong><span>${Utils.escapeHtml(album.artist || 'Unknown Artist')} · ${tracksCount} tracks</span></div>
+      <span class="collection-list-chevron">${appIcon('next')}</span>
+    </div>`;
+  },
+
+  renderArtistListItem(artist) {
+    const count = artist.tracks?.length || artist.trackCount || 0;
+    return `<div class="collection-list-item" onclick="UI.navigate('artist-detail',{artist:${JSON.stringify(artist.name)}})">
+      <div class="collection-list-art circle">${this.getArtistArtwork(artist, [])}</div>
+      <div class="collection-list-info"><strong>${Utils.escapeHtml(artist.name || 'Unknown Artist')}</strong><span>${count} tracks · ${artist.albums?.length || 0} albums</span></div>
+      <span class="collection-list-chevron">${appIcon('next')}</span>
+    </div>`;
+  },
+
   async renderAlbums(container) {
     const albums = await Data.getAll('albums');
-    const viewStyle = SettingsManager.get('ui.gridViewStyle') || 'grid';
-    const isCollage = viewStyle === 'collage';
-
-    let html = '<div class="view-toolbar">';
-    html += '<div class="view-toolbar-left"><h2 style="font-size:18px;font-weight:800;">Albums</h2></div>';
-    html += '<div class="view-toolbar-right">';
-    html += `<button class="view-toggle-btn ${!isCollage ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'grid'); UI.renderCurrentPage()">${appIcon('grid')}</button>`;
-    html += `<button class="view-toggle-btn ${isCollage ? 'active' : ''}" onclick="SettingsManager.set('ui.gridViewStyle', 'collage'); UI.renderCurrentPage()">${appIcon('grid')}</button>`;
-    html += '</div></div>';
-
-    if (albums.size === 0) {
-      html += this.renderEmptyState('No albums yet');
-      container.innerHTML = html;
-      return;
+    let html = this.collectionViewToolbar('Albums');
+    if (albums.length === 0) { html += this.renderEmptyState('No albums yet'); container.innerHTML = html; return; }
+    const list = [...albums].sort((a,b) => String(a.name||'').localeCompare(String(b.name||''), undefined, {numeric:true,sensitivity:'base'}));
+    const mode = this.getCollectionViewStyle();
+    if (mode === 'list') {
+      html += '<div class="collection-list">' + list.map(a => this.renderAlbumListItem(a)).join('') + '</div>';
+    } else {
+      html += `<div class="grid-container ${this.getGridColumnClass()} ${mode === 'collage' ? 'collage collection-collage' : ''}">`;
+      list.forEach((album,i) => {
+        html += `<div class="grid-item collection-card-item" style="${mode === 'collage' ? this.collectionCollageStyle(album.id,i) : ''}" onclick="UI.navigate('album-detail',{albumId:'${album.id}'})">${this.renderAlbumCard(album)}</div>`;
+      });
+      html += '</div>';
     }
-
-    const albumList = [...albums].sort((a,b) => a.name.localeCompare(b.name));
-    html += `<div class="grid-container ${isCollage ? 'collage' : 'grid-cols-2'}">`;
-    albumList.forEach(album => {
-      html += `<div class="grid-item" onclick="UI.navigate('album-detail', {albumId: '${album.id}'})">${this.renderAlbumCard(album)}</div>`;
-    });
-    html += '</div>';
     container.innerHTML = html;
   },
 
   async renderArtists(container) {
     const artists = await Data.getAll('artists');
-    let html = '<div class="view-toolbar"><div class="view-toolbar-left"><h2 style="font-size:18px;font-weight:800;">Artists</h2></div></div>';
-
-    if (artists.size === 0) {
-      html += this.renderEmptyState('No artists yet');
-      container.innerHTML = html;
-      return;
+    let html = this.collectionViewToolbar('Artists');
+    if (artists.length === 0) { html += this.renderEmptyState('No artists yet'); container.innerHTML = html; return; }
+    const list = [...artists].map(a => ({...a, trackCount: a.tracks?.length || a.trackCount || 0})).sort((a,b) => String(a.name||'').localeCompare(String(b.name||''), undefined, {numeric:true,sensitivity:'base'}));
+    const mode = this.getCollectionViewStyle();
+    if (mode === 'list') {
+      html += '<div class="collection-list">' + list.map(a => this.renderArtistListItem(a)).join('') + '</div>';
+    } else {
+      html += `<div class="grid-container ${this.getGridColumnClass()} ${mode === 'collage' ? 'collage collection-collage' : ''}">`;
+      list.forEach((artist,i) => {
+        html += `<div class="grid-item collection-card-item" style="${mode === 'collage' ? this.collectionCollageStyle(artist.id,i) : ''}" onclick="UI.navigate('artist-detail',{artist:${JSON.stringify(artist.name)}})">${this.renderArtistCard(artist)}</div>`;
+      });
+      html += '</div>';
     }
-
-    const artistList = [...artists].sort((a,b) => a.name.localeCompare(b.name));
-    html += '<div class="grid-container grid-cols-2">';
-    artistList.forEach(artist => {
-      html += `<div class="grid-item" onclick="UI.navigate('tracks', {artist: '${Utils.escapeHtml(artist.name)}'})">${this.renderArtistCard(artist)}</div>`;
-    });
-    html += '</div>';
     container.innerHTML = html;
   },
 
@@ -1768,7 +1750,7 @@ const UI = {
     html += select('ui.miniplayerGlowMode', 'Mini-player Glow Mode', s.ui.miniplayerGlowMode, [['dynamic','Dynamic'],['static','Static']]);
     html += toggle('ui.glassmorphism', 'Glassmorphism', s.ui.glassmorphism, 'Use frosted, translucent surfaces for the bottom navigation and sidebar.');
     html += number('ui.glassIntensity', 'Glass Intensity', s.ui.glassIntensity, 0, 1, 0.05);
-    html += toggle('ui.fillAlbumArt', 'Fill Album Art', s.ui.fillAlbumArt, 'Uses the artwork as a large full-player background that fades into the solid background. When off, only the square album cover is shown.');
+    html += toggle('ui.fillAlbumArt', 'Fill Album Art', s.ui.fillAlbumArt, 'Uses the artwork as the full-player visual surface with a blurred artwork reflection below. When off, only the square album cover is shown.');
     html += select('ui.gridColumns', 'Grid Columns', s.ui.gridColumns, [['auto','Auto'],['2','2'],['3','3'],['4','4'],['5','5']]);
     html += select('ui.gridViewStyle', 'Library View', s.ui.gridViewStyle, [['grid','Grid'],['list','List'],['collage','Collage']]);
     html += toggle('ui.waveformSeekbar', 'Waveform Seekbar', s.ui.waveformSeekbar);
@@ -1937,7 +1919,7 @@ const UI = {
     const isPlaying = Player.currentTrack && Player.currentTrack.id === track.id;
     const isSelected = this.selectedTracks.has(track.id);
     return `
-      <div class="track-row ${isPlaying ? 'playing' : ''} ${isSelected ? 'selected' : ''}" onclick="${this.isSelectionMode ? `UI.toggleTrackSelection('${track.id}')` : `UI.playTrackById('${track.id}')`}" oncontextmenu="UI.showTrackMenu('${track.id}', event)">
+      <div class="track-row ${isPlaying ? 'playing' : ''} ${isSelected ? 'selected' : ''}" data-track-id="${Utils.escapeHtml(String(track.id))}" onclick="${this.isSelectionMode ? `UI.toggleTrackSelection('${track.id}')` : `UI.playTrackById('${track.id}')`}" oncontextmenu="UI.showTrackMenu('${track.id}', event)">
         ${this.isSelectionMode ? `<div class="track-check ${isSelected ? 'checked' : ''}">${appIcon('select')}</div>` : ''}
         <img class="track-art" src="${this.getArtworkUrl(track)}" alt="">
         <div class="track-info">
@@ -1985,7 +1967,7 @@ const UI = {
         </div>
       </div>
       <span class="grid-title">${Utils.escapeHtml(artist.name)}</span>
-      <span class="grid-subtitle">${artist.trackCount || 0} tracks</span>
+      <span class="grid-subtitle">${artist.tracks?.length || artist.trackCount || 0} tracks</span>
     `;
   },
 
@@ -2614,10 +2596,12 @@ const UI = {
 
   toggleSortDir() {
     const select = document.querySelector('.sort-select');
-    const field = select ? select.value : 'title';
-    const newDir = this.currentSortDir === 'asc' ? 'desc' : 'asc';
+    const field = select?.value || this.currentSortBy || this.currentPageParams?.sortBy || 'title';
+    const currentDir = this.currentPageParams?.sortDir || this.currentSortDir || 'asc';
+    const newDir = currentDir === 'asc' ? 'desc' : 'asc';
+    this.currentSortBy = field;
     this.currentSortDir = newDir;
-    this.navigate('tracks', { sortBy: field, sortDir: newDir });
+    this.navigate(this.currentPage, { ...(this.currentPageParams || {}), sortBy: field, sortDir: newDir });
   },
 
   applyFillAlbumArtMode() {
@@ -2835,8 +2819,11 @@ const UI = {
   },
 
   sortTracks(field) {
-    this.currentSortDir = 'asc';
-    this.navigate('tracks', { sortBy: field, sortDir: 'asc' });
+    const safeField = ['title','artist','album','duration','playCount','dateAdded'].includes(field) ? field : 'title';
+    const currentDir = this.currentPageParams?.sortDir || this.currentSortDir || 'asc';
+    this.currentSortBy = safeField;
+    this.currentSortDir = currentDir;
+    this.navigate('tracks', { ...(this.currentPageParams || {}), sortBy: safeField, sortDir: currentDir });
   },
 
   filterTracks(tracks, params) {
@@ -2853,17 +2840,38 @@ const UI = {
     return this.filterTracks(tracks, params);
   },
 
-  getSortedTracks(tracks, sortBy, sortDir) {
+  getSortedTracks(tracks, sortBy = 'title', sortDir = 'asc') {
     const dir = sortDir === 'desc' ? -1 : 1;
-    switch(sortBy) {
-      case 'title': return [...tracks].sort((a,b) => dir * (a.title || '').localeCompare(b.title || ''));
-      case 'artist': return [...tracks].sort((a,b) => dir * (a.artist || '').localeCompare(b.artist || ''));
-      case 'album': return [...tracks].sort((a,b) => dir * (a.album || '').localeCompare(b.album || ''));
-      case 'duration': return [...tracks].sort((a,b) => dir * ((a.duration || 0) - (b.duration || 0)));
-      case 'playCount': return [...tracks].sort((a,b) => dir * ((a.playCount || 0) - (b.playCount || 0)));
-      case 'dateAdded': return [...tracks].sort((a,b) => dir * ((a.dateAdded || 0) - (b.dateAdded || 0)));
-      default: return tracks;
-    }
+    const list = Array.isArray(tracks) ? [...tracks] : [];
+    const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
+    const value = (t, key) => {
+      switch (key) {
+        case 'duration': return Number(t?.duration) || 0;
+        case 'playCount': return Number(t?.playCount) || 0;
+        case 'dateAdded': return Number(t?.dateAdded) || 0;
+        case 'artist': return String(t?.artist || '');
+        case 'album': return String(t?.album || '');
+        case 'title':
+        default: return String(t?.title || '');
+      }
+    };
+    return list
+      .map((track, index) => ({ track, index }))
+      .sort((a, b) => {
+        const av = value(a.track, sortBy);
+        const bv = value(b.track, sortBy);
+        let cmp = (typeof av === 'number' && typeof bv === 'number') ? av - bv : collator.compare(av, bv);
+        if (cmp === 0 && sortBy !== 'title') cmp = collator.compare(String(a.track?.title || ''), String(b.track?.title || ''));
+        return cmp === 0 ? a.index - b.index : dir * cmp;
+      })
+      .map(item => item.track);
+  },
+
+  updateVisibleTrackRows(currentId) {
+    const rows = document.querySelectorAll('.track-row[data-track-id]');
+    rows.forEach(row => {
+      row.classList.toggle('playing', row.dataset.trackId === String(currentId || ''));
+    });
   },
 
   async getTracksByAlbum(album) {
@@ -2872,8 +2880,13 @@ const UI = {
   },
 
   async getTracksByArtist(artist) {
+    const target = String(artist?.name || '').trim().toLowerCase();
+    if (!target) return [];
     const tracks = await Data.getTracks();
-    return tracks.filter(t => t.artist === artist.name);
+    return tracks.filter(t => {
+      const names = [...Utils.splitArtists(t.artist || ''), ...(Array.isArray(t.featuredArtists) ? t.featuredArtists : [])];
+      return names.some(n => String(n).trim().toLowerCase() === target);
+    });
   },
 
   async getTracksByGenre(genre) {

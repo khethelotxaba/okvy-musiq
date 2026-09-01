@@ -98,12 +98,14 @@ const Utils = {
 
   splitArtists(str) {
     if (!str) return [];
-    const seps = SettingsManager.get('library.artistSeparators') || [';', '/', ','];
-    let artists = [str];
-    seps.forEach(sep => {
-      artists = artists.flatMap(a => a.split(sep).map(s => s.trim()).filter(Boolean));
-    });
-    return [...new Set(artists)];
+    const normalized = String(str)
+      .replace(/[()[\]{}]/g, ' ')
+      .replace(/\s+\b(?:feat(?:uring)?|ft\.?)\b\s*/gi, '||')
+      .replace(/\s*&\s*/g, '||')
+      .replace(/\s+\bx\b\s+/gi, '||')
+      .replace(/\s+\band\b\s+/gi, '||')
+      .replace(/\s*[,;/|]+\s*/g, '||');
+    return [...new Set(normalized.split('||').map(v => v.trim()).filter(Boolean))];
   },
 
   splitGenres(str) {
@@ -118,15 +120,28 @@ const Utils = {
 
   extractFeaturedArtists(title) {
     if (!title || !SettingsManager.get('library.extractFeaturedArtists')) return [];
-    const pattern = SettingsManager.get('library.featuredArtistPattern');
-    const match = title.match(pattern);
-    if (!match) return [];
-    return match[1].split(/,|&|and/i).map(s => s.trim()).filter(Boolean);
+    const text = String(title);
+    const matches = [];
+    const patterns = [
+      /[\(\[\{]\s*(?:feat\.?|ft\.?|featuring)\s+([^\)\]\}]+)[\)\]\}]/gi,
+      /(?:^|\s)(?:feat\.?|ft\.?|featuring)\s+([^\-–—|]+?)(?=\s+-\s+|\s+[\-–—|]|$)/gi
+    ];
+    for (const pattern of patterns) {
+      for (const m of text.matchAll(pattern)) {
+        const chunk = (m[1] || '').trim();
+        if (chunk) matches.push(...this.splitArtists(chunk));
+      }
+    }
+    return [...new Set(matches)].filter(a => a && !/^the$/i.test(a));
   },
 
   removeFeaturedFromTitle(title) {
     if (!title) return '';
-    return title.replace(/[\(\[](?:feat\.?|ft\.?|featuring)\s+[^\)\]]+[\)\]]/i, '').trim();
+    return String(title)
+      .replace(/[\(\[\{]\s*(?:feat\.?|ft\.?|featuring)\s+[^\)\]\}]+[\)\]\}]/gi, '')
+      .replace(/(?:^|\s)(?:feat\.?|ft\.?|featuring)\s+[^\-–—|]+(?=\s+-\s+|\s+[\-–—|]|$)/gi, '')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
   },
 
   parseM3U(content, basePath) {
