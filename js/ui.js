@@ -574,6 +574,11 @@ const UI = {
     }
   },
 
+  toggleThemeMode() {
+    const next = SettingsManager.get('ui.themeMode', 'dark') === 'light' ? 'dark' : 'light';
+    SettingsManager.set('ui.themeMode', next);
+  },
+
   applyThemeMode() {
     const mode = SettingsManager.get('ui.themeMode', 'dark');
     const isLight = mode === 'light';
@@ -1864,14 +1869,20 @@ const UI = {
     ['pointerup','pointercancel','pointerleave'].forEach(type => card.addEventListener(type, cancel));
   },
 
+  /** Sets the blurred-album-art backdrop CSS var on a player overlay element. */
+  setOverlayArt(overlay, track) {
+    if (!overlay) return;
+    const art = this.getArtworkUrl(track);
+    overlay.style.setProperty('--lyrics-art', `url("${String(art).replace(/"/g, '\\"')}")`);
+  },
+
   async openLyricsOverlay(expand = false) {
     const track = Player.currentTrack;
     if (!track) { this.showToast('Nothing is playing.'); return; }
     const overlay = document.getElementById('lyrics-overlay');
     const linesEl = document.getElementById('lyrics-preview-lines');
     if (!overlay || !linesEl) return;
-    const art = this.getArtworkUrl(track);
-    overlay.style.setProperty('--lyrics-art', `url("${String(art).replace(/"/g, '\\"')}")`);
+    this.setOverlayArt(overlay, track);
     document.getElementById('lyrics-overlay-title').textContent = track.title || 'Lyrics';
     document.getElementById('lyrics-overlay-artist').textContent = track.artist || '-';
     const lyrics = track.lyrics ? track.lyrics : track.lyricsLrc ? Utils.lrcParse(track.lyricsLrc) : track.lyricsTtml ? Utils.ttmlParse(track.lyricsTtml) : null;
@@ -1903,6 +1914,7 @@ const UI = {
     const overlay = document.getElementById('audio-effects-overlay');
     const content = document.getElementById('audio-effects-overlay-content');
     if (!overlay || !content) return;
+    this.setOverlayArt(overlay, Player.currentTrack);
     content.innerHTML = this.buildAudioEffectsControls();
     overlay.classList.add('open');
     overlay.setAttribute('aria-hidden','false');
@@ -1951,6 +1963,8 @@ const UI = {
       { icon: 'lyrics', label: 'Lyrics', action: () => { this.hidePlayerOptions(); this.openLyricsOverlay(false); } },
       { icon: 'queue', label: 'Queue', action: () => { this.hidePlayerOptions(); this.closeFullPlayer(); this.navigate('queue'); } },
       { icon: 'share', label: 'Share Track', action: () => { this.hidePlayerOptions(); this.shareTrack(); } },
+      { icon: 'theme', label: SettingsManager.get('ui.themeMode') === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode', action: () => { this.toggleThemeMode(); this.showPlayerOptions(); } },
+      { icon: 'palette', label: SettingsManager.get('ui.glassmorphism', true) ? 'Turn Off Glass Effect' : 'Turn On Glass Effect', action: () => { SettingsManager.set('ui.glassmorphism', !SettingsManager.get('ui.glassmorphism', true)); this.showPlayerOptions(); } },
     ];
     const container = document.getElementById('player-options-list');
     container.innerHTML = items.map((item,i) => `<div class="modal-item menu-action-item" onclick="UI.playerOptionAction(${i})">${appIcon(item.icon)}<span>${Utils.escapeHtml(item.label)}</span></div>`).join('');
