@@ -419,6 +419,8 @@ const UI = {
     document.getElementById('fp-title').textContent = track.title || 'Unknown';
     document.getElementById('fp-artist').textContent = track.artist || '-';
     document.getElementById('fp-art').src = artwork;
+    const reflectionArt = document.getElementById('fp-reflection-art');
+    if (reflectionArt) reflectionArt.src = artwork;
     const fpSheet = document.querySelector('#full-player .fp-sheet');
     if (fpSheet && artwork) fpSheet.style.setProperty('--fp-art-url', `url(\"${String(artwork).replace(/\"/g, '%22')}\")`);
     document.getElementById('fp-favorite').classList.toggle('active', track.favorite);
@@ -524,6 +526,7 @@ const UI = {
         case 'audio.pitchSemitones':
         case 'audio.playbackSpeed':
         case 'audio.volumeBoost':
+        case 'audio.volumeBoostEnabled':
           Player.applyPlaybackEffects();
           if (this.currentPage === 'audio-effects') this.renderCurrentPage();
           if (document.getElementById('audio-effects-overlay')?.classList.contains('open')) this.openAudioEffectsOverlay();
@@ -1224,6 +1227,7 @@ const UI = {
     const combined = Math.max(-12, Math.min(12, Math.round(pitch)));
     const combinedValue = `${combined > 0 ? '+' : ''}${combined} st · ${speed.toFixed(2)}×`;
     const boost = Number(s.volumeBoost || 1);
+    const boostEnabled = !!s.volumeBoostEnabled;
 
     let html = `<div class="view-toolbar audio-effects-toolbar">
       <div class="view-toolbar-left">
@@ -1299,11 +1303,14 @@ const UI = {
             <h3>Volume Boost</h3>
             <p>Additional playback gain</p>
           </div>
-          ${appIcon('volumeBoost')}
+          <label class="switch-modern" title="Enable volume boost">
+            <input type="checkbox" ${boostEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.volumeBoostEnabled', this.checked)">
+            <span></span>
+          </label>
         </div>
         <div class="modern-range-block">
           <div class="modern-range-value-row"><span>Boost</span><strong id="boost-value">${Math.round(boost * 100)}%</strong></div>
-          <input class="modern-range" id="volume-boost-range" type="range" min="0.5" max="2.5" step="0.05" value="${boost}" oninput="UI.setEffectValue('volumeBoost', this.value, this)">
+          <input class="modern-range volume-boost-drag" id="volume-boost-range" type="range" min="0.5" max="2.5" step="0.05" value="${boost}" ${boostEnabled ? '' : 'disabled'} oninput="UI.setEffectValue('volumeBoost', this.value, this)" aria-label="Volume Boost">
           <div class="modern-range-scale"><span>50%</span><span>100%</span><span>250%</span></div>
         </div>
       </section>
@@ -1312,22 +1319,26 @@ const UI = {
     container.innerHTML = html;
     container.querySelectorAll('.eq-modern-input').forEach((input, i) => this.updateEqVisual(input, i));
     container.querySelectorAll('.modern-range').forEach(input => this.updateRangeProgress(input));
+    container.querySelectorAll('.volume-boost-drag').forEach(input => this.makeDragOnlyRange(input));
     this.updatePitchSpeedVisual(combined);
   },
 
   resetEqualizer() {
     const flat = Array(5).fill(0);
-    SettingsManager.set('audio.eqCurrentPreset', 'Flat');
-    SettingsManager.set('audio.eqCustomValues', flat);
+    SettingsManager.set('audio.eqCurrentPreset', 'Flat', { notify: false });
+    SettingsManager.set('audio.eqCustomValues', flat, { notify: false });
     Player.applyEQPreset();
-    if (this.currentPage === 'audio-effects') this.renderCurrentPage();
-    if (document.getElementById('audio-effects-overlay')?.classList.contains('open')) this.openAudioEffectsOverlay();
+    this.refreshAudioEffectsViews();
   },
 
   resetPitchSpeed() {
-    SettingsManager.set('audio.pitchSemitones', 0);
-    SettingsManager.set('audio.playbackSpeed', 1);
+    SettingsManager.set('audio.pitchSemitones', 0, { notify: false });
+    SettingsManager.set('audio.playbackSpeed', 1, { notify: false });
     Player.applyPlaybackEffects();
+    this.refreshAudioEffectsViews();
+  },
+
+  refreshAudioEffectsViews() {
     if (this.currentPage === 'audio-effects') this.renderCurrentPage();
     if (document.getElementById('audio-effects-overlay')?.classList.contains('open')) this.openAudioEffectsOverlay();
   },
@@ -1400,6 +1411,26 @@ const UI = {
     const overlayEl = document.getElementById('overlay-boost-value');
     if (kind === 'volumeBoost' && overlayEl) overlayEl.textContent = `${Math.round(n*100)}%`;
     if (sourceEl) this.updateRangeProgress(sourceEl);
+  },
+
+  makeDragOnlyRange(input) {
+    if (!input || input.dataset.dragOnlyBound === '1') return;
+    input.dataset.dragOnlyBound = '1';
+    const update = () => this.updateRangeProgress(input);
+    input.addEventListener('pointerdown', (event) => {
+      const rect = input.getBoundingClientRect();
+      const min = Number(input.min ?? 0), max = Number(input.max ?? 100), value = Number(input.value ?? min);
+      const pct = max === min ? 0 : (value - min) / (max - min);
+      const thumbX = rect.left + pct * rect.width;
+      if (Math.abs(event.clientX - thumbX) > 24) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      input.setPointerCapture?.(event.pointerId);
+      requestAnimationFrame(update);
+    });
+    input.addEventListener('input', update);
   },
 
   updateRangeProgress(input) {
@@ -2145,6 +2176,7 @@ const UI = {
     const speed = Number(SettingsManager.get('audio.playbackSpeed',1));
     const combined = Math.max(-12, Math.min(12, Math.round(pitch)));
     const boost = Number(SettingsManager.get('audio.volumeBoost',1));
+    const boostEnabled = !!SettingsManager.get('audio.volumeBoostEnabled', false);
     return `<div class="effects-modern-page effects-overlay-modern-page">
       <section class="effects-modern-section effects-modern-eq">
         <div class="effects-modern-head"><div><span class="effects-modern-overline">EQUALIZER</span><h3>5-band EQ</h3></div><label class="switch-modern"><input type="checkbox" ${eqEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.equalizerEnabled', this.checked)"><span></span></label></div>
@@ -2153,7 +2185,7 @@ const UI = {
         <div class="eq-modern-scale"><span>-12 dB</span><span>0</span><span>+12 dB</span></div>
       </section>
       <section class="effects-modern-section"><div class="effects-modern-head"><div><span class="effects-modern-overline">PLAYBACK</span><h3>Pitch &amp; Speed</h3><p>One linked control</p></div>${appIcon('pitchSpeed')}</div><div class="modern-range-block"><div class="modern-range-value-row"><span>Pitch &amp; Speed</span><strong id="overlay-pitch-speed-combined-value">${combined>0?'+':''}${combined} st · ${speed.toFixed(2)}×</strong></div><input class="modern-range" id="overlay-pitch-speed-combined" type="range" min="-12" max="12" step="1" value="${combined}" oninput="UI.setPitchSpeedCombined(this.value,this)"><div class="modern-range-scale"><span>-12 st</span><span>Neutral</span><span>+12 st</span></div></div><button class="modern-inline-reset" type="button" onclick="UI.resetPitchSpeed()">Reset to neutral</button></section>
-      <section class="effects-modern-section"><div class="effects-modern-head"><div><span class="effects-modern-overline">OUTPUT</span><h3>Volume Boost</h3><p>Additional playback gain</p></div>${appIcon('volumeBoost')}</div><div class="modern-range-block"><div class="modern-range-value-row"><span>Boost</span><strong id="overlay-boost-value">${Math.round(boost*100)}%</strong></div><input class="modern-range" id="overlay-volume-boost-range" type="range" min="0.5" max="2.5" step="0.05" value="${boost}" oninput="UI.setEffectValue('volumeBoost',this.value,this)"><div class="modern-range-scale"><span>50%</span><span>100%</span><span>250%</span></div></div></section>
+      <section class="effects-modern-section"><div class="effects-modern-head"><div><span class="effects-modern-overline">OUTPUT</span><h3>Volume Boost</h3><p>Additional playback gain</p></div><label class="switch-modern" title="Enable volume boost"><input type="checkbox" ${boostEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.volumeBoostEnabled', this.checked)"><span></span></label></div><div class="modern-range-block"><div class="modern-range-value-row"><span>Boost</span><strong id="overlay-boost-value">${Math.round(boost*100)}%</strong></div><input class="modern-range volume-boost-drag" id="overlay-volume-boost-range" type="range" min="0.5" max="2.5" step="0.05" value="${boost}" ${boostEnabled ? '' : 'disabled'} oninput="UI.setEffectValue('volumeBoost',this.value,this)" aria-label="Volume Boost"><div class="modern-range-scale"><span>50%</span><span>100%</span><span>250%</span></div></div></section>
     </div>`;
   },
 

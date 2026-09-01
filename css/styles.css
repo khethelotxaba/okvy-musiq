@@ -3285,3 +3285,110 @@ body.light .full-player.fill-album-art .fp-content::before {
   .eq-modern-input { height:167px; }
   .eq-modern-frequency { font-size:10px; }
 }
+
+/* Audio-effects behavior polish: disabled boost is visibly inactive without altering the layout. */
+.modern-range:disabled { opacity:.38; cursor:not-allowed; }
+.effects-overlay-header .overlay-close { margin-right:-6px; }
+
+/* === v3.1 artwork reflection polish === */
+/* Keep the original top artwork geometry untouched; the reflection is an
+   independent layer underneath the metadata. */
+.full-player.fill-album-art .fp-art-container {
+  z-index: 2 !important;
+}
+.full-player.fill-album-art .fp-reflection {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 58dvh;
+  min-height: 270px;
+  overflow: hidden;
+  z-index: 1;
+  pointer-events: none;
+  opacity: .94;
+  -webkit-mask-image: linear-gradient(to bottom,
+    transparent 0%,
+    rgba(0,0,0,.08) 14%,
+    rgba(0,0,0,.48) 25%,
+    rgba(0,0,0,.86) 38%,
+    #000 52%,
+    #000 100%);
+  mask-image: linear-gradient(to bottom,
+    transparent 0%,
+    rgba(0,0,0,.08) 14%,
+    rgba(0,0,0,.48) 25%,
+    rgba(0,0,0,.86) 38%,
+    #000 52%,
+    #000 100%);
+}
+.full-player.fill-album-art .fp-reflection img {
+  display: block;
+  width: 100%;
+  height: 58dvh;
+  min-height: 270px;
+  object-fit: cover;
+  object-position: center top;
+  transform: scaleY(-1) scale(1.035);
+  transform-origin: center center;
+  filter: blur(calc(20px + var(--glass-intensity) * 24px));
+  -webkit-filter: blur(calc(20px + var(--glass-intensity) * 24px));
+}
+/* The reflection is hidden when Fill Album Art is off. */
+.full-player:not(.fill-album-art) .fp-reflection { display: none !important; }
+
+/* Never place a tint/surface behind the metadata. */
+.full-player.fill-album-art .fp-meta,
+.full-player.fill-album-art .fp-text,
+.full-player.fill-album-art .fp-title,
+.full-player.fill-album-art .fp-artist {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  padding: 0 !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.full-player.fill-album-art .fp-title,
+.full-player.fill-album-art .fp-artist {
+  display: block;
+  width: auto;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Seamless artwork-to-reflection handoff: the crisp cover gently dissolves
+   into its mirrored blur instead of meeting it at a hard horizontal edge. */
+.full-player.fill-album-art .fp-art {
+  -webkit-mask-image: linear-gradient(to bottom,
+    #000 0%,
+    #000 88%,
+    rgba(0,0,0,.88) 93%,
+    rgba(0,0,0,.42) 98%,
+    transparent 100%);
+  mask-image: linear-gradient(to bottom,
+    #000 0%,
+    #000 88%,
+    rgba(0,0,0,.88) 93%,
+    rgba(0,0,0,.42) 98%,
+    transparent 100%);
+}
+.full-player.fill-album-art .fp-reflection {
+  top: 50%;
+  -webkit-mask-image: linear-gradient(to bottom,
+    transparent 0%,
+    rgba(0,0,0,.42) 7%,
+    rgba(0,0,0,.82) 14%,
+    #000 22%,
+    #000 100%);
+  mask-image: linear-gradient(to bottom,
+    transparent 0%,
+    rgba(0,0,0,.42) 7%,
+    rgba(0,0,0,.82) 14%,
+    #000 22%,
+    #000 100%);
+}

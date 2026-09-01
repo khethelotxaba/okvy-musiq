@@ -143,7 +143,7 @@ const Player = {
 
     lastNode.connect(this.compressor);
     if (this.boostGain) {
-      this.boostGain.gain.value = SettingsManager.get('audio.volumeBoost', 1);
+      this.boostGain.gain.value = SettingsManager.get('audio.volumeBoostEnabled', false) ? SettingsManager.get('audio.volumeBoost', 1) : 1;
       this.compressor.connect(this.boostGain);
       this.boostGain.connect(this.gainNode);
     } else {
@@ -172,7 +172,7 @@ const Player = {
     try { this.audio.preservesPitch = false; } catch (e) {}
     try { this.audio.mozPreservesPitch = false; } catch (e) {}
     try { this.audio.webkitPreservesPitch = false; } catch (e) {}
-    if (this.boostGain) this.boostGain.gain.value = SettingsManager.get('audio.volumeBoost', 1);
+    if (this.boostGain) this.boostGain.gain.value = SettingsManager.get('audio.volumeBoostEnabled', false) ? SettingsManager.get('audio.volumeBoost', 1) : 1;
   },
 
   setPitch(value) { SettingsManager.set('audio.pitchSemitones', value); this.applyPlaybackEffects(); },

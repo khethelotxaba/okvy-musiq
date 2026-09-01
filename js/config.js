@@ -59,7 +59,8 @@ const CONFIG = {
     normalizationTarget: -14,
     pitchSemitones: 0,
     playbackSpeed: 1,
-    volumeBoost: 1
+    volumeBoost: 1,
+    volumeBoostEnabled: false
   },
 
   playback: {
@@ -126,6 +127,7 @@ const SETTINGS_RULES = {
   'audio.pitchSemitones': { type: 'number', min: -12, max: 12 },
   'audio.playbackSpeed': { type: 'number', min: 0.5, max: 2 },
   'audio.volumeBoost': { type: 'number', min: 0.5, max: 2.5 },
+  'audio.volumeBoostEnabled': { type: 'boolean' },
   'ui.particlesIntensity': { type: 'number', min: 0, max: 2 },
   'ui.waveformBars': { type: 'number', min: 20, max: 300 },
   'ui.glassIntensity': { type: 'number', min: 0, max: 1 },
