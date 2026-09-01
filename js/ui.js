@@ -1,70 +1,40 @@
 
 function appIcon(name, extraClass = '', id = '') {
-  const icons = {
-    play: ['M8 5v14l11-7z'],
-    pause: ['M7 5h4v14H7z','M13 5h4v14h-4z'],
-    playMini: ['M8 5v14l11-7z'],
-    pauseMini: ['M7 5h4v14H7z','M13 5h4v14h-4z'],
-    playMiniPlayer: ['M8 5v14l11-7z'],
-    pauseMiniPlayer: ['M7 5h4v14H7z','M13 5h4v14h-4z'],
-    search: ['m21 21-4.35-4.35','M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z'],
-    options: ['M12 6h9','M3 6h3','M12 12h9','M3 12h3','M12 18h9','M3 18h3','M6 4v4','M6 10v4','M6 16v4'],
-    menu: ['M4 7h16','M4 12h16','M4 17h16'],
-    home: ['M3 10.8 12 3l9 7.8','M5.5 9.8V21h13V9.8','M9.5 21v-7h5v7'],
-    tracks: ['M4 6h16','M4 12h16','M4 18h16','M7 6v0','M7 12v0','M7 18v0'],
-    albums: ['M4 5h16v14H4z','M8 9h8','M8 13h5','M8 17h3'],
-    artists: ['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z','M4 21a8 8 0 0 1 16 0'],
-    genres: ['M4 6h16','M4 12h12','M4 18h8','M17 10v8','M15 16h4'],
-    playlists: ['M5 4h14v16H5z','M8 8h8','M8 12h8','M8 16h5'],
-    queue: ['M4 6h10','M4 12h10','M4 18h10','M17 16l4 2-4 2z'],
-    folders: ['M3 7h7l2 2h9v10H3z'],
-    favourite: ['M20.8 8.9c0 5.1-8.8 10.2-8.8 10.2S3.2 14 3.2 8.9A5 5 0 0 1 12 6a5 5 0 0 1 8.8 2.9Z'],
-    settings: ['M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z','M19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7.2 7.2 0 0 0-2.1-1.2L14.1 3h-4.2l-.3 2.6a7.2 7.2 0 0 0-2.1 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7.2 7.2 0 0 0 2.1 1.2l.3 2.6h4.2l.3-2.6a7.2 7.2 0 0 0 2.1-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z'],
-    previous: ['M6 5v14','M18 6 9 12l9 6z'],
-    next: ['M18 5v14','M6 6l9 6-9 6z'],
-    shuffle: ['M3 6h3c4 0 6 12 10 12h5','M17 4l4 2-4 2','M3 18h3c1.5 0 2.5-1 3.5-2.4','M17 16l4 2-4 2'],
-    none: ['M4 7h11l-2-2','M20 17H9l2 2','M17 7l3-3 0 6','M7 17l-3 3 0-6'],
-    repeatNone: ['M4 7h11l-2-2','M20 17H9l2 2','M17 7l3-3 0 6','M7 17l-3 3 0-6'],
-    repeatAll: ['M17 2l4 4-4 4','M3 11V8a2 2 0 0 1 2-2h16','M7 22l-4-4 4-4','M21 13v3a2 2 0 0 1-2 2H3'],
-    repeatOne: ['M17 2l4 4-4 4','M3 11V8a2 2 0 0 1 2-2h16','M14 14l-2 2-2-2','M12 16v-5','M12 11h2'],
-    repeatN: ['M17 2l4 4-4 4','M3 11V8a2 2 0 0 1 2-2h16','M7 22l-4-4 4-4','M21 13v3a2 2 0 0 1-2 2H3','M9 13h6'],
-    lightMode: ['M12 3v2','M12 19v2','M4.2 4.2l1.4 1.4','M18.4 18.4l1.4 1.4','M3 12h2','M19 12h2','M4.2 19.8l1.4-1.4','M18.4 5.6l1.4-1.4','M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z'],
-    darkMode: ['M20.5 14.7A8.5 8.5 0 0 1 9.3 3.5 8.5 8.5 0 1 0 20.5 14.7Z'],
-    theme: ['M12 3v18','M3 12h18','M5.6 5.6l12.8 12.8','M18.4 5.6 5.6 18.4'],
-    share: ['M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z','M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z','M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z','m8.7 13.5 6.6 4','m15.3 6.5-6.6 4'],
-    addPlaylist: ['M5 4h10v5','M5 4v16h10','M12 17h8','M16 13v8'],
-    addPlayNext: ['M5 4h10v8','M5 4v16h10','M16 15h5','M18.5 12.5v5'],
-    remove: ['M5 7h14','M9 7V4h6v3','M8 11v7','M12 11v7','M16 11v7','M7 7l1 14h8l1-14'],
-    select: ['M4 4h6','M4 4v6','M20 4h-6','M20 4v6','M4 20h6','M4 20v-6','M20 20h-6','M20 20v-6','M9 12l2 2 4-5'],
-    sort: ['M4 6h16','M4 12h12','M4 18h8'],
-    grid: ['M4 4h6v6H4z','M14 4h6v6h-6z','M4 14h6v6H4z','M14 14h6v6h-6z'],
-    scanner: ['M4 7V5a1 1 0 0 1 1-1h2','M17 4h2a1 1 0 0 1 1 1v2','M20 17v2a1 1 0 0 1-1 1h-2','M7 20H5a1 1 0 0 1-1-1v-2','M8 12h8','M12 8v8'],
-    warning: ['M12 3 2.5 20h19L12 3Z','M12 9v5','M12 17h.01'],
-    equalizer: ['M5 4v16','M12 4v16','M19 4v16','M3 8h4','M10 15h4','M17 10h4'],
-    pitchSpeed: ['M4 18 10 12l4 4 6-8','M16 8h4v4','M5 5h7'],
-    volumeBoost: ['M4 10v4h3l4 4V6L7 10H4','M15 9a4 4 0 0 1 0 6','M18 6a8 8 0 0 1 0 12'],
-    sleepTimer: ['M12 6v6l4 2','M12 3a9 9 0 1 1-6.4 2.6','M16 4h4v4'],
-    pauseSleep: ['M9 4v8','M15 4v8','M12 8a6 6 0 1 0 5.2 3'],
-    resumeSleep: ['M8 5v8l6-4z','M12 20a8 8 0 0 0 7-4','M18 4v5h-5'],
-    repeatSection: ['M4 7h10l-2-2','M20 17H10l2 2','M17 7l3-3v6','M7 17l-3 3v-6'],
-    playAfterSeconds: ['M12 6v6l3 2','M12 3a9 9 0 1 1-9 9','M17 4h4v4'],
-    playAfterTracks: ['M5 5h8','M5 10h8','M5 15h5','M17 13l4 3-4 3z'],
-    comments: ['M4 5h16v11H8l-4 4z','M8 9h8','M8 13h5'],
-    metadata: ['M5 4h10v16H5z','M8 8h6','M8 12h6','M8 16h4'],
-    youtube: ['M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v10a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3Z','M10 8v8l6-4z'],
-    favoriteArtist: ['M12 20s-8-4.8-8-10a4.2 4.2 0 0 1 8-2 4.2 4.2 0 0 1 8 2c0 5.2-8 10-8 10Z','M18 12v6','M15 15h6'],
-    playOnly: ['M5 5h8','M5 10h8','M5 15h6','M17 13l4 3-4 3z'],
-    deleteArtist: ['M5 7h9','M9 7V4h4v3','M8 11v9','M12 11v9','M16 11v4','M16 20l5-5','M21 20l-5-5'],
-    removeArtists: ['M5 7h9','M5 12h9','M5 17h6','M17 15l4 4','M21 15l-4 4'],
-    filter: ['M4 5h16l-6 7v6l-4 1v-7z'],
+  const files = {
+    play: 'play.svg', pause: 'pause.svg', playMini: 'play-for-mini-player.svg', pauseMini: 'pause-for-mini-player.svg',
+    playMiniPlayer: 'play-for-mini-player.svg', pauseMiniPlayer: 'pause-for-mini-player.svg',
+    previous: 'previous-track.svg', next: 'next-track.svg', previousMini: 'previous-track-for-mini-player.svg', nextMini: 'next-track-for-mini-player.svg', previousFloating: 'previous-track-for-floating-player.svg', nextFloating: 'next-track-for-floating-player.svg',
+    search: 'search.svg', options: 'options.svg', menu: 'side-nav-hamburger.svg', home: 'home.svg',
+    tracks: 'tracks.svg', albums: 'albums.svg', artists: 'artists.svg', genres: 'genres.svg',
+    playlists: 'playlists.svg', queue: 'queue.svg', folders: 'Folders.svg', favorites: 'favourite.svg', favourites: 'favourite.svg', favourite: 'favourite.svg',
+    settings: 'setting.svg', shuffle: 'shuffle.svg', 'play-mini': 'play-for-mini-player.svg', 'next-mini': 'next-track-for-mini-player.svg', 'previous-mini': 'previous-track-for-mini-player.svg', 'next-floating': 'next-track-for-floating-player.svg', 'previous-floating': 'previous-track-for-floating-player.svg', repeatNone: 'repeate-all.svg', repeatAll: 'repeate-all.svg',
+    repeatOne: 'repeate-one.svg', repeatN: 'repeat-track-x-times.svg', repeat: 'repeate-all.svg', none: 'repeate-all.svg',
+    lightMode: 'light-mode.svg', darkMode: 'dark-mode.svg', theme: 'theme.svg',
+    share: 'share.svg', addPlaylist: 'add-to-playlist.svg', 'add-playlist': 'add-to-playlist.svg', addPlayNext: 'add-to-play-next.svg', remove: 'delete.svg',
+    select: 'select.svg', sort: 'sort.svg', sortPlaylist: 'sort-playlist.svg', grid: 'grid-style.svg', scanner: 'scanner.svg',
+    warning: 'warning-info.svg', lyrics: 'lyrics.svg', equalizer: 'equalizer.svg', pitchSpeed: 'pitch-and-speed.svg',
+    volumeBoost: 'volume boost.svg', sleepTimer: 'sleep-timer.svg', pauseSleep: 'pause-sleep-timer.svg',
+    resumeSleep: 'resume-sleep-timer.svg', repeatSection: 'repeat-this-section.svg', playAfterSeconds: 'play-after-x-seconds.svg',
+    playAfterTracks: 'play-track-after-x-tracks.svg', playAlbumAfterTrack: 'play-x-album-after-x-track.svg', comments: 'comments.svg',
+    metadata: 'edit-metadata.svg', youtube: 'find on YouTube.svg', favoriteArtist: 'add-to-favourite-artists.svg', playOnly: 'play-only-these-tracks.svg',
+    deleteArtist: 'delete-artist-and-related-tracks.svg', removeArtists: 'remove-artists-from-playlist.svg', filter: 'filter.svg', filterSearch: 'filter-search.svg',
+    folderAdd: 'folder-add.svg', folderRemove: 'folder-remove.svg', folderIgnore: 'folder-ignore.svg', history: 'history.svg',
+    mostPlayed: 'most played.svg', hoursListened: 'hours-listened.svg', nowPlaying: 'now-playing.svg', notifications: 'notifications.svg',
+    soundMute: 'sound-mute-status.svg', soundProfile: 'sound-profile.svg', bluetooth: 'bluetooth-device-output-status.svg', aux: 'aux-output-status.svg',
+    floatingPlayer: 'floating-mini-music-player.svg', minimizeFloating: 'minimize-floating-player.svg', minimizePlayerUI: 'minimize-music-player-ui.svg',
+    minimizeToPlayerUI: 'minimize-to-music-player-ui.svg', expandPlayerTitle: 'expand-to-album-art-and-track-title-only.svg',
+    alignLeft: 'title-and-artist-align-left.svg', alignCenter: 'title-and-artist-align-center.svg', alignRight: 'title-and-artist-align-right.svg',
+    accent: 'choose-current-accent-colour.svg', palette: 'colorfilter-palette.svg'
   };
-  const paths = icons[name] || icons.options;
-  return `<svg${id ? ` id="${id}"` : ''} class="app-icon ${extraClass}" data-icon="${name}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${paths.map(p=>`<path d="${p}"/>`).join('')}</svg>`;
+  const file = files[name];
+  if (!file) return '';
+  const src = `Icons/${encodeURI(file)}`;
+  return `<img${id ? ` id="${id}"` : ''} class="app-icon ${extraClass}" data-icon="${name}" src="${src}" alt="" aria-hidden="true" decoding="async">`;
 }
 
 function hydrateStaticIcons(root = document) {
   root.querySelectorAll('[data-icon].app-icon').forEach(node => {
-    if (node.tagName.toLowerCase() === 'svg') return;
+    if (node.tagName.toLowerCase() === 'img') return;
     const name = node.dataset.icon;
     const extra = [...node.classList].filter(c => c !== 'app-icon').join(' ');
     node.outerHTML = appIcon(name, extra, node.id);
