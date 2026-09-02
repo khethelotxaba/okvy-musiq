@@ -1923,13 +1923,37 @@ html, body {
 
 .setting-icon { width: 20px; height: 20px; margin-right: 8px; color: var(--text-primary); }
 .theme-setting-row > span:first-child { display: inline-flex; align-items: center; }
-#fp-repeat { position: relative; }
+#fp-repeat {
+  position: relative;
+  overflow: visible;
+  isolation: isolate;
+}
+#fp-repeat {
+  width: 76px;
+  min-width: 76px;
+  height: 44px;
+  justify-content: flex-start;
+  padding: 0;
+}
+#fp-repeat .repeat-icon-hit {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  display: grid;
+  place-items: center;
+}
+#fp-repeat .app-icon {
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+}
 .repeat-count-badge {
   position: absolute;
-  right: -4px;
-  bottom: -4px;
-  min-width: 18px;
-  height: 18px;
+  right: 2px;
+  bottom: 1px;
+  width: 27px;
+  min-width: 27px;
+  height: 20px;
   padding: 0 4px;
   display: inline-flex;
   align-items: center;
@@ -1940,7 +1964,9 @@ html, body {
   font-size: 9px;
   font-weight: 800;
   line-height: 1;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 3;
   box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.35);
 }
 
@@ -2239,9 +2265,15 @@ body.light .fp-options-btn {
   display: inline-flex;
 }
 .repeat-count-badge {
-  right: -5px;
-  bottom: -5px;
+  right: 2px;
+  bottom: 1px;
+  width: 27px;
+  min-width: 27px;
+  height: 20px;
   box-shadow: none;
+  pointer-events: auto;
+  z-index: 3;
+  transform: none;
 }
 
 
@@ -4838,5 +4870,12 @@ body:not(.light) .full-player.fill-album-art {
 .floating-mini-caption .floating-mini-artist{margin-top:4px;font-size:13px;opacity:.78;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* Keep the native mini-player hit target strictly on its track/info region. */
-.np-track{position:relative;z-index:2}
-.np-controls{position:relative;z-index:3;flex:0 0 auto}
+.np-track{position:relative;z-index:2;pointer-events:auto;touch-action:manipulation}
+.np-track > *{pointer-events:none}
+.np-controls{position:relative;z-index:3;flex:0 0 auto;pointer-events:auto}
+
+/* Repeat control has two physically separated hit lanes: 44px icon + 27px count. */
+@media (max-width: 420px) {
+  #fp-repeat { width: 74px; min-width: 74px; }
+  #fp-repeat .repeat-count-badge { right: 1px; }
+}

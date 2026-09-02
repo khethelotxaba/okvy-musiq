@@ -506,7 +506,7 @@ const Player = {
   async next() {
     if (this.queue.length === 0) return;
 
-    const nextIndex = this.getNextIndex();
+    const nextIndex = this.getNextIndex({ manual: true });
     if (SettingsManager.get('audio.crossfadeDuration') > 0 && this.isPlaying) {
       await this.crossfadeToNext();
       return;
@@ -539,10 +539,14 @@ const Player = {
     if (prevTrack) await this.loadTrack(prevTrack, true);
   },
 
-  getNextIndex() {
+  getNextIndex(options = {}) {
+    const manual = !!options.manual;
     const mode = SettingsManager.get('playback.repeatMode');
-    if (mode === 'one') return this.queueIndex;
-    if (mode === 'n') {
+
+    // Repeat-One / Repeat-N only apply when a track naturally ends.
+    // A user pressing Next explicitly means: move on now.
+    if (!manual && mode === 'one') return this.queueIndex;
+    if (!manual && mode === 'n') {
       const totalRepeats = Math.max(1, Number(SettingsManager.get('playback.repeatNTimes', 1)) || 1);
       if (this.repeatCount < totalRepeats - 1) {
         this.repeatCount++;

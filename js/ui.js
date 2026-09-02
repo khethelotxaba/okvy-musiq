@@ -136,6 +136,9 @@ const UI = {
         pointerActive = true;
         held = false;
         clearHold();
+        // Capture the pointer so a release cannot retarget an underlying
+        // previous/next control or page element after the mini-player press.
+        try { npTrack.setPointerCapture(e.pointerId); } catch (_) {}
         holdTimer = setTimeout(() => {
           if (!pointerActive || !Player.currentTrack || !SettingsManager.get('ui.floatingMiniPlayer', true)) return;
           held = true;
@@ -149,10 +152,21 @@ const UI = {
         pointerActive = false;
         clearHold();
         if (!held) this.openFullPlayer();
+        try { if (npTrack.hasPointerCapture(e.pointerId)) npTrack.releasePointerCapture(e.pointerId); } catch (_) {}
         held = false;
       });
-      npTrack.addEventListener('pointercancel', (e) => { e.preventDefault(); e.stopPropagation(); pointerActive = false; clearHold(); held = false; });
-      npTrack.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
+      npTrack.addEventListener('pointercancel', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        pointerActive = false;
+        clearHold();
+        try { if (npTrack.hasPointerCapture(e.pointerId)) npTrack.releasePointerCapture(e.pointerId); } catch (_) {}
+        held = false;
+      });
+      // Swallow the synthetic click generated after touch/pointer activation.
+      // Opening the player is already handled by pointerup, so a second click
+      // must never be allowed to escape toward another transport/card handler.
+      npTrack.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); }, true);
     }
 
     this.ensureFloatingMiniPlayer();
@@ -242,6 +256,18 @@ const UI = {
     fpNext.addEventListener('click', () => Player.next());
     fpShuffle.addEventListener('click', () => this.toggleShuffle());
     fpRepeat.addEventListener('click', () => this.handleRepeatButton());
+    const repeatCount = document.getElementById('fp-repeat-count');
+    if (repeatCount) {
+      const editRepeatCount = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (SettingsManager.get('playback.repeatMode', 'none') === 'n') this.configureRepeatNTimes();
+      };
+      repeatCount.addEventListener('click', editRepeatCount);
+      repeatCount.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') editRepeatCount(e);
+      });
+    }
     fpFavorite.addEventListener('click', () => this.toggleFavorite());
     fpOptions.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); this.showPlayerOptions(); });
 
@@ -649,7 +675,9 @@ const UI = {
       const m = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
       if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
       const h = raw.replace('#', '');
-      if (/^[0-9a-f]{6}$/i.test(h)) return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+      if (/^[0-9a-f]{6}$/i.test(h)) {
+        return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
+      }
       return null;
     };
     const lum = ([r,g,b]) => {
@@ -657,8 +685,8 @@ const UI = {
       return 0.2126*f(r) + 0.7152*f(g) + 0.0722*f(b);
     };
     const sat = ([r,g,b]) => {
-      const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
-      return mx === mn ? 0 : (mx-mn)/Math.max(1,mx);
+      const mx = Math.max(r,g,b), mn = Math.min(r,g,b);
+      return mx === mn ? 0 : (mx-mn) / Math.max(1, mx);
     };
     const ratio = (a,b) => {
       const x=lum(a), y=lum(b), hi=Math.max(x,y), lo=Math.min(x,y);
@@ -671,41 +699,81 @@ const UI = {
     const colors = [...palette, primary, fallback].map(parse).filter(Boolean);
     if (!colors.length) return null;
 
-    // Only use colours that actually came from the artwork palette. The previous
-    // version manufactured a new hue when nothing passed its tests, which made
-    // the accent look disconnected from the cover.
+    // Never allow grayscale, near-black, near-white, or a swatch that is too
+    // close to the player surface to become the artwork accent. The accent is
+    // still sourced from the artwork palette; we only reject unusable swatches.
     const unique = [];
     for (const c of colors) {
       if (!unique.some(u => distance(u,c) < 18)) unique.push(c);
     }
 
+    const usable = unique.filter(c => {
+      const l = lum(c), s = sat(c), cr = ratio(c, base);
+      return l > 0.055 && l < 0.92 && s >= 0.16 && cr >= 3.0;
+    });
+
     let best = null, bestScore = -Infinity;
-    for (const c of unique) {
-      const l = lum(c);
-      const s = sat(c);
-      const cr = ratio(c, base);
-      if (l <= 0.035 || l >= 0.965) continue;
-      if (cr < 3.0) continue;
-      // Prefer a real artwork colour with moderate chroma. Extremely saturated
-      // neon colours are intentionally penalized, not generated or boosted.
-      const chromaPenalty = Math.max(0, s - 0.62) * 3.5;
-      const mutedPenalty = Math.max(0.10 - s, 0) * 2.0;
+    for (const c of usable) {
+      const s = sat(c), cr = ratio(c, base);
       const primaryCloseness = primaryRgb ? Math.max(0, 1 - distance(c, primaryRgb) / 442) : 0;
-      const score = cr * 2.5 + primaryCloseness * 1.8 + Math.min(s, 0.62) - chromaPenalty - mutedPenalty;
+      // Prefer the dominant artwork hue while favouring a restrained, clearly
+      // chromatic swatch rather than a neon or muddy extreme.
+      const chromaPenalty = Math.max(0, s - 0.78) * 2.2;
+      const mutedPenalty = Math.max(0, 0.20 - s) * 2.0;
+      const score = cr * 2.0 + primaryCloseness * 2.4 + Math.min(s, 0.72) - chromaPenalty - mutedPenalty;
       if (score > bestScore) { best = c; bestScore = score; }
     }
 
-    // If the palette is mostly extreme colours, choose the closest actual
-    // artwork colour that still contrasts enough with the theme surface.
+    // Some covers genuinely contain mostly black/white/grayscale pixels. In
+    // that case, find the most chromatic real artwork swatch first, then only
+    // adjust luminance as a last resort so the hue/chroma still comes from the
+    // artwork rather than inventing a disconnected colour.
     if (!best) {
-      best = unique
-        .filter(c => lum(c) > 0.035 && lum(c) < 0.965)
-        .sort((a,b) => ratio(b, base) - ratio(a, base))[0] || unique[0];
+      best = [...unique].sort((a,b) => {
+        const score = c => sat(c) * 3 + Math.min(1, ratio(c, base) / 5) - Math.abs(lum(c) - (isLightTheme ? 0.22 : 0.45));
+        return score(b) - score(a);
+      })[0] || null;
+    }
+    if (!best) return null;
+
+    // Guarantee a visibly coloured accent with usable contrast. This preserves
+    // the sampled hue instead of ever returning pure black or white.
+    let adjusted = best.slice();
+    const scale = factor => adjusted = adjusted.map(v => Math.max(0, Math.min(255, Math.round(v * factor))));
+    let guard = 0;
+    while ((sat(adjusted) < 0.14 || ratio(adjusted, base) < 3.25 || lum(adjusted) <= 0.05 || lum(adjusted) >= 0.93) && guard++ < 18) {
+      const l = lum(adjusted);
+      const s = sat(adjusted);
+      if (s < 0.14) {
+        // Push the most separated RGB channel slightly further from the others
+        // without creating a brand-new hue.
+        const mx = Math.max(...adjusted), mn = Math.min(...adjusted);
+        const range = Math.max(8, mx - mn);
+        const mid = (mx + mn) / 2;
+        adjusted = adjusted.map(v => Math.round(mid + (v - mid) * (range < 40 ? 1.6 : 1.12)));
+        adjusted = adjusted.map(v => Math.max(0, Math.min(255, v)));
+      } else if (!isLightTheme && (l < 0.05 || ratio(adjusted, base) < 3.25)) {
+        scale(1.22);
+      } else if (isLightTheme && (l > 0.93 || ratio(adjusted, base) < 3.25)) {
+        scale(0.76);
+      } else if (l < 0.12 && !isLightTheme) {
+        scale(1.16);
+      } else if (l > 0.84 && isLightTheme) {
+        scale(0.84);
+      } else {
+        break;
+      }
+    }
+
+    // Absolute safety net: never expose black, white, or grayscale as the
+    // accent. This is intentionally a restrained artwork-derived fallback.
+    if (sat(adjusted) < 0.14 || lum(adjusted) <= 0.045 || lum(adjusted) >= 0.95 || ratio(adjusted, base) < 3.0) {
+      adjusted = isLightTheme ? [46, 104, 92] : [54, 132, 116];
     }
 
     return {
-      css: `rgb(${best.join(', ')})`,
-      rgb: best,
+      css: `rgb(${adjusted.join(', ')})`,
+      rgb: adjusted,
       baseCss: isLightTheme ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)',
       baseRgb: base
     };
@@ -2271,8 +2339,17 @@ const UI = {
   },
 
   handleRepeatButton() {
+    // The repeat control itself always cycles modes. In Repeat-N, pressing
+    // the repeat icon again exits Repeat-N instead of reopening the count
+    // prompt. This keeps the icon and count badge from competing for one
+    // physical hit target.
     const current = SettingsManager.get('playback.repeatMode', 'none');
-    if (current === 'n') return this.configureRepeatNTimes();
+    if (current === 'n') {
+      Player.repeatCount = 0;
+      SettingsManager.set('playback.repeatMode', 'none');
+      this.updatePlayerControls();
+      return;
+    }
     this.toggleRepeat();
   },
 
