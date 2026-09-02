@@ -1,6 +1,9 @@
-# Okvy MusiQ
+# Okvy MusiQ v3.0
 
-A premium music player with a Minimalist UI. Built with vanilla JavaScript, featuring a Black, Gold & White theme.
+A premium music player PWA with a Telegram-inspired glassmorphism UI. Built with vanilla JavaScript, featuring a Black, Gold & White theme.
+
+![Theme](https://img.shields.io/badge/Theme-Black%20%7C%20Gold%20%7C%20White-0a0a0a?style=for-the-badge&labelColor=d4a843)
+![PWA](https://img.shields.io/badge/PWA-Ready-0a0a0a?style=for-the-badge&labelColor=d4a843)
 
 ## Features
 
@@ -20,3 +23,8 @@ MIT — feel free to use, modify, and distribute.
 ---
 
 Built with passion. Black, Gold & White forever.
+
+
+Audio Effects: complete minimalist UI rebuild (v3.0).
+
+- Layered artwork player: synchronized crisp + mirrored-blur artwork with album/artist/swipe gestures.

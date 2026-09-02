@@ -6,6 +6,10 @@ const App = {
       await Player.init();
       await UI.init();
       await Data.ensureAutoPlaylists();
+      if (window.NativeAndroid?.isAvailable?.()) {
+        try { await window.NativeAndroid.requestNotificationPermission(); } catch (e) {}
+        try { await Scanner.scanDeviceMedia(); } catch (e) { console.warn("Native media scan skipped", e); }
+      }
       await UI.autoIndexSavedFolders();
 
       console.log('Okvy MusiQ v3.0 initialized');

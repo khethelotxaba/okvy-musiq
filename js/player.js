@@ -338,6 +338,7 @@ const Player = {
     if (!track) return null;
     if (track.blob) return URL.createObjectURL(track.blob);
     if (track.url) return track.url;
+    if (track.nativeUri) return track.nativeUri;
     return null;
   },
 
@@ -380,6 +381,7 @@ const Player = {
     this.repeatCount = 0;
     this.isPlaying = false;
     this.isPaused = true;
+    window.NativeAndroid?.updatePlaybackState?.(false, this.currentTrack?.title, this.currentTrack?.artist);
 
     const url = this.getTrackUrl(resolvedTrack);
     if (!url) {
@@ -467,6 +469,7 @@ const Player = {
     // while the optional fade-out is still running.
     this.isPlaying = false;
     this.isPaused = true;
+    window.NativeAndroid?.updatePlaybackState?.(false, this.currentTrack?.title, this.currentTrack?.artist);
     this.stopSkipSilence();
     window.dispatchEvent(new CustomEvent('playback-state', { detail: { playing: false } }));
 
@@ -668,6 +671,7 @@ const Player = {
     if (!this.currentTrack || !this.audio) return;
     this.isPlaying = false;
     this.isPaused = true;
+    window.NativeAndroid?.updatePlaybackState?.(false, this.currentTrack?.title, this.currentTrack?.artist);
     this.saveListenProgress(true);
 
     if (this.sleepTracksRemaining > 0) {

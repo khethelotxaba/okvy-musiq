@@ -5,6 +5,42 @@ const Scanner = {
   scanned: 0,
   abortController: null,
 
+  async scanDeviceMedia() {
+    if (!window.NativeAndroid?.isAvailable?.()) return null;
+    const perm = await window.NativeAndroid.requestAudioPermission();
+    if (!perm?.granted) return null;
+    const result = await window.NativeAndroid.scanAudio();
+    if (!result?.tracks?.length) return 0;
+
+    const existing = await Data.getTracks();
+    const existingByNative = new Set(existing.filter(t => t.nativeId != null).map(t => String(t.nativeId)));
+    let added = 0;
+    for (const nativeTrack of result.tracks) {
+      if (existingByNative.has(String(nativeTrack.nativeId))) continue;
+      const track = {
+        ...nativeTrack,
+        id: nativeTrack.id,
+        blob: null,
+        native: true,
+        favorite: false,
+        rating: 0,
+        playCount: 0,
+        moods: [],
+        featuredArtists: Utils.extractFeaturedArtists(nativeTrack.title || ''),
+        cleanTitle: nativeTrack.title || '',
+        dateAdded: nativeTrack.dateAdded || Date.now()
+      };
+      track.cleanTitle = track.featuredArtists.length ? Utils.removeFeaturedFromTitle(track.title) : track.title;
+      await Data.saveTrack(track);
+      added++;
+    }
+    await this.rebuildIndexes();
+    await Data.ensureAutoPlaylists();
+    await Data.refreshAutoPlaylists();
+    window.dispatchEvent(new CustomEvent('scan-complete', { detail: { added, native: true } }));
+    return added;
+  },
+
   async scanDirectory(dirHandle) {
     const files = [];
     const audioExts = ['.mp3','.flac','.wav','.ogg','.m4a','.aac','.wma','.opus'];
