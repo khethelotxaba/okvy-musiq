@@ -37,39 +37,93 @@ jobs:
         run: |
           echo "Node:"
           node --version
+
           echo "NPM:"
           npm --version
+
           echo "Java:"
           java --version
 
       - name: Install web/native dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
+
+      - name: Verify Capacitor configuration
+        run: |
+          test -f capacitor.config.json
+          echo "capacitor.config.json found."
+          cat capacitor.config.json
+
+      - name: Prepare web assets
+        run: |
+          npm run build
+
+          test -f www/index.html
+          echo "www/index.html found."
+
+          echo "Web directory:"
+          find www -maxdepth 2 -type f | sort
 
       - name: Generate Android project
-        run: npx cap add android
+        run: |
+          npx cap add android
 
-      - name: Sync web assets
-        run: npx cap sync android
+      - name: Verify Android project was generated
+        run: |
+          test -d android
+          test -f android/gradlew
+          test -f android/app/src/main/AndroidManifest.xml
+          echo "Android project generated successfully."
+
+      - name: Sync Capacitor Android project
+        run: |
+          npx cap sync android
+
+      - name: Verify Capacitor generated assets
+        run: |
+          test -f android/app/src/main/assets/capacitor.plugins.json
+          echo "Capacitor plugin metadata found."
 
       - name: Add native media scanner and playback bridge
-        run: node scripts/prepare-android.mjs
+        run: |
+          node scripts/prepare-android.mjs
 
-      - name: Verify Android project and native plugin
+      - name: Verify Android project and native integration
         working-directory: android
         run: |
+          echo "Checking native files..."
+
           test -f app/src/main/java/com/okvymusiq/app/NativeMediaPlugin.java
           test -f app/src/main/java/com/okvymusiq/app/NativePlaybackService.java
           test -f app/src/main/java/com/okvymusiq/app/MainActivity.java
 
+          echo "Checking MainActivity registration..."
+
           grep -q 'NativeMediaPlugin' \
             app/src/main/java/com/okvymusiq/app/MainActivity.java
 
-          grep -q 'NativeMediaPlugin' \
-            capacitor.config.json
+          echo "Checking foreground playback service..."
+
+          grep -q 'NativePlaybackService' \
+            app/src/main/AndroidManifest.xml
+
+          echo "Checking audio permission..."
+
+          grep -q 'READ_MEDIA_AUDIO' \
+            app/src/main/AndroidManifest.xml
+
+          echo "Checking foreground media playback permission..."
+
+          grep -q 'FOREGROUND_SERVICE_MEDIA_PLAYBACK' \
+            app/src/main/AndroidManifest.xml
+
+          echo "Making Gradle executable..."
 
           chmod +x gradlew
 
+          echo "Gradle version:"
           ./gradlew --version
+
+          echo "Android project verification passed."
 
       - name: Build Debug APK
         working-directory: android
@@ -78,6 +132,13 @@ jobs:
             --no-daemon \
             --stacktrace \
             --warning-mode all
+
+      - name: Verify APK exists
+        run: |
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+
+          echo "APK successfully built:"
+          ls -lh android/app/build/outputs/apk/debug/app-debug.apk
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
