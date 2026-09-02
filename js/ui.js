@@ -120,27 +120,39 @@ const UI = {
     const npNext = document.getElementById('np-next');
     const npTrack = document.getElementById('np-track');
 
-    npPlay?.addEventListener('click', () => Player.togglePlay());
-    npPrev?.addEventListener('click', () => Player.prev());
-    npNext?.addEventListener('click', () => Player.next());
+    npPlay?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); Player.togglePlay(); });
+    npPrev?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); Player.prev(); });
+    npNext?.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); Player.next(); });
 
     if (npTrack) {
       let holdTimer = null;
       let held = false;
+      let pointerActive = false;
       const clearHold = () => { if (holdTimer) clearTimeout(holdTimer); holdTimer = null; };
       npTrack.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        pointerActive = true;
         held = false;
         clearHold();
         holdTimer = setTimeout(() => {
-          if (!Player.currentTrack || !SettingsManager.get('ui.floatingMiniPlayer', true)) return;
+          if (!pointerActive || !Player.currentTrack || !SettingsManager.get('ui.floatingMiniPlayer', true)) return;
           held = true;
           if (navigator.vibrate) navigator.vibrate(18);
           this.openFloatingMiniPlayer();
         }, 1000);
       });
-      npTrack.addEventListener('pointerup', () => { clearHold(); if (!held) this.openFullPlayer(); held = false; });
-      npTrack.addEventListener('pointercancel', () => { clearHold(); held = false; });
+      npTrack.addEventListener('pointerup', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        pointerActive = false;
+        clearHold();
+        if (!held) this.openFullPlayer();
+        held = false;
+      });
+      npTrack.addEventListener('pointercancel', (e) => { e.preventDefault(); e.stopPropagation(); pointerActive = false; clearHold(); held = false; });
+      npTrack.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); });
     }
 
     this.ensureFloatingMiniPlayer();
@@ -158,13 +170,16 @@ const UI = {
     el.setAttribute('aria-hidden', 'true');
     el.innerHTML = `
       <div class="floating-mini-backdrop" data-floating-close></div>
-      <section class="floating-mini-card" role="dialog" aria-label="Floating album artwork">
-        <img id="floating-mini-art" class="floating-mini-art" src="assets/default-art.png" alt="">
-        <div class="floating-mini-overlay">
-          <div class="floating-mini-copy"><div id="floating-mini-title" class="floating-mini-title">Not Playing</div><div id="floating-mini-artist" class="floating-mini-artist">-</div></div>
-          <button id="floating-mini-favorite" class="floating-mini-favorite" type="button" aria-label="Add to favourites">${appIcon('heart')}</button>
+      <div class="floating-mini-stack" role="dialog" aria-label="Floating album artwork">
+        <section class="floating-mini-card">
+          <img id="floating-mini-art" class="floating-mini-art" src="assets/default-art.png" alt="">
+          <button id="floating-mini-favorite" class="floating-mini-favorite" type="button" aria-label="Add to favourites">${appIcon('favourite')}</button>
+        </section>
+        <div class="floating-mini-caption">
+          <div id="floating-mini-title" class="floating-mini-title">Not Playing</div>
+          <div id="floating-mini-artist" class="floating-mini-artist">-</div>
         </div>
-      </section>`;
+      </div>`;
     document.body.appendChild(el);
     el.querySelector('[data-floating-close]')?.addEventListener('click', () => this.closeFloatingMiniPlayer());
     el.querySelector('#floating-mini-favorite')?.addEventListener('click', (e) => { e.stopPropagation(); this.toggleFavorite(); this.updateFloatingMiniPlayer(); });
@@ -1841,6 +1856,28 @@ const UI = {
     if (input) input.style.touchAction = 'none';
   },
 
+  updateEqVisual(input, index, prefix='') {
+    if (!input) return;
+    const value = Number(input.value) || 0;
+    const min = Number(input.min ?? -12);
+    const max = Number(input.max ?? 12);
+    const pct = max === min ? 50 : Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+    const band = input.closest('.eq-modern-band');
+    if (!band) return;
+    const knob = band.querySelector('.eq-modern-knob');
+    const fill = band.querySelector('.eq-modern-fill');
+    const valueEl = band.querySelector(`#${prefix ? `overlay-eq-value-${index}` : `eq-value-${index}`}`) || band.querySelector('.eq-modern-value');
+    const zero = 50;
+    if (knob) knob.style.top = `${100 - pct}%`;
+    if (fill) {
+      const upper = Math.max(pct, zero);
+      const lower = Math.min(pct, zero);
+      fill.style.top = `${100 - upper}%`;
+      fill.style.height = `${upper - lower}%`;
+    }
+    if (valueEl) valueEl.textContent = `${value > 0 ? '+' : ''}${value} dB`;
+  },
+
   updateRangeProgress(input) {
     if (!input) return;
     const min = Number(input.min ?? 0);
@@ -2227,7 +2264,7 @@ const UI = {
 
   toggleRepeat() {
     const current = SettingsManager.get('playback.repeatMode');
-    const next = current === 'none' ? 'all' : current === 'all' ? 'one' : current === 'one' ? 'none' : 'none';
+    const next = current === 'none' ? 'all' : current === 'all' ? 'one' : current === 'one' ? 'n' : 'none';
     Player.repeatCount = 0;
     SettingsManager.set('playback.repeatMode', next);
     this.updatePlayerControls();
