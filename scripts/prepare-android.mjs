@@ -23,6 +23,22 @@ if (!xml.includes('NativePlaybackService')) {
 }
 fs.writeFileSync(manifest, xml);
 
+// Capacitor 6 does not automatically discover local custom Android plugins.
+// Add the plugin to the generated registration list so window.Capacitor
+// registerPlugin('NativeMedia') resolves on Android.
+const capConfigPath = path.join(root, 'android', 'capacitor.config.json');
+if (fs.existsSync(capConfigPath)) {
+  try {
+    const capConfig = JSON.parse(fs.readFileSync(capConfigPath, 'utf8'));
+    const list = Array.isArray(capConfig.packageClassList) ? capConfig.packageClassList : [];
+    if (!list.includes('com.okvymusiq.app.NativeMediaPlugin')) list.push('com.okvymusiq.app.NativeMediaPlugin');
+    capConfig.packageClassList = list;
+    fs.writeFileSync(capConfigPath, JSON.stringify(capConfig, null, 2) + '\n');
+  } catch (e) {
+    console.warn('Could not patch android/capacitor.config.json:', e.message);
+  }
+}
+
 // Determine generated Java/Kotlin package from appId.
 const pkg = 'com.okvymusiq.app';
 const javaDir = path.join(appRoot, 'src', 'main', 'java', ...pkg.split('.'));

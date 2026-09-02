@@ -21,3 +21,11 @@ This is intentionally a **test wrapper**, not the final native music architectur
 The Android workflow now adds a native Capacitor `NativeMedia` plugin. On Android it requests the appropriate audio permission, scans the device's MediaStore audio collection, returns content URIs and metadata to the web app, and extracts available album artwork. The web scanner automatically uses this native scan when running inside Capacitor and falls back to the existing folder scanner elsewhere.
 
 A lightweight foreground playback service is also included to keep playback visible in Android's notification area while the current web audio player is active. This is intentionally a bridge/keep-alive layer for the test APK; a future Media3 migration can replace it with a fully native player without requiring a redesign of the web UI.
+
+
+## APK artifact
+The GitHub Actions workflow builds `android/app/build/outputs/apk/debug/app-debug.apk` and uploads it as the `okvy-musiq-debug-apk` artifact.
+If the artifact is absent, the workflow did not reach the upload step; open the failed run and inspect the first failing step.
+
+## Capacitor 6 custom plugin registration
+The Android preparation step explicitly registers `NativeMediaPlugin` because Capacitor 6 uses a generated plugin class list for native registration. The build also verifies the generated Android project before Gradle runs.
