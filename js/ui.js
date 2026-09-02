@@ -545,7 +545,6 @@ const UI = {
       if (/^[0-9a-f]{6}$/i.test(h)) return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
       return null;
     };
-    const toCss = ([r,g,b]) => `rgb(${r}, ${g}, ${b})`;
     const lum = ([r,g,b]) => {
       const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
       return 0.2126*f(r) + 0.7152*f(g) + 0.0722*f(b);
@@ -558,51 +557,51 @@ const UI = {
       const x=lum(a), y=lum(b), hi=Math.max(x,y), lo=Math.min(x,y);
       return (hi+0.05)/(lo+0.05);
     };
+    const distance = (a,b) => Math.sqrt((a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2);
+    const isLightTheme = document.body.classList.contains('light');
+    const base = isLightTheme ? [255,255,255] : [0,0,0];
+    const primaryRgb = parse(primary);
     const colors = [...palette, primary, fallback].map(parse).filter(Boolean);
     if (!colors.length) return null;
 
-    // Keep the visual base tied to the artwork, but never let it become
-    // near-black or near-white. This is also used as the player's solid lower plane.
-    let base = parse(primary) || colors[0];
-    const baseLum = lum(base);
-    const baseSat = sat(base);
-    if (baseLum < 0.07 || baseLum > 0.86 || baseSat < 0.08) {
-      base = colors.slice().sort((a,b) => sat(b)-sat(a))[0] || base;
-    }
-    if (lum(base) < 0.06) base = base.map(v => Math.min(255, Math.round(v*1.7 + 18)));
-    if (lum(base) > 0.88) base = base.map(v => Math.max(0, Math.round(v*0.72)));
-
-    // Pick an actual artwork colour which is visibly different from the base.
-    // We score contrast first, then chroma, with no inversion/filter trickery.
-    let best = null, bestScore = -Infinity;
+    // Only use colours that actually came from the artwork palette. The previous
+    // version manufactured a new hue when nothing passed its tests, which made
+    // the accent look disconnected from the cover.
+    const unique = [];
     for (const c of colors) {
-      const s = sat(c), l = lum(c);
-      if (s < 0.22 || l <= 0.05 || l >= 0.90) continue;
-      const cr = ratio(c, base);
-      const gap = Math.abs(l - lum(base));
-      const score = cr * 5 + gap * 2 + s;
-      if (cr >= 2.0 && score > bestScore) { best = c; bestScore = score; }
+      if (!unique.some(u => distance(u,c) < 18)) unique.push(c);
     }
 
-    // Deterministic fallback: shift the dominant hue rather than returning
-    // black/white/grey or a barely-visible colour.
-    if (!best) {
-      const [r,g,b] = base.map(v=>v/255);
-      const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn;
-      let h=0;
-      if (d) {
-        if (mx===r) h=((g-b)/d)%6;
-        else if (mx===g) h=(b-r)/d+2;
-        else h=(r-g)/d+4;
-        h=((h*60)+360)%360;
-      }
-      h=(h+55)%360;
-      const targetL = lum(base) < 0.50 ? 0.68 : 0.34;
-      const targetS = 0.72;
-      const f = (n) => { const k=(n+h/60)%6; return targetL - targetL*targetS*Math.max(Math.min(k,4-k,1),0); };
-      best=[Math.round(f(5)*255),Math.round(f(3)*255),Math.round(f(1)*255)];
+    let best = null, bestScore = -Infinity;
+    for (const c of unique) {
+      const l = lum(c);
+      const s = sat(c);
+      const cr = ratio(c, base);
+      if (l <= 0.035 || l >= 0.965) continue;
+      if (cr < 3.0) continue;
+      // Prefer a real artwork colour with moderate chroma. Extremely saturated
+      // neon colours are intentionally penalized, not generated or boosted.
+      const chromaPenalty = Math.max(0, s - 0.62) * 3.5;
+      const mutedPenalty = Math.max(0.10 - s, 0) * 2.0;
+      const primaryCloseness = primaryRgb ? Math.max(0, 1 - distance(c, primaryRgb) / 442) : 0;
+      const score = cr * 2.5 + primaryCloseness * 1.8 + Math.min(s, 0.62) - chromaPenalty - mutedPenalty;
+      if (score > bestScore) { best = c; bestScore = score; }
     }
-    return { css: toCss(best), rgb: best, baseCss: toCss(base), baseRgb: base };
+
+    // If the palette is mostly extreme colours, choose the closest actual
+    // artwork colour that still contrasts enough with the theme surface.
+    if (!best) {
+      best = unique
+        .filter(c => lum(c) > 0.035 && lum(c) < 0.965)
+        .sort((a,b) => ratio(b, base) - ratio(a, base))[0] || unique[0];
+    }
+
+    return {
+      css: `rgb(${best.join(', ')})`,
+      rgb: best,
+      baseCss: isLightTheme ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)',
+      baseRgb: base
+    };
   },
   onThemeColors(detail) {
     const root = document.documentElement;
@@ -614,8 +613,9 @@ const UI = {
     root.style.setProperty('--accent-rgb', accent.rgb.join(', '));
     root.style.setProperty('--fp-art-accent', accent.css);
     root.style.setProperty('--fp-art-accent-rgb', accent.rgb.join(', '));
-    root.style.setProperty('--fp-bottom-color', accent.baseCss);
-    root.style.setProperty('--fp-bottom-color-rgb', accent.baseRgb.join(', '));
+    const playerBase = document.body.classList.contains('light') ? [255, 255, 255] : [0, 0, 0];
+    root.style.setProperty('--fp-bottom-color', `rgb(${playerBase.join(', ')})`);
+    root.style.setProperty('--fp-bottom-color-rgb', playerBase.join(', '));
 
     const baseLum = (() => {
       const [r,g,b] = accent.baseRgb;

@@ -4678,3 +4678,94 @@ body.light .app-icon { color: #000; stroke: currentColor; }
   .full-player.fill-album-art .fp-controls { gap: 12px !important; }
   #player-options-modal .modal-sheet { padding-left: 14px !important; padding-right: 14px !important; }
 }
+
+
+/* === v3.4 — solid theme lower player with overlapping 60% artwork === */
+.full-player.fill-album-art .fp-sheet {
+  background: var(--fp-bottom-color, #000) !important;
+  overflow: hidden !important;
+  isolation: isolate !important;
+}
+
+/* The artwork intentionally extends to 60% of the sheet and remains behind
+   the lower panel. The panel overlaps it, so there is never a bare seam/gap. */
+.full-player.fill-album-art .fp-sheet::before {
+  display: block !important;
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 0 auto 0 !important;
+  width: 100% !important;
+  height: 60% !important;
+  background-image: var(--fp-art-url) !important;
+  background-repeat: no-repeat !important;
+  background-size: cover !important;
+  background-position: center top !important;
+  opacity: 1 !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  z-index: 0 !important;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+}
+
+.full-player.fill-album-art .fp-sheet::after {
+  display: block !important;
+  content: "" !important;
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 55% !important;
+  bottom: 0 !important;
+  background: var(--fp-bottom-color, #000) !important;
+  background-image: none !important;
+  opacity: 1 !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  border-radius: 30px 30px 0 0 !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+}
+
+.full-player.fill-album-art .fp-art-container {
+  height: 60% !important;
+  min-height: 0 !important;
+  z-index: 2 !important;
+}
+.full-player.fill-album-art .fp-art {
+  opacity: 0 !important;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+}
+.full-player.fill-album-art .fp-reflection {
+  display: none !important;
+  visibility: hidden !important;
+}
+.full-player.fill-album-art .fp-content {
+  position: relative !important;
+  z-index: 3 !important;
+}
+
+/* The lower surface follows the theme only: never the artwork accent. */
+.full-player.fill-album-art {
+  background: var(--fp-bottom-color, #000) !important;
+}
+body.light .full-player.fill-album-art {
+  --fp-bottom-color: rgb(255, 255, 255) !important;
+}
+body:not(.light) .full-player.fill-album-art {
+  --fp-bottom-color: rgb(0, 0, 0) !important;
+}
+
+/* Dynamic accent stays an artwork colour, but is deliberately restrained. */
+.full-player.fill-album-art #fp-shuffle.active .app-icon,
+.full-player.fill-album-art #fp-repeat.active .app-icon,
+.full-player.fill-album-art #fp-favorite.active .app-icon {
+  color: var(--fp-art-accent) !important;
+  filter: none !important;
+}
+.full-player.fill-album-art .fp-progress-bar,
+.full-player.fill-album-art .progress-handle,
+.full-player.fill-album-art .progress-track::after {
+  background: var(--fp-art-accent) !important;
+  border-color: var(--fp-art-accent) !important;
+}
