@@ -18,120 +18,59 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
-      # ─────────────────────────────────────────────
-      # 1. Checkout repository
-      # ─────────────────────────────────────────────
       - name: Checkout
         uses: actions/checkout@v5
 
-
-      # ─────────────────────────────────────────────
-      # 2. Node.js 24
-      # ─────────────────────────────────────────────
       - name: Set up Node.js 24
         uses: actions/setup-node@v5
         with:
           node-version: '24'
           package-manager-cache: false
 
-
-      # ─────────────────────────────────────────────
-      # 3. Java 17
-      # setup-java@v5 = Action version 5
-      # JDK 17 = Java version used by Android build
-      # ─────────────────────────────────────────────
       - name: Set up Java 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-          cache: none
 
-
-      # ─────────────────────────────────────────────
-      # 4. Verify toolchain
-      # ─────────────────────────────────────────────
       - name: Verify toolchain
         run: |
-          echo "===== Node ====="
+          echo "Node:"
           node --version
-
-          echo "===== NPM ====="
+          echo "NPM:"
           npm --version
-
-          echo "===== Java ====="
+          echo "Java:"
           java --version
 
-
-      # ─────────────────────────────────────────────
-      # 5. Install project dependencies
-      # No npm ci because the repository has no
-      # package-lock.json
-      # ─────────────────────────────────────────────
       - name: Install web/native dependencies
         run: npm install
 
-
-      # ─────────────────────────────────────────────
-      # 6. Generate Android project
-      # This creates the android/ directory
-      # ─────────────────────────────────────────────
       - name: Generate Android project
         run: npx cap add android
 
-
-      # ─────────────────────────────────────────────
-      # 7. Sync web application into Android
-      # ─────────────────────────────────────────────
       - name: Sync web assets
         run: npx cap sync android
 
-
-      # ─────────────────────────────────────────────
-      # 8. Add Okvy MusiQ native Android functionality
-      # MediaStore scanner
-      # Album artwork extraction
-      # Native playback bridge
-      # Foreground playback service
-      # ─────────────────────────────────────────────
       - name: Add native media scanner and playback bridge
         run: node scripts/prepare-android.mjs
 
-
-      # ─────────────────────────────────────────────
-      # 9. Verify generated Android project
-      # ─────────────────────────────────────────────
       - name: Verify Android project and native plugin
         working-directory: android
         run: |
-          echo "Checking NativeMediaPlugin..."
           test -f app/src/main/java/com/okvymusiq/app/NativeMediaPlugin.java
-
-          echo "Checking NativePlaybackService..."
           test -f app/src/main/java/com/okvymusiq/app/NativePlaybackService.java
-
-          echo "Checking MainActivity..."
           test -f app/src/main/java/com/okvymusiq/app/MainActivity.java
 
-          echo "Checking MainActivity registration..."
           grep -q 'NativeMediaPlugin' \
             app/src/main/java/com/okvymusiq/app/MainActivity.java
 
-          echo "Checking Capacitor plugin registration..."
           grep -q 'NativeMediaPlugin' \
             capacitor.config.json
 
-          echo "Making Gradle executable..."
           chmod +x gradlew
 
-          echo "Checking Gradle..."
           ./gradlew --version
 
-
-      # ─────────────────────────────────────────────
-      # 10. Build Debug APK
-      # ─────────────────────────────────────────────
       - name: Build Debug APK
         working-directory: android
         run: |
@@ -140,10 +79,6 @@ jobs:
             --stacktrace \
             --warning-mode all
 
-
-      # ─────────────────────────────────────────────
-      # 11. Upload APK to GitHub Actions Artifacts
-      # ─────────────────────────────────────────────
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
