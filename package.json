@@ -4,7 +4,7 @@
   "description": "Okvy MusiQ - Local Music Player Version 3.0",
   "main": "index.html",
   "scripts": {
-    "build": "echo 'No build step needed for vanilla JS'",
+    "build": "node scripts/prepare-web.mjs",
     "sync": "npx cap sync",
     "android": "npx cap open android"
   },
