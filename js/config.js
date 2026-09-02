@@ -36,7 +36,8 @@ const CONFIG = {
     glassmorphism: true,
     glassIntensity: 0.28,
     fillAlbumArt: false,
-    sidebarCollapsed: false
+    floatingMiniPlayer: true,
+    floatingPlayerBlur: 24
   },
 
   audio: {
@@ -66,6 +67,7 @@ const CONFIG = {
   playback: {
     persistentQueue: true,
     trackPlayMode: 'context',
+    timeSkipInterval: 10,
     repeatMode: 'none',
     repeatNTimes: 2,
     sleepTimer: { enabled: false, mode: 'tracks', value: 10 },
@@ -131,14 +133,20 @@ const SETTINGS_RULES = {
   'ui.particlesIntensity': { type: 'number', min: 0, max: 2 },
   'ui.waveformBars': { type: 'number', min: 20, max: 300 },
   'ui.glassIntensity': { type: 'number', min: 0, max: 1 },
+  'ui.floatingMiniPlayer': { type: 'boolean' },
+  'ui.floatingPlayerBlur': { type: 'number', min: 0, max: 60 },
   'ui.glassmorphism': { type: 'boolean' },
   'ui.fillAlbumArt': { type: 'boolean' },
   'ui.gridColumns': { type: 'enum', values: ['auto', '2', '3', '4', '5'] },
   'ui.gridViewStyle': { type: 'enum', values: ['grid', 'list', 'collage'] },
+  'ui.albumSort': { type: 'enum', values: ['name', 'artist', 'year', 'dateAdded'] },
+  'ui.artistSort': { type: 'enum', values: ['name', 'trackCount', 'dateAdded'] },
   'ui.themeMode': { type: 'enum', values: ['dark', 'light'] },
   'ui.miniplayerGlowMode': { type: 'enum', values: ['dynamic', 'static'] },
   'ui.landscapeLayout': { type: 'enum', values: ['auto', 'compact', 'expanded'] },
   'ui.vibrationMode': { type: 'enum', values: ['haptic', 'none'] },
+  'playback.timeSkipInterval': { type: 'enum', values: ['5', '10', '15'] },
+  'playback.trackPlayMode': { type: 'enum', values: ['context', 'single', 'continuous'] },
   'playback.repeatMode': { type: 'enum', values: ['none', 'one', 'all', 'n'] },
   'playback.repeatNTimes': { type: 'number', min: 1, max: 20 },
   'playback.sleepTimer.mode': { type: 'enum', values: ['tracks', 'minutes'] },

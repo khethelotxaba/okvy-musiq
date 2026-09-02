@@ -542,11 +542,18 @@ const Player = {
   getNextIndex() {
     const mode = SettingsManager.get('playback.repeatMode');
     if (mode === 'one') return this.queueIndex;
-    if (mode === 'n' && this.repeatCount < (SettingsManager.get('playback.repeatNTimes') || 1) - 1) {
-      this.repeatCount++;
-      return this.queueIndex;
+    if (mode === 'n') {
+      const totalRepeats = Math.max(1, Number(SettingsManager.get('playback.repeatNTimes', 1)) || 1);
+      if (this.repeatCount < totalRepeats - 1) {
+        this.repeatCount++;
+        return this.queueIndex;
+      }
+      // N repeats are complete: disable N-repeat before advancing so the
+      // following song starts with normal playback and cannot inherit it.
+      this.repeatCount = 0;
+      SettingsManager.set('playback.repeatMode', 'none');
+      window.dispatchEvent(new CustomEvent('repeat-mode-reset', { detail: { reason: 'n-complete' } }));
     }
-    this.repeatCount = 0;
 
     if (SettingsManager.get('playback.shuffleMode')) {
       if (this.queue.length <= 1) return this.queueIndex;
@@ -687,14 +694,20 @@ const Player = {
       return;
     }
 
-    if (mode === 'n' && this.repeatCount < (SettingsManager.get('playback.repeatNTimes') || 1) - 1) {
-      this.repeatCount++;
-      this.audio.currentTime = 0;
-      this.play();
-      return;
+    if (mode === 'n') {
+      const totalRepeats = Math.max(1, Number(SettingsManager.get('playback.repeatNTimes', 1)) || 1);
+      if (this.repeatCount < totalRepeats - 1) {
+        this.repeatCount++;
+        this.audio.currentTime = 0;
+        this.play();
+        return;
+      }
+      this.repeatCount = 0;
+      SettingsManager.set('playback.repeatMode', 'none');
+      window.dispatchEvent(new CustomEvent('repeat-mode-reset', { detail: { reason: 'n-complete' } }));
+    } else {
+      this.repeatCount = 0;
     }
-
-    this.repeatCount = 0;
     if (this.queueIndex >= this.queue.length - 1 && mode !== 'all' && !SettingsManager.get('playback.shuffleMode')) {
       this.isPlaying = false;
       this.isPaused = true;
