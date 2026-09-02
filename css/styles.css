@@ -4451,3 +4451,230 @@ body.light .app-icon { color: #000; stroke: currentColor; }
 .full-player.fill-album-art #fp-repeat.active .app-icon,
 .full-player.fill-album-art #fp-favorite.active .app-icon { color: var(--fp-art-accent) !important; }
 .full-player.fill-album-art #fp-play .app-icon { color: var(--fp-foreground) !important; }
+
+/* === Final player color reset: solid lower plane + single artwork accent === */
+.full-player.fill-album-art {
+  --fp-bottom-color: var(--dynamic-primary, var(--bg));
+  --fp-art-accent: var(--dynamic-primary, var(--accent));
+  background: var(--fp-bottom-color) !important;
+}
+.full-player.fill-album-art .fp-sheet {
+  background: var(--fp-bottom-color) !important;
+  background-image: none !important;
+}
+.full-player.fill-album-art .fp-content {
+  background: transparent !important;
+}
+.full-player.fill-album-art .fp-reflection {
+  display: none !important;
+  visibility: hidden !important;
+  background: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+}
+.full-player.fill-album-art .fp-sheet::after {
+  content: none !important;
+  display: none !important;
+  background: none !important;
+}
+.full-player.fill-album-art .fp-art-container {
+  z-index: 2 !important;
+}
+.full-player.fill-album-art .fp-title,
+.full-player.fill-album-art .fp-current,
+.full-player.fill-album-art .fp-duration,
+.full-player.fill-album-art .fp-text,
+.full-player.fill-album-art .fp-meta,
+.full-player.fill-album-art .fp-close-btn,
+.full-player.fill-album-art .fp-options-btn,
+.full-player.fill-album-art .fp-favorite-btn,
+.full-player.fill-album-art .fp-progress-section,
+.full-player.fill-album-art .fp-controls,
+.full-player.fill-album-art .fp-bottom-row,
+.full-player.fill-album-art .time-display {
+  color: var(--fp-foreground) !important;
+}
+.full-player.fill-album-art .fp-artist {
+  color: var(--fp-muted) !important;
+}
+.full-player.fill-album-art .app-icon {
+  color: var(--fp-icon-color) !important;
+  stroke: currentColor !important;
+  filter: none !important;
+}
+.full-player.fill-album-art #fp-shuffle.active .app-icon,
+.full-player.fill-album-art #fp-repeat.active .app-icon,
+.full-player.fill-album-art #fp-favorite.active .app-icon {
+  color: var(--fp-art-accent) !important;
+  filter: none !important;
+}
+.full-player.fill-album-art #fp-play .app-icon {
+  color: var(--fp-foreground) !important;
+  filter: none !important;
+}
+.full-player.fill-album-art .fp-progress-bar,
+.full-player.fill-album-art .progress-handle,
+.full-player.fill-album-art .progress-track::after {
+  background: var(--fp-art-accent) !important;
+  border-color: var(--fp-art-accent) !important;
+}
+
+
+/* === Final geometry pass: rounded solid lower player + aligned player/options UI === */
+.full-player.fill-album-art .fp-sheet {
+  background: var(--fp-bottom-color, var(--bg)) !important;
+  overflow: hidden !important;
+}
+
+/* Keep the artwork clean in the upper half, then introduce one solid lower plane. */
+.full-player.fill-album-art .fp-sheet::before {
+  height: 58dvh !important;
+  min-height: 0 !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  z-index: 0 !important;
+}
+.full-player.fill-album-art .fp-sheet::after {
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 52% !important;
+  bottom: 0 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  background: var(--fp-bottom-color, var(--bg)) !important;
+  background-image: none !important;
+  transform: none !important;
+  filter: none !important;
+  -webkit-filter: none !important;
+  opacity: 1 !important;
+  border-radius: 30px 30px 0 0 !important;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+  z-index: 1 !important;
+  pointer-events: none !important;
+}
+
+.full-player.fill-album-art .fp-content {
+  z-index: 2 !important;
+  width: 100% !important;
+  max-width: none !important;
+  padding: 0 24px max(24px, env(safe-area-inset-bottom)) !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 0 !important;
+}
+.full-player.fill-album-art .fp-close-btn,
+.full-player.fill-album-art .fp-options-btn {
+  position: absolute !important;
+  top: max(18px, env(safe-area-inset-top)) !important;
+  z-index: 6 !important;
+  margin: 0 !important;
+}
+.full-player.fill-album-art .fp-close-btn { left: 24px !important; }
+.full-player.fill-album-art .fp-options-btn { right: 24px !important; }
+
+.full-player.fill-album-art .fp-meta,
+.full-player.fill-album-art .fp-progress-section,
+.full-player.fill-album-art .fp-controls,
+.full-player.fill-album-art .fp-bottom-row {
+  width: min(100%, 420px) !important;
+  max-width: 420px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+.full-player.fill-album-art .fp-meta {
+  margin-bottom: 20px !important;
+  gap: 14px !important;
+  align-items: center !important;
+}
+.full-player.fill-album-art .fp-progress-section { margin-bottom: 22px !important; }
+.full-player.fill-album-art .fp-controls {
+  margin-bottom: 18px !important;
+  gap: 18px !important;
+}
+.full-player.fill-album-art .fp-bottom-row {
+  justify-content: space-between !important;
+  gap: 16px !important;
+  min-height: 36px !important;
+}
+.full-player.fill-album-art .fp-title {
+  font-size: clamp(20px, 2.8vw, 24px) !important;
+  line-height: 1.15 !important;
+  margin-bottom: 5px !important;
+}
+.full-player.fill-album-art .fp-artist {
+  font-size: 14px !important;
+  line-height: 1.2 !important;
+}
+.full-player.fill-album-art .fp-favorite-btn {
+  width: 42px !important;
+  height: 42px !important;
+  flex: 0 0 42px !important;
+}
+
+/* Player Options: one clean column with a fixed icon rail and aligned labels. */
+#player-options-modal .modal-sheet {
+  width: min(100%, 560px) !important;
+  max-width: 560px !important;
+  padding: 18px 20px max(24px, env(safe-area-inset-bottom)) !important;
+}
+#player-options-modal .modal-header {
+  min-height: 40px !important;
+  margin-bottom: 10px !important;
+  padding: 0 2px !important;
+}
+#player-options-modal .modal-header h3 {
+  font-size: 18px !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.2px !important;
+}
+#player-options-modal .modal-list {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  margin: 0 !important;
+}
+#player-options-modal .menu-action-item {
+  display: grid !important;
+  grid-template-columns: 24px minmax(0,1fr) !important;
+  align-items: center !important;
+  justify-content: initial !important;
+  column-gap: 14px !important;
+  min-height: 52px !important;
+  padding: 12px 14px !important;
+  border-radius: 14px !important;
+  font-size: 15px !important;
+  line-height: 1.2 !important;
+  font-weight: 650 !important;
+  text-align: left !important;
+}
+#player-options-modal .menu-action-item .app-icon {
+  width: 22px !important;
+  height: 22px !important;
+  min-width: 22px !important;
+  min-height: 22px !important;
+  justify-self: center !important;
+}
+#player-options-modal .menu-action-item span {
+  min-width: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+#player-options-modal #close-player-options {
+  width: 36px !important;
+  height: 36px !important;
+  flex: 0 0 36px !important;
+}
+#player-options-modal #close-player-options svg { width: 20px !important; height: 20px !important; }
+
+@media (max-width: 600px) {
+  .full-player.fill-album-art .fp-content { padding-left: 18px !important; padding-right: 18px !important; }
+  .full-player.fill-album-art .fp-close-btn { left: 18px !important; }
+  .full-player.fill-album-art .fp-options-btn { right: 18px !important; }
+  .full-player.fill-album-art .fp-controls { gap: 12px !important; }
+  #player-options-modal .modal-sheet { padding-left: 14px !important; padding-right: 14px !important; }
+}

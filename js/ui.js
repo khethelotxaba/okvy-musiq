@@ -541,203 +541,110 @@ const UI = {
       const raw = String(value).trim();
       const m = raw.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
       if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
-      const h = raw.replace('#','');
-      if (/^[0-9a-f]{6}$/i.test(h)) return [parseInt(h.slice(0,2),16),parseInt(h.slice(2,4),16),parseInt(h.slice(4,6),16)];
+      const h = raw.replace('#', '');
+      if (/^[0-9a-f]{6}$/i.test(h)) return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
       return null;
     };
-    const luminance = ([r,g,b]) => {
-      const toLinear = (v) => {
-        v /= 255;
-        return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
-      };
-      return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
-    };
     const toCss = ([r,g,b]) => `rgb(${r}, ${g}, ${b})`;
-    const saturation = ([r,g,b]) => {
+    const lum = ([r,g,b]) => {
+      const f = v => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+      return 0.2126*f(r) + 0.7152*f(g) + 0.0722*f(b);
+    };
+    const sat = ([r,g,b]) => {
       const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
       return mx === mn ? 0 : (mx-mn)/Math.max(1,mx);
     };
-    const chromaQuality = (rgb) => {
-      if (!rgb) return -1;
-      const l = luminance(rgb), s = saturation(rgb);
-      // Reject colours that are effectively black, white, or grey.
-      if (l <= 0.045 || l >= 0.92 || s < 0.20) return -1;
-      return s * 0.75 + (1 - Math.abs(l - 0.50)) * 0.25;
+    const ratio = (a,b) => {
+      const x=lum(a), y=lum(b), hi=Math.max(x,y), lo=Math.min(x,y);
+      return (hi+0.05)/(lo+0.05);
     };
-    const contrastRatio = (a,b) => {
-      const la = luminance(a), lb = luminance(b);
-      const hi = Math.max(la,lb), lo = Math.min(la,lb);
-      return (hi + 0.05) / (lo + 0.05);
-    };
+    const colors = [...palette, primary, fallback].map(parse).filter(Boolean);
+    if (!colors.length) return null;
 
-    const parsedPalette = [...palette].map(parse).filter(Boolean);
-    const primaryRgb = parse(primary);
-    const fallbackRgb = parse(fallback);
-    const artworkBase = primaryRgb || (parsedPalette.length
-      ? parsedPalette.reduce((sum,c) => sum.map((v,i) => v + c[i]), [0,0,0]).map(v => Math.round(v / parsedPalette.length))
-      : null);
-    const candidates = [...parsedPalette, primaryRgb, fallbackRgb].filter(Boolean);
-
-    let best = null;
-    let bestScore = -Infinity;
-    for (const rgb of candidates) {
-      const q = chromaQuality(rgb);
-      if (q < 0) continue;
-      const contrast = artworkBase ? contrastRatio(rgb, artworkBase) : 1;
-      const lumGap = artworkBase ? Math.abs(luminance(rgb) - luminance(artworkBase)) : 0;
-      // Visibility from the artwork is the priority; saturation keeps the accent
-      // recognisably chromatic instead of becoming a grey/black/white accent.
-      const score = q * 1.25 + contrast * 2.4 + lumGap * 1.15;
-      if (score > bestScore) { bestScore = score; best = rgb; }
+    // Keep the visual base tied to the artwork, but never let it become
+    // near-black or near-white. This is also used as the player's solid lower plane.
+    let base = parse(primary) || colors[0];
+    const baseLum = lum(base);
+    const baseSat = sat(base);
+    if (baseLum < 0.07 || baseLum > 0.86 || baseSat < 0.08) {
+      base = colors.slice().sort((a,b) => sat(b)-sat(a))[0] || base;
     }
-    if (!best) return null;
-    return { css: toCss(best), rgb: best };
+    if (lum(base) < 0.06) base = base.map(v => Math.min(255, Math.round(v*1.7 + 18)));
+    if (lum(base) > 0.88) base = base.map(v => Math.max(0, Math.round(v*0.72)));
+
+    // Pick an actual artwork colour which is visibly different from the base.
+    // We score contrast first, then chroma, with no inversion/filter trickery.
+    let best = null, bestScore = -Infinity;
+    for (const c of colors) {
+      const s = sat(c), l = lum(c);
+      if (s < 0.22 || l <= 0.05 || l >= 0.90) continue;
+      const cr = ratio(c, base);
+      const gap = Math.abs(l - lum(base));
+      const score = cr * 5 + gap * 2 + s;
+      if (cr >= 2.0 && score > bestScore) { best = c; bestScore = score; }
+    }
+
+    // Deterministic fallback: shift the dominant hue rather than returning
+    // black/white/grey or a barely-visible colour.
+    if (!best) {
+      const [r,g,b] = base.map(v=>v/255);
+      const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn;
+      let h=0;
+      if (d) {
+        if (mx===r) h=((g-b)/d)%6;
+        else if (mx===g) h=(b-r)/d+2;
+        else h=(r-g)/d+4;
+        h=((h*60)+360)%360;
+      }
+      h=(h+55)%360;
+      const targetL = lum(base) < 0.50 ? 0.68 : 0.34;
+      const targetS = 0.72;
+      const f = (n) => { const k=(n+h/60)%6; return targetL - targetL*targetS*Math.max(Math.min(k,4-k,1),0); };
+      best=[Math.round(f(5)*255),Math.round(f(3)*255),Math.round(f(1)*255)];
+    }
+    return { css: toCss(best), rgb: best, baseCss: toCss(base), baseRgb: base };
   },
   onThemeColors(detail) {
     const root = document.documentElement;
-    const palette = Array.isArray(detail.palette) ? detail.palette : [];
-    const accent = this.safeAccentColor(detail.dominant, detail.vibrant, palette);
-    if (accent) {
-      root.style.setProperty('--dynamic-primary', accent.css);
-      root.style.setProperty('--dynamic-vibrant', accent.css);
-      root.style.setProperty('--accent-rgb', accent.rgb.join(', '));
-    }
-    this.setAlbumDominantColor(detail.dominant);
-    this.applyFillArtworkForeground(null, palette);
+    const palette = Array.isArray(detail?.palette) ? detail.palette : [];
+    const accent = this.safeAccentColor(detail?.dominant, detail?.vibrant, palette);
+    if (!accent) return;
+    root.style.setProperty('--dynamic-primary', accent.css);
+    root.style.setProperty('--dynamic-vibrant', accent.css);
+    root.style.setProperty('--accent-rgb', accent.rgb.join(', '));
+    root.style.setProperty('--fp-art-accent', accent.css);
+    root.style.setProperty('--fp-art-accent-rgb', accent.rgb.join(', '));
+    root.style.setProperty('--fp-bottom-color', accent.baseCss);
+    root.style.setProperty('--fp-bottom-color-rgb', accent.baseRgb.join(', '));
+
+    const baseLum = (() => {
+      const [r,g,b] = accent.baseRgb;
+      const f=v=>{v/=255; return v<=0.04045?v/12.92:Math.pow((v+0.055)/1.055,2.4)};
+      return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b);
+    })();
+    const foreground = baseLum >= 0.52 ? [12,12,12] : [248,248,248];
+    const muted = baseLum >= 0.52 ? [48,48,48] : [218,218,218];
+    const css = c => `rgb(${c.join(', ')})`;
+    root.style.setProperty('--fp-foreground', css(foreground));
+    root.style.setProperty('--fp-muted', css(muted));
+    root.style.setProperty('--fp-icon-color', css(foreground));
     if (SettingsManager.get('ui.waveformSeekbar')) requestAnimationFrame(() => this.renderWaveform());
   },
 
   async applyFillArtworkForeground(artworkSrc = null, palette = []) {
-    const root = document.documentElement;
-    const fp = document.getElementById('full-player');
-    if (!fp) return;
-
-    const parseRgb = (value) => {
-      if (!value) return null;
-      const m = String(value).match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-      if (m) return [Number(m[1]), Number(m[2]), Number(m[3])];
-      const h = String(value).trim().replace('#', '');
-      if (/^[0-9a-f]{6}$/i.test(h)) return [parseInt(h.slice(0,2),16), parseInt(h.slice(2,4),16), parseInt(h.slice(4,6),16)];
-      return null;
-    };
-    const luminance = ([r,g,b]) => (0.2126*r + 0.7152*g + 0.0722*b) / 255;
-    const css = ([r,g,b]) => `rgb(${r}, ${g}, ${b})`;
-    const toArray = (values) => values.map(parseRgb).filter(Boolean);
-
-    let luma = null;
-    let artworkSample = null;
     const src = artworkSrc || document.getElementById('fp-art')?.currentSrc || document.getElementById('fp-art')?.src;
-    if (src && src !== 'assets/default-art.png') {
+    let colors = Array.isArray(palette) ? palette : [];
+    if ((!colors.length || colors.length < 2) && src && src !== 'assets/default-art.png') {
       try {
-        const image = new Image();
-        image.crossOrigin = 'anonymous';
-        image.src = src;
-        await new Promise((resolve) => {
-          image.onload = resolve;
-          image.onerror = resolve;
-          setTimeout(resolve, 1200);
-        });
-        if (image.naturalWidth && image.naturalHeight) {
-          const canvas = document.createElement('canvas');
-          canvas.width = 64; canvas.height = 64;
-          const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          ctx.drawImage(image, 0, 0, 64, 64);
-          const data = ctx.getImageData(0, 0, 64, 64).data;
-          let sum = 0, weight = 0;
-          let rSum = 0, gSum = 0, bSum = 0;
-          for (let i=0; i<data.length; i+=16) {
-            const rgb = [data[i], data[i+1], data[i+2]];
-            const a = data[i+3] / 255;
-            if (!a) continue;
-            // Bias toward the lower artwork atmosphere where the metadata and controls live.
-            const py = Math.floor((i/4) / 64);
-            const regionWeight = py >= 28 ? 1.35 : 0.85;
-            sum += luminance(rgb) * a * regionWeight;
-            rSum += rgb[0] * a * regionWeight;
-            gSum += rgb[1] * a * regionWeight;
-            bSum += rgb[2] * a * regionWeight;
-            weight += a * regionWeight;
-          }
-          if (weight) {
-            luma = sum / weight;
-            artworkSample = [Math.round(rSum / weight), Math.round(gSum / weight), Math.round(bSum / weight)];
-          }
-        }
+        const extracted = await Utils.extractColors(src);
+        if (extracted) colors = extracted.palette || [];
+        if (extracted) this.onThemeColors(extracted);
       } catch (e) {}
     }
-
-    const parsedPalette = toArray(palette);
-    if (luma == null && parsedPalette.length) {
-      const total = parsedPalette.reduce((n,c)=>n+luminance(c),0);
-      luma = total / parsedPalette.length;
-    }
-    if (luma == null) luma = document.body.classList.contains('light') ? 0.78 : 0.22;
-
-    // Opposite-contrast foreground, independent of the app's light/dark theme.
-    const foreground = luma >= 0.58 ? [18,18,18] : [245,245,245];
-    const muted = luma >= 0.58 ? [52,52,52] : [218,218,218];
-
-    // Pick a real artwork palette colour that stays visible against the artwork.
-    // Do not let a beautiful-but-similar palette entry disappear into its backdrop.
-    let accent = null;
-    const candidates = [...parsedPalette];
-    const dominant = parseRgb(getComputedStyle(root).getPropertyValue('--dynamic-primary').trim());
-    if (dominant) candidates.push(dominant);
-    const backdrop = artworkSample || dominant || null;
-    const backdropLum = backdrop ? luminance(backdrop) : luma;
-    let bestScore = -Infinity;
-    for (const c of candidates) {
-      const [r,g,b] = c;
-      const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
-      const sat = mx === mn ? 0 : (mx-mn)/Math.max(1,mx);
-      const L = luminance(c);
-      if (L <= 0.045 || L >= 0.92 || sat < 0.22) continue;
-      const low = Math.min(L, backdropLum), high = Math.max(L, backdropLum);
-      const contrast = (high + 0.05) / (low + 0.05);
-      const lumGap = Math.abs(L - backdropLum);
-      const score = contrast * 3.0 + lumGap * 2.0 + sat * 1.5;
-      if (score > bestScore) { bestScore = score; accent = c; }
-    }
-
-    // If the extracted palette contains no safe chromatic color, derive a
-    // clearly colored mid-luminance version from its most saturated entry.
-    // This still comes from the artwork rather than the light/dark theme.
-    if (!accent && candidates.length) {
-      let source = candidates[0], sourceSat = -1;
-      for (const c of candidates) {
-        const [r,g,b] = c;
-        const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
-        const sat = mx === mn ? 0 : (mx-mn)/Math.max(1,mx);
-        if (sat > sourceSat) { sourceSat = sat; source = c; }
-      }
-      const [r,g,b] = source;
-      const mx=Math.max(r,g,b), mn=Math.min(r,g,b);
-      const sat = Math.max(0.55, (mx-mn)/Math.max(1,mx));
-      const hue = (() => {
-        if (mx === mn) return 200;
-        const d = mx - mn;
-        let h = 0;
-        if (mx === r) h = ((g-b)/d) % 6;
-        else if (mx === g) h = (b-r)/d + 2;
-        else h = (r-g)/d + 4;
-        return ((h * 60) + 360) % 360;
-      })();
-      const hsvToRgb = (h, ss, v) => {
-        const f=(n)=>{ const k=(n+h/60)%6; return v-v*ss*Math.max(Math.min(k,4-k,1),0); };
-        return [Math.round(f(5)*255),Math.round(f(3)*255),Math.round(f(1)*255)];
-      };
-      accent = hsvToRgb(hue, sat, 0.72);
-    }
-
-    root.style.setProperty('--fp-foreground', css(foreground));
-    root.style.setProperty('--fp-muted', css(muted));
-    root.style.setProperty('--fp-icon-color', css(foreground));
-    if (accent) {
-      root.style.setProperty('--fp-art-accent', css(accent));
-      root.style.setProperty('--fp-art-accent-rgb', accent.join(', '));
-    }
+    if (!colors.length) return;
+    const detail = { palette: colors, dominant: colors[0], vibrant: colors[1] || colors[0] };
+    this.onThemeColors(detail);
   },
-
 
   async onSettingChanged(detail) {
     const { path, value } = detail;
@@ -1857,7 +1764,7 @@ const UI = {
     html += select('ui.miniplayerGlowMode', 'Mini-player Glow Mode', s.ui.miniplayerGlowMode, [['dynamic','Dynamic'],['static','Static']]);
     html += toggle('ui.glassmorphism', 'Glassmorphism', s.ui.glassmorphism, 'Use frosted, translucent surfaces for the bottom navigation and sidebar.');
     html += number('ui.glassIntensity', 'Glass Intensity', s.ui.glassIntensity, 0, 1, 0.05);
-    html += toggle('ui.fillAlbumArt', 'Fill Album Art', s.ui.fillAlbumArt, 'Uses the artwork as the full-player visual surface with a blurred artwork reflection below. When off, only the square album cover is shown.');
+    html += toggle('ui.fillAlbumArt', 'Fill Album Art', s.ui.fillAlbumArt, 'Uses the artwork as the upper player visual surface with a solid artwork-derived lower panel. When off, only the square album cover is shown.');
     html += select('ui.gridColumns', 'Grid Columns', s.ui.gridColumns, [['auto','Auto'],['2','2'],['3','3'],['4','4'],['5','5']]);
     html += select('ui.gridViewStyle', 'Library View', s.ui.gridViewStyle, [['grid','Grid'],['list','List'],['collage','Collage']]);
     html += toggle('ui.waveformSeekbar', 'Waveform Seekbar', s.ui.waveformSeekbar);
