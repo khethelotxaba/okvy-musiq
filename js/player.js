@@ -165,7 +165,7 @@ const Player = {
   applyPlaybackEffects() {
     if (!this.audio) return;
     const speed = Utils.clamp(Number(SettingsManager.get('audio.playbackSpeed', 1)) || 1, 0.5, 2);
-    const pitch = Utils.clamp(Number(SettingsManager.get('audio.pitchSemitones', 0)) || 0, -12, 12);
+    const pitch = Utils.clamp(Number(SettingsManager.get('audio.pitchSemitones', 0)) || 0, -6, 6);
     // Native media playback can only shift pitch and tempo together reliably.
     // We keep speed as the primary rate and apply pitch as a semitone rate offset.
     this.audio.playbackRate = speed * Math.pow(2, pitch / 12);

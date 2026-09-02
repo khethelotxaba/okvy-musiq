@@ -126,7 +126,7 @@ const SETTINGS_RULES = {
   'audio.playPauseFadeDuration': { type: 'number', min: 0, max: 5 },
   'audio.skipSilenceThreshold': { type: 'number', min: -100, max: 0 },
   'audio.normalizationTarget': { type: 'number', min: -30, max: 0 },
-  'audio.pitchSemitones': { type: 'number', min: -12, max: 12 },
+  'audio.pitchSemitones': { type: 'number', min: -6, max: 6 },
   'audio.playbackSpeed': { type: 'number', min: 0.5, max: 2 },
   'audio.volumeBoost': { type: 'number', min: 0.5, max: 2.5 },
   'audio.volumeBoostEnabled': { type: 'boolean' },

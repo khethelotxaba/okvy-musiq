@@ -4789,3 +4789,38 @@ body:not(.light) .full-player.fill-album-art {
 
 /* Audited optional floating mini-player and time-skip controls */
 .floating-mini-player{position:fixed;inset:0;z-index:1200;pointer-events:none;opacity:0;transition:opacity .18s ease}.floating-mini-player.open{pointer-events:auto;opacity:1}.floating-mini-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.28);backdrop-filter:blur(var(--floating-blur,24px));-webkit-backdrop-filter:blur(var(--floating-blur,24px))}.floating-mini-card{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) scale(.96);width:min(92vw,420px);display:grid;grid-template-columns:56px minmax(0,1fr) 40px 40px 48px 40px 40px;align-items:center;gap:6px;padding:12px 14px;border:1px solid rgba(255,255,255,.14);border-radius:24px;background:rgba(25,25,25,.9);box-shadow:0 20px 70px rgba(0,0,0,.42);color:#fff;transition:transform .2s ease}.floating-mini-player.open .floating-mini-card{transform:translate(-50%,-50%) scale(1)}.floating-mini-art-wrap{width:56px;height:56px;border-radius:14px;overflow:hidden}.floating-mini-art{width:100%;height:100%;object-fit:cover}.floating-mini-info{min-width:0;padding:0 4px}.floating-mini-title,.floating-mini-artist{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.floating-mini-title{font-size:14px;font-weight:800}.floating-mini-artist{font-size:12px;opacity:.7;margin-top:3px}.floating-mini-icon{appearance:none;border:0;background:transparent;color:#fff;display:grid;place-items:center;width:40px;height:40px;border-radius:50%;cursor:pointer}.floating-mini-icon .app-icon{width:20px;height:20px}.floating-mini-icon.active{color:var(--dynamic-primary,var(--accent))}.floating-mini-play{width:48px;height:48px;background:rgba(255,255,255,.12)}.time-skip-btn{appearance:none;border:0;background:none;color:inherit;font:inherit;padding:2px 6px;border-radius:7px;cursor:pointer}.time-skip-btn:hover{background:rgba(127,127,127,.14)}.settings-action-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.settings-action-grid .btn-full{margin:0!important}@media(max-width:760px){.floating-mini-card{grid-template-columns:52px minmax(0,1fr) 36px 36px 44px 36px 36px;width:min(96vw,420px);padding:10px}.floating-mini-art-wrap{width:52px;height:52px}.settings-action-grid{grid-template-columns:1fr}}
+
+/* Inline top-bar search: no dedicated search page */
+.main-content{position:relative}.top-bar{position:relative;z-index:40}.top-bar.searching #page-title{opacity:0;pointer-events:none}.global-search{position:absolute;right:0;top:50%;transform:translateY(-50%);width:52px;height:44px;z-index:50;transition:width .22s ease}.global-search.open{width:min(520px,calc(100vw - 32px))}.global-search-field{height:44px;display:flex;align-items:center;gap:10px;padding:0 10px;border:1px solid var(--border);border-radius:999px;background:var(--bg-surface);box-shadow:0 10px 30px rgba(0,0,0,.12);overflow:hidden}.global-search-field .app-icon{flex:0 0 20px;width:20px;height:20px}.global-search-field input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:var(--text-primary);font:inherit;font-size:14px}.global-search-close{width:30px;height:30px;display:grid;place-items:center;flex:0 0 30px;border:0;border-radius:50%;background:transparent;color:var(--text-primary);cursor:pointer}.global-search-close .app-icon{width:18px;height:18px}.global-search-results{position:absolute;top:calc(100% + 10px);left:0;right:0;max-height:min(65vh,520px);overflow:auto;padding:8px;border:1px solid var(--border);border-radius:18px;background:var(--bg-surface);box-shadow:0 18px 55px rgba(0,0,0,.2)}.global-search-result{width:100%;display:flex;align-items:center;gap:12px;padding:9px;border:0;border-radius:12px;background:transparent;color:var(--text-primary);text-align:left;cursor:pointer}.global-search-result:hover{background:var(--bg-surface-hover)}.global-search-result img{width:44px;height:44px;flex:0 0 44px;object-fit:cover;border-radius:10px;background:var(--bg-elevated)}.global-search-result-copy{min-width:0;display:flex;flex-direction:column;gap:3px}.global-search-result-copy strong{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.global-search-result-copy small{font-size:11px;color:var(--text-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.global-search-empty{padding:22px 14px;text-align:center;color:var(--text-tertiary);font-size:13px}
+
+/* Settings search updates in place so the mobile keyboard never gets destroyed. */
+.settings-search-live{padding:8px 0 20px}.settings-search-list{display:flex;flex-direction:column;gap:12px}.settings-browse-content[hidden]{display:none!important}.settings-search-live .setting-row{border:1px solid var(--border);border-radius:14px;background:var(--bg-surface);margin-bottom:8px}.settings-search-live .setting-row:last-child{border-bottom:1px solid var(--border)}
+
+/* Aesthetic floating 4:3 artwork widget */
+.floating-mini-card{width:min(88vw,420px);aspect-ratio:4/3;display:block;padding:0;overflow:hidden;border-radius:24px;background:#111;box-shadow:0 24px 90px rgba(0,0,0,.45);color:#fff}.floating-mini-art{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.floating-mini-card{position:relative}.floating-mini-overlay{position:absolute;inset:auto 0 0 0;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;padding:28px 18px 16px;background:linear-gradient(0deg,rgba(0,0,0,.68),rgba(0,0,0,0))}.floating-mini-copy{min-width:0}.floating-mini-title{font-size:17px;font-weight:800}.floating-mini-artist{margin-top:4px;font-size:12px;opacity:.82;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.floating-mini-favorite{width:42px;height:42px;flex:0 0 42px;display:grid;place-items:center;border:0;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;backdrop-filter:blur(8px);cursor:pointer}.floating-mini-favorite .app-icon{width:21px;height:21px}.floating-mini-favorite.active{color:var(--accent);background:rgba(255,255,255,.22)}
+@media(max-width:760px){.global-search.open{width:calc(100vw - 24px);right:-6px}.global-search-results{left:-2px;right:-2px}.floating-mini-card{width:min(92vw,420px)}}
+
+/* === Final player geometry polish === */
+.effects-overlay-header > div:first-child { flex: 1 1 auto; min-width: 0; }
+.effects-overlay-header .overlay-close {
+  margin-left: auto !important;
+  margin-right: 0 !important;
+  flex: 0 0 34px !important;
+  width: 34px !important;
+  height: 34px !important;
+  align-self: center !important;
+}
+
+/* Player options should show the complete action list without an inner scrollbar. */
+#player-options-modal .modal-sheet {
+  max-height: none !important;
+  overflow: hidden !important;
+  padding-bottom: max(22px, env(safe-area-inset-bottom)) !important;
+}
+#player-options-modal .modal-list {
+  overflow: visible !important;
+  max-height: none !important;
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+#player-options-modal .modal-list::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }

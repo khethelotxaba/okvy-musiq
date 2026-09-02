@@ -92,7 +92,7 @@ const UI = {
     document.getElementById('menu-toggle').addEventListener('click', () => this.toggleSidebar());
     document.getElementById('close-sidebar').addEventListener('click', () => this.toggleSidebar());
     document.getElementById('sidebar-overlay').addEventListener('click', () => this.toggleSidebar());
-    document.getElementById('search-toggle').addEventListener('click', () => this.navigate('search'));
+    document.getElementById('search-toggle').addEventListener('click', () => this.toggleGlobalSearch());
     document.getElementById('close-playlist-modal').addEventListener('click', () => this.hidePlaylistModal());
     document.getElementById('create-playlist-btn').addEventListener('click', () => this.createPlaylist());
     document.getElementById('close-track-menu').addEventListener('click', () => this.hideTrackMenu());
@@ -158,22 +158,20 @@ const UI = {
     el.setAttribute('aria-hidden', 'true');
     el.innerHTML = `
       <div class="floating-mini-backdrop" data-floating-close></div>
-      <section class="floating-mini-card" role="dialog" aria-label="Floating mini player">
-        <div class="floating-mini-art-wrap"><img id="floating-mini-art" class="floating-mini-art" src="assets/default-art.png" alt=""></div>
-        <div class="floating-mini-info"><div id="floating-mini-title" class="floating-mini-title">Not Playing</div><div id="floating-mini-artist" class="floating-mini-artist">-</div></div>
-        <button id="floating-mini-favorite" class="floating-mini-icon" type="button" aria-label="Favorite">${appIcon('favourite-for-floating-player')}</button>
-        <button id="floating-mini-prev" class="floating-mini-icon" type="button" aria-label="Previous">${appIcon('previous-floating')}</button>
-        <button id="floating-mini-play" class="floating-mini-icon floating-mini-play" type="button" aria-label="Play/Pause">${appIcon('play-for-mini-player')}</button>
-        <button id="floating-mini-next" class="floating-mini-icon" type="button" aria-label="Next">${appIcon('next-floating')}</button>
-        <button id="floating-mini-minimize" class="floating-mini-icon" type="button" aria-label="Minimize">${appIcon('minimize-floating')}</button>
+      <section class="floating-mini-card" role="dialog" aria-label="Floating album artwork">
+        <img id="floating-mini-art" class="floating-mini-art" src="assets/default-art.png" alt="">
+        <div class="floating-mini-overlay">
+          <div class="floating-mini-copy"><div id="floating-mini-title" class="floating-mini-title">Not Playing</div><div id="floating-mini-artist" class="floating-mini-artist">-</div></div>
+          <button id="floating-mini-favorite" class="floating-mini-favorite" type="button" aria-label="Add to favourites">${appIcon('heart')}</button>
+        </div>
       </section>`;
     document.body.appendChild(el);
     el.querySelector('[data-floating-close]')?.addEventListener('click', () => this.closeFloatingMiniPlayer());
-    document.getElementById('floating-mini-prev')?.addEventListener('click', () => Player.prev());
-    document.getElementById('floating-mini-next')?.addEventListener('click', () => Player.next());
-    document.getElementById('floating-mini-play')?.addEventListener('click', () => Player.togglePlay());
-    document.getElementById('floating-mini-favorite')?.addEventListener('click', () => this.toggleFavorite());
-    document.getElementById('floating-mini-minimize')?.addEventListener('click', () => this.closeFloatingMiniPlayer());
+    el.querySelector('#floating-mini-favorite')?.addEventListener('click', (e) => { e.stopPropagation(); this.toggleFavorite(); this.updateFloatingMiniPlayer(); });
+    el.querySelector('.floating-mini-card')?.addEventListener('click', (e) => {
+      if (e.target.closest('#floating-mini-favorite')) return;
+      this.closeFloatingMiniPlayer();
+    });
   },
 
   openFloatingMiniPlayer() {
@@ -358,6 +356,11 @@ const UI = {
       item.addEventListener('click', (e) => {
         e.preventDefault();
         const page = item.dataset.page;
+        if (page === 'search') {
+          this.toggleSidebar();
+          this.openGlobalSearch();
+          return;
+        }
         this.navigate(page);
         this.toggleSidebar();
       });
@@ -1064,46 +1067,99 @@ const UI = {
   },
 
   renderSearch(container) {
-    container.innerHTML = `
-      <div class="search-hero">
-        <div class="search-box">
-          ${appIcon('search')}
-          <input type="text" id="search-input" placeholder="Search songs, albums, artists..." oninput="UI.handleSearch(this.value)">
-        </div>
-        <div class="search-filters">
-          <select id="search-type" onchange="UI.handleSearch(document.getElementById('search-input').value)">
-            <option value="all">All</option>
-            <option value="tracks">Tracks</option>
-            <option value="albums">Albums</option>
-            <option value="artists">Artists</option>
-          </select>
-        </div>
+    // Search is now an inline top-bar interaction. Keep this route harmless for old bookmarks.
+    container.innerHTML = '<div class="empty-state">Use the search icon in the top bar to search your library.</div>';
+    this.openGlobalSearch();
+  },
+
+  ensureGlobalSearch() {
+    let panel = document.getElementById('global-search');
+    if (panel) return panel;
+    const topBar = document.querySelector('.top-bar');
+    if (!topBar) return null;
+    panel = document.createElement('div');
+    panel.id = 'global-search';
+    panel.className = 'global-search';
+    panel.innerHTML = `
+      <div class="global-search-field">
+        ${appIcon('search')}
+        <input id="global-search-input" type="search" inputmode="search" autocomplete="off" spellcheck="false" placeholder="Search songs, albums, artists…">
+        <button type="button" class="global-search-close" id="global-search-close" aria-label="Close search">${appIcon('close')}</button>
       </div>
-      <div id="search-results"></div>
-    `;
-  },
-
-  async handleSearch(query) {
-    if (!query.trim()) {
-      document.getElementById('search-results').innerHTML = '';
-      return;
-    }
-    const type = document.getElementById('search-type').value;
-    const results = await Data.search(query, type);
-    const container = document.getElementById('search-results');
-
-    if (results.length === 0) {
-      container.innerHTML = '<div class="empty-state">No results found</div>';
-      return;
-    }
-
-    let html = '<div class="track-list">';
-    results.forEach((track, i) => {
-      html += this.renderTrackRow(track, i + 1);
+      <div class="global-search-results" id="global-search-results" hidden></div>`;
+    topBar.appendChild(panel);
+    const input = panel.querySelector('#global-search-input');
+    input?.addEventListener('input', Utils.debounce((e) => this.runGlobalSearch(e.target.value), 90));
+    input?.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') this.closeGlobalSearch();
     });
-    html += '</div>';
-    container.innerHTML = html;
+    panel.querySelector('#global-search-close')?.addEventListener('click', () => this.closeGlobalSearch());
+    return panel;
   },
+
+  openGlobalSearch(prefill='') {
+    const panel = this.ensureGlobalSearch();
+    const topBar = document.querySelector('.top-bar');
+    const input = document.getElementById('global-search-input');
+    if (!panel || !topBar || !input) return;
+    topBar.classList.add('searching');
+    panel.classList.add('open');
+    input.value = prefill;
+    requestAnimationFrame(() => input.focus());
+    if (prefill.trim()) this.runGlobalSearch(prefill);
+  },
+
+  toggleGlobalSearch() {
+    const panel = this.ensureGlobalSearch();
+    if (!panel) return;
+    panel.classList.contains('open') ? this.closeGlobalSearch() : this.openGlobalSearch();
+  },
+
+  closeGlobalSearch() {
+    const panel = document.getElementById('global-search');
+    const topBar = document.querySelector('.top-bar');
+    const input = document.getElementById('global-search-input');
+    const results = document.getElementById('global-search-results');
+    if (input) input.value = '';
+    if (results) { results.hidden = true; results.innerHTML = ''; }
+    panel?.classList.remove('open');
+    topBar?.classList.remove('searching');
+  },
+
+  async runGlobalSearch(query) {
+    const q = String(query || '').trim();
+    const resultsEl = document.getElementById('global-search-results');
+    if (!resultsEl) return;
+    if (!q) { resultsEl.hidden = true; resultsEl.innerHTML = ''; return; }
+    try {
+      const tracks = await Data.searchTracks(q, {});
+      if (!tracks.length) {
+        resultsEl.hidden = false;
+        resultsEl.innerHTML = '<div class="global-search-empty">No results found</div>';
+        return;
+      }
+      const shown = tracks.slice(0, 12);
+      resultsEl.hidden = false;
+      resultsEl.innerHTML = shown.map((track, i) => {
+        const art = this.getArtworkUrl(track);
+        return `<button class="global-search-result" type="button" data-track-id="${Utils.escapeHtml(String(track.id))}">
+          <img src="${Utils.escapeHtml(art)}" alt="" loading="lazy">
+          <span class="global-search-result-copy"><strong>${Utils.escapeHtml(track.title || 'Unknown')}</strong><small>${Utils.escapeHtml(track.artist || 'Unknown Artist')} · ${Utils.escapeHtml(track.album || 'Unknown Album')}</small></span>
+        </button>`;
+      }).join('');
+      resultsEl.querySelectorAll('.global-search-result').forEach(btn => btn.addEventListener('click', () => {
+        const id = btn.dataset.trackId;
+        this.closeGlobalSearch();
+        this.playTrackById(id);
+      }));
+    } catch (err) {
+      console.error('Global search failed:', err);
+      resultsEl.hidden = false;
+      resultsEl.innerHTML = '<div class="global-search-empty">Search is temporarily unavailable.</div>';
+    }
+  },
+
+  async handleSearch(query) { return this.runGlobalSearch(query); },
 
   async renderTracks(container, params = {}) {
     let tracks = await this.getFilteredTracks(params);
@@ -1574,8 +1630,6 @@ const UI = {
       : (presetValues || Array(5).fill(0));
     const pitch = Number(s.pitchSemitones || 0);
     const speed = Number(s.playbackSpeed || 1);
-    const combined = Math.max(-12, Math.min(12, Math.round(pitch)));
-    const combinedValue = `${combined > 0 ? '+' : ''}${combined} st · ${speed.toFixed(2)}×`;
     const boost = Number(s.volumeBoost || 1);
     const boostEnabled = !!s.volumeBoostEnabled;
 
@@ -1633,17 +1687,34 @@ const UI = {
         <div class="effects-modern-head">
           <div>
             <span class="effects-modern-overline">PLAYBACK</span>
-            <h3>Pitch &amp; Speed</h3>
-            <p>One linked control</p>
+            <h3>Pitch</h3>
+            <p>Shift the song pitch independently.</p>
           </div>
           ${appIcon('pitchSpeed')}
         </div>
         <div class="modern-range-block">
-          <div class="modern-range-value-row"><span>Pitch &amp; Speed</span><strong id="pitch-speed-combined-value">${combinedValue}</strong></div>
-          <input class="modern-range" id="pitch-speed-combined" type="range" min="-12" max="12" step="1" value="${combined}" oninput="UI.setPitchSpeedCombined(this.value, this)">
-          <div class="modern-range-scale"><span>-12 st</span><span>Neutral</span><span>+12 st</span></div>
+          <div class="modern-range-value-row"><span>Pitch</span><strong id="pitch-value">${pitch > 0 ? '+' : ''}${pitch} st</strong></div>
+          <input class="modern-range" id="pitch-range" type="range" min="-6" max="6" step="1" value="${Math.max(-6, Math.min(6, Math.round(pitch)))}" oninput="UI.setPitch(this.value, this)">
+          <div class="modern-range-scale"><span>-6 st</span><span>Neutral</span><span>+6 st</span></div>
         </div>
-        <button class="modern-inline-reset" type="button" onclick="UI.resetPitchSpeed()">Reset to neutral</button>
+        <button class="modern-inline-reset" type="button" onclick="UI.resetPitch()">Reset Pitch</button>
+      </section>
+
+      <section class="effects-modern-section">
+        <div class="effects-modern-head">
+          <div>
+            <span class="effects-modern-overline">PLAYBACK</span>
+            <h3>Speed</h3>
+            <p>Change playback tempo without changing the pitch setting.</p>
+          </div>
+          ${appIcon('playAfterSeconds')}
+        </div>
+        <div class="modern-range-block">
+          <div class="modern-range-value-row"><span>Speed</span><strong id="speed-value">${speed.toFixed(2)}×</strong></div>
+          <input class="modern-range" id="speed-range" type="range" min="0.5" max="2" step="0.05" value="${speed.toFixed(2)}" oninput="UI.setSpeed(this.value, this)">
+          <div class="modern-range-scale"><span>0.50×</span><span>1.00×</span><span>2.00×</span></div>
+        </div>
+        <button class="modern-inline-reset" type="button" onclick="UI.resetSpeed()">Reset Speed</button>
       </section>
 
       <section class="effects-modern-section">
@@ -1663,13 +1734,13 @@ const UI = {
           <input class="modern-range volume-boost-drag" id="volume-boost-range" type="range" min="0.5" max="2.5" step="0.05" value="${boost}" ${boostEnabled ? '' : 'disabled'} oninput="UI.setEffectValue('volumeBoost', this.value, this)" aria-label="Volume Boost">
           <div class="modern-range-scale"><span>50%</span><span>100%</span><span>250%</span></div>
         </div>
+        <button class="modern-inline-reset" type="button" onclick="UI.resetVolumeBoost()">Reset Boost</button>
       </section>
     </main>`;
 
     container.innerHTML = html;
     container.querySelectorAll('.eq-modern-input').forEach((input, i) => this.updateEqVisual(input, i));
     container.querySelectorAll('.modern-range').forEach(input => this.updateRangeProgress(input));
-    container.querySelectorAll('.volume-boost-drag').forEach(input => this.makeDragOnlyRange(input));
     this.updatePitchSpeedVisual(combined);
   },
 
@@ -1688,6 +1759,13 @@ const UI = {
     this.refreshAudioEffectsViews();
   },
 
+  resetVolumeBoost() {
+    SettingsManager.set('audio.volumeBoost', 1, { notify: false });
+    SettingsManager.set('audio.volumeBoostEnabled', false, { notify: false });
+    Player.applyPlaybackEffects();
+    this.refreshAudioEffectsViews();
+  },
+
   refreshAudioEffectsViews() {
     if (this.currentPage === 'audio-effects') this.renderCurrentPage();
     if (document.getElementById('audio-effects-overlay')?.classList.contains('open')) this.openAudioEffectsOverlay();
@@ -1701,53 +1779,48 @@ const UI = {
     this.renderCurrentPage();
   },
 
-  setPitchSpeedCombined(value, sourceEl = null) {
-    const n = Math.max(-12, Math.min(12, Math.round(Number(value) || 0)));
-    const speed = 1 + (n / 12);
-    SettingsManager.set('audio.pitchSemitones', n, { notify:false });
-    SettingsManager.set('audio.playbackSpeed', speed, { notify:false });
+  setPitch(value, sourceEl = null) {
+    const n = Math.max(-6, Math.min(6, Math.round(Number(value) || 0)));
+    SettingsManager.set('audio.pitchSemitones', n, { notify: false });
     Player.applyPlaybackEffects();
-    const label = `${n>0?'+':''}${n} st · ${speed.toFixed(2)}×`;
-    document.getElementById('pitch-speed-combined-value')?.replaceChildren(document.createTextNode(label));
-    document.getElementById('overlay-pitch-speed-combined-value')?.replaceChildren(document.createTextNode(label));
-    if (sourceEl) this.updateRangeProgress(sourceEl, true);
+    this.updateEffectValueDisplays();
+    if (sourceEl) this.updateRangeProgress(sourceEl);
   },
 
-  updateEqVisual(input, index, prefix = '') {
-    if (!input) return;
-    const v = Number(input.value || 0);
-    const pct = ((v + 12) / 24) * 100;
-    input.style.setProperty('--eq-progress', `${pct}%`);
-    const wrap = input.closest('.eq-modern-track');
-    const fill = wrap?.querySelector('.eq-modern-fill');
-    const knob = wrap?.querySelector('.eq-modern-knob');
-    if (fill) {
-      const zero = 50;
-      const valuePct = pct;
-      if (valuePct >= zero) {
-        fill.style.top = `${100 - valuePct}%`;
-        fill.style.height = `${valuePct - zero}%`;
-      } else {
-        fill.style.top = `${zero}%`;
-        fill.style.height = `${zero - valuePct}%`;
-      }
-    }
-    if (knob) {
-      knob.style.top = `${100 - pct}%`;
-      knob.style.transform = 'translate(-50%, -50%)';
-    }
-    const id = prefix ? `${prefix}eq-value-${index}` : `eq-value-${index}`;
-    const el = document.getElementById(id);
-    if (el) el.textContent = `${v>0?'+':''}${v} dB`;
+  setSpeed(value, sourceEl = null) {
+    const n = Math.max(0.5, Math.min(2, Number(value) || 1));
+    SettingsManager.set('audio.playbackSpeed', n, { notify: false });
+    Player.applyPlaybackEffects();
+    this.updateEffectValueDisplays();
+    if (sourceEl) this.updateRangeProgress(sourceEl);
+  },
+
+  resetPitch() {
+    SettingsManager.set('audio.pitchSemitones', 0, { notify: false });
+    Player.applyPlaybackEffects();
+    this.refreshAudioEffectsViews();
+  },
+
+  resetSpeed() {
+    SettingsManager.set('audio.playbackSpeed', 1, { notify: false });
+    Player.applyPlaybackEffects();
+    this.refreshAudioEffectsViews();
+  },
+
+  updateEffectValueDisplays() {
+    const pitch = Math.max(-6, Math.min(6, Math.round(Number(SettingsManager.get('audio.pitchSemitones', 0)))));
+    const speed = Math.max(0.5, Math.min(2, Number(SettingsManager.get('audio.playbackSpeed', 1)) || 1));
+    ['pitch-value','overlay-pitch-value'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent=`${pitch>0?'+':''}${pitch} st`; });
+    ['speed-value','overlay-speed-value'].forEach(id => { const el=document.getElementById(id); if(el) el.textContent=`${speed.toFixed(2)}×`; });
+  },
+
+  setPitchSpeedCombined(value, sourceEl = null) {
+    // Legacy compatibility: older callers now map to pitch only.
+    this.setPitch(value, sourceEl);
   },
 
   updatePitchSpeedVisual(value) {
-    const n = Number(value)||0;
-    const pct = ((n + 12) / 24) * 100;
-    ['pitch-speed-combined','overlay-pitch-speed-combined'].forEach(id => {
-      const el = document.getElementById(id);
-      if (el) { el.style.setProperty('--range-progress', `${pct}%`); el.value = n; }
-    });
+    this.updateEffectValueDisplays();
   },
 
   setEffectValue(kind, value, sourceEl = null) {
@@ -1764,23 +1837,8 @@ const UI = {
   },
 
   makeDragOnlyRange(input) {
-    if (!input || input.dataset.dragOnlyBound === '1') return;
-    input.dataset.dragOnlyBound = '1';
-    const update = () => this.updateRangeProgress(input);
-    input.addEventListener('pointerdown', (event) => {
-      const rect = input.getBoundingClientRect();
-      const min = Number(input.min ?? 0), max = Number(input.max ?? 100), value = Number(input.value ?? min);
-      const pct = max === min ? 0 : (value - min) / (max - min);
-      const thumbX = rect.left + pct * rect.width;
-      if (Math.abs(event.clientX - thumbX) > 24) {
-        event.preventDefault();
-        event.stopPropagation();
-        return;
-      }
-      input.setPointerCapture?.(event.pointerId);
-      requestAnimationFrame(update);
-    });
-    input.addEventListener('input', update);
+    // Native range inputs are fully draggable; no custom pointer gating needed.
+    if (input) input.style.touchAction = 'none';
   },
 
   updateRangeProgress(input) {
@@ -1836,7 +1894,7 @@ const UI = {
     add('Audio','audio.gaplessPlayback','Gapless / Preload Next',s.audio.gaplessPlayback,()=>toggle('audio.gaplessPlayback','Gapless / Preload Next',s.audio.gaplessPlayback));
     add('Audio','audio.normalization','Volume Normalization',s.audio.normalization,()=>toggle('audio.normalization','Volume Normalization',s.audio.normalization));
     add('Audio','audio.normalizationTarget','Normalization Target (LUFS)',s.audio.normalizationTarget,()=>number('audio.normalizationTarget','Normalization Target (LUFS)',s.audio.normalizationTarget,-30,0,1));
-    add('Audio','audio.pitchSemitones','Pitch (semitones)',s.audio.pitchSemitones,()=>number('audio.pitchSemitones','Pitch (semitones)',s.audio.pitchSemitones,-12,12,1));
+    add('Audio','audio.pitchSemitones','Pitch (semitones)',s.audio.pitchSemitones,()=>number('audio.pitchSemitones','Pitch (semitones)',s.audio.pitchSemitones,-6,6,1));
     add('Audio','audio.playbackSpeed','Playback Speed',s.audio.playbackSpeed,()=>number('audio.playbackSpeed','Playback Speed',s.audio.playbackSpeed,.5,2,.05));
     add('Audio','audio.volumeBoostEnabled','Volume Boost',s.audio.volumeBoostEnabled,()=>toggle('audio.volumeBoostEnabled','Volume Boost',s.audio.volumeBoostEnabled));
     add('Audio','audio.volumeBoost','Boost Amount',s.audio.volumeBoost,()=>number('audio.volumeBoost','Boost Amount',s.audio.volumeBoost,.5,2.5,.05));
@@ -1891,16 +1949,32 @@ const UI = {
     const back=section?`<button class="icon-btn settings-back" onclick="UI.navigate('settings')" aria-label="Back">${appIcon('previous')}</button>`:'';
     let html=`<div class="view-toolbar settings-toolbar"><div class="view-toolbar-left">${back}<div><h2 class="settings-title">${Utils.escapeHtml(section?titleFor(section):'Settings')}</h2><p class="settings-kicker">${section?'Preferences':'Choose a category'}</p></div></div><div class="settings-search-wrap">${appIcon('search')}<input id="settings-search" type="search" value="${Utils.escapeHtml(this.currentPageParams?.q||'')}" placeholder="Search settings…" oninput="UI.handleSettingsSearch(this.value)" autocomplete="off"></div></div>`;
     const cards=cats.map(([id,title,icon,desc])=>`<button class="settings-category-card" type="button" onclick="UI.navigate('settings',{section:'${id}'})"><span class="settings-category-icon">${appIcon(icon)}</span><span class="settings-category-copy"><strong>${Utils.escapeHtml(title)}</strong><small>${Utils.escapeHtml(desc)}</small></span><span class="settings-category-arrow">${appIcon('next')}</span></button>`).join('');
-    if (query) {
-      const matches=defs.filter(d=>(d.label+' '+d.path+' '+d.group+' '+d.keywords).toLowerCase().includes(query));
-      html+=`<div class="settings-search-results"><div class="settings-search-heading">${matches.length} setting${matches.length===1?'':'s'} found</div>${matches.length?matches.map(d=>d.render()).join(''):`<div class="settings-empty">No settings match “${Utils.escapeHtml(query)}”.</div>`}</div>`;
-    } else if (!section) html+=`<div class="settings-category-list">${cards}</div>`;
-    else if (section==='data') html+=`<div class="settings-list">${defs.filter(d=>d.group==='Data').map(d=>d.render()).join('')}<div class="settings-subgroup settings-actions"><div class="settings-action-grid"><button class="btn-gold btn-full" onclick="SettingsManager.save();UI.showToast('Settings saved.')">Save Settings</button><button class="btn-outline btn-full" onclick="SettingsManager.reset();UI.showToast('Settings reset.')">Reset All Settings</button><button class="btn-outline danger btn-full" onclick="UI.clearLibrary()">Clear Library</button></div></div></div>`;
-    else { const groups=section==='ui'?['UI · Library UI','UI · Music Player UI']:[titleFor(section)]; html+=`<div class="settings-list">${groups.map(g=>{const items=defs.filter(d=>d.group===g);return items.length?`<div class="settings-subgroup"><h3>${Utils.escapeHtml(g.replace('UI · ',''))}</h3>${items.map(d=>d.render()).join('')}</div>`:''}).join('')}</div>`; }
+    this._settingsDefs = defs;
+    html += `<div id="settings-search-live" class="settings-search-live" hidden></div>`;
+    if (!section) html+=`<div class="settings-category-list settings-browse-content">${cards}</div>`;
+    else if (section==='data') html+=`<div class="settings-list settings-browse-content">${defs.filter(d=>d.group==='Data').map(d=>d.render()).join('')}<div class="settings-subgroup settings-actions"><div class="settings-action-grid"><button class="btn-gold btn-full" onclick="SettingsManager.save();UI.showToast('Settings saved.')">Save Settings</button><button class="btn-outline btn-full" onclick="SettingsManager.reset();UI.showToast('Settings reset.')">Reset All Settings</button><button class="btn-outline danger btn-full" onclick="UI.clearLibrary()">Clear Library</button></div></div></div>`;
+    else { const groups=section==='ui'?['UI · Library UI','UI · Music Player UI']:[titleFor(section)]; html+=`<div class="settings-list settings-browse-content">${groups.map(g=>{const items=defs.filter(d=>d.group===g);return items.length?`<div class="settings-subgroup"><h3>${Utils.escapeHtml(g.replace('UI · ',''))}</h3>${items.map(d=>d.render()).join('')}</div>`:''}).join('')}</div>`; }
     container.innerHTML=html;
+    if (query) this.handleSettingsSearch(query);
   },
 
-  handleSettingsSearch(query) { const q=String(query||'').trim(); this.navigate('settings', q?{q}:{}); },
+  handleSettingsSearch(query) {
+    const q = String(query || '').trim().toLowerCase();
+    const live = document.getElementById('settings-search-live');
+    const browse = document.querySelectorAll('.settings-browse-content');
+    if (!live) return;
+    if (!q) {
+      live.hidden = true;
+      live.innerHTML = '';
+      browse.forEach(el => el.hidden = false);
+      return;
+    }
+    const defs = this._settingsDefs || [];
+    const matches = defs.filter(d => (d.label+' '+d.path+' '+d.group+' '+d.keywords).toLowerCase().includes(q));
+    live.hidden = false;
+    browse.forEach(el => el.hidden = true);
+    live.innerHTML = `<div class="settings-search-heading">${matches.length} setting${matches.length===1?'':'s'} found</div>${matches.length ? `<div class="settings-search-list">${matches.map(d=>d.render()).join('')}</div>` : `<div class="settings-empty">No settings match “${Utils.escapeHtml(q)}”.</div>`}`;
+  },
 
   async renderAlbumDetail(container, params) {
     const albums = await Data.getAll('albums');
@@ -2551,7 +2625,6 @@ const UI = {
     const eqEnabled = SettingsManager.get('audio.equalizerEnabled', true);
     const pitch = Number(SettingsManager.get('audio.pitchSemitones',0));
     const speed = Number(SettingsManager.get('audio.playbackSpeed',1));
-    const combined = Math.max(-12, Math.min(12, Math.round(pitch)));
     const boost = Number(SettingsManager.get('audio.volumeBoost',1));
     const boostEnabled = !!SettingsManager.get('audio.volumeBoostEnabled', false);
     return `<div class="effects-modern-page effects-overlay-modern-page">
@@ -2561,8 +2634,9 @@ const UI = {
         <div class="eq-modern-grid">${bands.map((f,i)=>{const v=Number(values[i]||0);return `<div class="eq-modern-band"><div class="eq-modern-value" id="overlay-eq-value-${i}">${v>0?'+':''}${v} dB</div><div class="eq-modern-track"><span class="eq-modern-rail"></span><span class="eq-modern-fill"></span><span class="eq-modern-zero"></span><span class="eq-modern-knob"></span><input class="eq-modern-input" aria-label="${f} Hz EQ" type="range" min="-12" max="12" step="0.5" value="${v}" oninput="UI.setQuickEQ(${i}, this.value); UI.updateEqVisual(this, ${i}, 'overlay-')"></div><div class="eq-modern-frequency">${f>=1000?`${f/1000}k`:f}<span>Hz</span></div></div>`;}).join('')}</div>
         <div class="eq-modern-scale"><span>-12 dB</span><span>0</span><span>+12 dB</span></div>
       </section>
-      <section class="effects-modern-section"><div class="effects-modern-head"><div><span class="effects-modern-overline">PLAYBACK</span><h3>Pitch &amp; Speed</h3><p>One linked control</p></div>${appIcon('pitchSpeed')}</div><div class="modern-range-block"><div class="modern-range-value-row"><span>Pitch &amp; Speed</span><strong id="overlay-pitch-speed-combined-value">${combined>0?'+':''}${combined} st · ${speed.toFixed(2)}×</strong></div><input class="modern-range" id="overlay-pitch-speed-combined" type="range" min="-12" max="12" step="1" value="${combined}" oninput="UI.setPitchSpeedCombined(this.value,this)"><div class="modern-range-scale"><span>-12 st</span><span>Neutral</span><span>+12 st</span></div></div><button class="modern-inline-reset" type="button" onclick="UI.resetPitchSpeed()">Reset to neutral</button></section>
-      <section class="effects-modern-section"><div class="effects-modern-head"><div><span class="effects-modern-overline">OUTPUT</span><h3>Volume Boost</h3><p>Additional playback gain</p></div><label class="switch-modern" title="Enable volume boost"><input type="checkbox" ${boostEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.volumeBoostEnabled', this.checked)"><span></span></label></div><div class="modern-range-block"><div class="modern-range-value-row"><span>Boost</span><strong id="overlay-boost-value">${Math.round(boost*100)}%</strong></div><input class="modern-range volume-boost-drag" id="overlay-volume-boost-range" type="range" min="0.5" max="2.5" step="0.05" value="${boost}" ${boostEnabled ? '' : 'disabled'} oninput="UI.setEffectValue('volumeBoost',this.value,this)" aria-label="Volume Boost"><div class="modern-range-scale"><span>50%</span><span>100%</span><span>250%</span></div></div></section>
+      <section class="effects-modern-section"><div class="effects-modern-head"><div><span class="effects-modern-overline">PLAYBACK</span><h3>Pitch</h3><p>Independent pitch shift.</p></div>${appIcon('pitchSpeed')}</div><div class="modern-range-block"><div class="modern-range-value-row"><span>Pitch</span><strong id="overlay-pitch-value">${pitch>0?'+':''}${pitch} st</strong></div><input class="modern-range" id="overlay-pitch-range" type="range" min="-6" max="6" step="1" value="${Math.max(-6,Math.min(6,Math.round(pitch)))}" oninput="UI.setPitch(this.value,this)"><div class="modern-range-scale"><span>-6 st</span><span>Neutral</span><span>+6 st</span></div></div><button class="modern-inline-reset" type="button" onclick="UI.resetPitch()">Reset Pitch</button></section>
+      <section class="effects-modern-section"><div class="effects-modern-head"><div><span class="effects-modern-overline">PLAYBACK</span><h3>Speed</h3><p>Independent playback speed.</p></div>${appIcon('playAfterSeconds')}</div><div class="modern-range-block"><div class="modern-range-value-row"><span>Speed</span><strong id="overlay-speed-value">${speed.toFixed(2)}×</strong></div><input class="modern-range" id="overlay-speed-range" type="range" min="0.5" max="2" step="0.05" value="${speed.toFixed(2)}" oninput="UI.setSpeed(this.value,this)"><div class="modern-range-scale"><span>0.50×</span><span>1.00×</span><span>2.00×</span></div></div><button class="modern-inline-reset" type="button" onclick="UI.resetSpeed()">Reset Speed</button></section>
+      <section class="effects-modern-section"><div class="effects-modern-head"><div><span class="effects-modern-overline">OUTPUT</span><h3>Volume Boost</h3><p>Additional playback gain</p></div><label class="switch-modern" title="Enable volume boost"><input type="checkbox" ${boostEnabled ? 'checked' : ''} onchange="SettingsManager.set('audio.volumeBoostEnabled', this.checked)"><span></span></label></div><div class="modern-range-block"><div class="modern-range-value-row"><span>Boost</span><strong id="overlay-boost-value">${Math.round(boost*100)}%</strong></div><input class="modern-range volume-boost-drag" id="overlay-volume-boost-range" type="range" min="0.5" max="2.5" step="0.05" value="${boost}" ${boostEnabled ? '' : 'disabled'} oninput="UI.setEffectValue('volumeBoost',this.value,this)" aria-label="Volume Boost"><div class="modern-range-scale"><span>50%</span><span>100%</span><span>250%</span></div></div><button class="modern-inline-reset" type="button" onclick="UI.resetVolumeBoost()">Reset Boost</button></section>
     </div>`;
   },
 
