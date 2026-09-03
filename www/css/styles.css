@@ -4879,3 +4879,112 @@ body:not(.light) .full-player.fill-album-art {
   #fp-repeat { width: 74px; min-width: 74px; }
   #fp-repeat .repeat-count-badge { right: 1px; }
 }
+
+/* === FINAL PLAYER INTERACTION + VIEWPORT FIXES === */
+/* A closed full-player must be completely absent from hit-testing/accessibility.
+   Opacity alone is not enough for the animated layered player. */
+.full-player:not(.open) {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.full-player.open {
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+/* Keep the mini-player above the closed full-player layer and give its controls
+   deterministic hit regions. */
+.now-playing-bar {
+  z-index: 220 !important;
+}
+.now-playing-bar .np-content {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.now-playing-bar .np-track {
+  min-width: 0;
+}
+.now-playing-bar .np-controls {
+  flex: 0 0 auto;
+}
+
+/* Stable full-player geometry: header actions are viewport-anchored instead of
+   participating in the content flow, preventing the artwork/meta stack from
+   shifting when the viewport changes. */
+.full-player .fp-sheet {
+  position: relative !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+.full-player .fp-content {
+  position: relative !important;
+  width: min(100%, 720px) !important;
+  margin: 0 auto !important;
+  box-sizing: border-box !important;
+  padding-top: 0 !important;
+}
+.full-player .fp-close-btn,
+.full-player .fp-options-btn {
+  position: absolute !important;
+  top: max(10px, env(safe-area-inset-top)) !important;
+  z-index: 30 !important;
+  margin: 0 !important;
+}
+.full-player .fp-close-btn { left: 18px !important; }
+.full-player .fp-options-btn { right: 18px !important; }
+.full-player .fp-handle {
+  position: relative !important;
+  z-index: 25 !important;
+}
+
+/* The floating player is centered as a single bounded stack, so the portrait
+   artwork cannot push the widget above/below the viewport on short screens. */
+#floating-mini-player {
+  box-sizing: border-box;
+  padding: max(14px, env(safe-area-inset-top)) 14px max(14px, env(safe-area-inset-bottom));
+  overflow: hidden;
+}
+#floating-mini-player .floating-mini-stack {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: min(82vw, 360px) !important;
+  max-width: calc(100vw - 28px) !important;
+  max-height: calc(100dvh - max(28px, env(safe-area-inset-top) + env(safe-area-inset-bottom) + 28px)) !important;
+  transform: translate(-50%, -50%) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 10px !important;
+}
+#floating-mini-player .floating-mini-card {
+  width: min(100%, calc((100dvh - 86px) * 0.75)) !important;
+  max-width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 3 / 4 !important;
+  flex: 0 1 auto !important;
+  transform: none !important;
+}
+#floating-mini-player .floating-mini-caption {
+  max-width: 100%;
+  min-height: 0;
+}
+#floating-mini-player .floating-mini-title,
+#floating-mini-player .floating-mini-artist {
+  max-width: 100%;
+}
+
+@media (max-width: 600px) {
+  .full-player .fp-close-btn { left: 18px !important; }
+  .full-player .fp-options-btn { right: 18px !important; }
+  #floating-mini-player .floating-mini-stack {
+    width: min(88vw, 340px) !important;
+  }
+  #floating-mini-player .floating-mini-card {
+    width: min(100%, calc((100dvh - 96px) * 0.75)) !important;
+  }
+}
